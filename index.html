@@ -195,6 +195,29 @@
   .note-box { background: #1a1200; border: 1px solid #5a4a00; border-radius: 10px; padding: 10px 14px; margin: 10px 16px 0; font-size: 12px; color: #c8a830; line-height: 1.6; }
   .prep-box { background: #0f1f10; border: 1px solid #2a4a2a; border-radius: 10px; padding: 10px 14px; margin: 10px 16px 0; font-size: 12px; color: #7a9a7a; line-height: 1.5; }
 
+  /* DIAL */
+  .dial-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 0 10px; }
+  .dial-container { position: relative; width: 280px; height: 280px; }
+  .dial-btn {
+    position: absolute;
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px; cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+  .dial-btn.center { border-color: var(--accent); background: linear-gradient(135deg,#0f1f35,#1a2a4a); }
+  .dial-btn.dragging { opacity: 0.85; transform: scale(1.08); z-index: 50; border-color: var(--accent3); box-shadow: 0 0 20px #f59e0b44; }
+  .dial-btn.drop-target { border-color: var(--accent2); box-shadow: 0 0 16px #10b98144; }
+  .dial-icon { font-size: 26px; pointer-events: none; }
+  .dial-label { font-family: var(--font-display); font-size: 11px; letter-spacing: 1.5px; color: var(--text); pointer-events: none; }
+  .dial-hint { font-size: 11px; color: var(--text3); margin-top: 8px; letter-spacing: 1px; }
+
   canvas { width: 100%; height: 160px; }
   
   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -210,37 +233,21 @@
     <div class="home-sub">6-WEEK FAT LOSS PROGRAM</div>
     <div class="week-badge">⚡ WEEK 3 ACTIVE</div>
   </div>
-  <div class="stats-row">
-    <div class="stat-card"><div class="stat-val" style="color:#3b82f6">233</div><div class="stat-label">Start lbs</div></div>
-    <div class="stat-card"><div class="stat-val" style="color:#10b981">227</div><div class="stat-label">Best lbs</div></div>
-    <div class="stat-card"><div class="stat-val" style="color:#f59e0b">-6</div><div class="stat-label">Lost lbs</div></div>
+  <div class="stats-row" id="homeStats"></div>
+  <div class="dial-wrapper">
+    <div class="dial-container" id="dialContainer"></div>
+    <div class="dial-hint">TAP TO OPEN · HOLD OR DRAG TO MOVE</div>
   </div>
-  <div class="nav-circles">
-    <div class="nav-btn workout" onclick="showScreen('workout')">
-      <div class="nav-dot"></div>
-      <div class="nav-icon" id="workoutIcon">🏋🏾</div>
-      <div class="nav-label">Workout</div>
-      <div class="nav-desc">Track sets & weights</div>
-    </div>
-    <div class="nav-btn meals" onclick="showScreen('meals')">
-      <div class="nav-dot"></div>
-      <div class="nav-icon">🥗</div>
-      <div class="nav-label">Meal Plan</div>
-      <div class="nav-desc">Plan + groceries</div>
-    </div>
-    <div class="nav-btn tracking" onclick="showScreen('tracking')">
-      <div class="nav-dot"></div>
-      <div class="nav-icon">📊</div>
-      <div class="nav-label">Food Log</div>
-      <div class="nav-desc">Track your macros</div>
-    </div>
-    <div class="nav-btn weighin" onclick="showScreen('weighin')">
-      <div class="nav-dot"></div>
-      <div class="nav-icon">⚖️</div>
-      <div class="nav-label">Weigh In</div>
-      <div class="nav-desc">Track progress</div>
-    </div>
+</div>
+
+<!-- TODAY SCREEN -->
+<div id="today-screen" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showHome()">← Back</button>
+    <div class="screen-title">TODAY</div>
+    <div class="screen-sub" id="todayDateSub"></div>
   </div>
+  <div id="todayContent"></div>
 </div>
 
 <!-- WORKOUT SCREEN -->
@@ -369,9 +376,9 @@
     <div class="nav-tab-label">Workout</div>
     <div class="nav-tab-dot"></div>
   </button>
-  <button class="nav-tab" id="nav-meals" onclick="showScreen('meals')">
-    <div class="nav-tab-icon">🥗</div>
-    <div class="nav-tab-label">Meals</div>
+  <button class="nav-tab" id="nav-today" onclick="showScreen('today')">
+    <div class="nav-tab-icon">📅</div>
+    <div class="nav-tab-label">Today</div>
     <div class="nav-tab-dot"></div>
   </button>
   <button class="nav-tab" id="nav-tracking" onclick="showScreen('tracking')">
@@ -703,14 +710,18 @@ let selectedWorkoutDay = dayMap[currentWorkoutDay];
 function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
 
 // ─── NAVIGATION ───
-function showHome() {
+function _showHome() {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('home').style.display = 'flex';
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('nav-home').classList.add('active');
 }
+function showHome() {
+  navStack.push('home');
+  _showHome();
+}
 
-function showScreen(name) {
+function _showScreen(name) {
   document.getElementById('home').style.display = 'none';
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(name + '-screen').classList.add('active');
@@ -720,6 +731,11 @@ function showScreen(name) {
   if (name === 'meals') renderMeals();
   if (name === 'tracking') renderTracking();
   if (name === 'weighin') renderWeighIn();
+  if (name === 'today') renderToday();
+}
+function showScreen(name) {
+  navStack.push(name);
+  _showScreen(name);
 }
 
 // ─── WORKOUT ───
@@ -1068,6 +1084,7 @@ function addWeightEntry() {
   weightLog = entries;
   document.getElementById('newWeight').value = '';
   renderWeighIn();
+  renderHomeStats();
 }
 
 function drawWeightChart(entries) {
@@ -1137,8 +1154,258 @@ function showClaudePrompt(type) {
 
 function closeClaudeModal() { document.getElementById('claudeModal').classList.remove('open'); }
 
+// ─── DIAL ───
+const DIAL_BTNS = [
+  { id: 'today',    icon: '📅', label: 'TODAY',    screen: 'today' },
+  { id: 'workout',  icon: '🏋🏾', label: 'WORKOUT',  screen: 'workout' },
+  { id: 'meals',    icon: '🥗', label: 'MEALS',    screen: 'meals' },
+  { id: 'tracking', icon: '📊', label: 'LOG',      screen: 'tracking' },
+  { id: 'weighin',  icon: '⚖️', label: 'SCALE',    screen: 'weighin' },
+];
+
+// Slot 0 = center, slots 1-4 = outer (top, right, bottom, left)
+let dialSlots = load('dialSlots', [0,1,2,3,4]); // index into DIAL_BTNS
+
+const SLOT_POS = [
+  { x: 90, y: 90 },   // 0 center
+  { x: 90, y: 0 },    // 1 top
+  { x: 180, y: 90 },  // 2 right
+  { x: 90, y: 180 },  // 3 bottom
+  { x: 0, y: 90 },    // 4 left
+];
+
+let dragState = null;
+let holdTimer = null;
+let spinStartAngle = null;
+let spinLastAngle = null;
+
+function renderDial() {
+  const container = document.getElementById('dialContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  dialSlots.forEach((btnIdx, slotIdx) => {
+    const btn = DIAL_BTNS[btnIdx];
+    const pos = SLOT_POS[slotIdx];
+    const el = document.createElement('div');
+    el.className = 'dial-btn' + (slotIdx === 0 ? ' center' : '');
+    el.id = 'dial-' + slotIdx;
+    el.style.left = pos.x + 'px';
+    el.style.top = pos.y + 'px';
+    el.innerHTML = `<div class="dial-icon">${btn.icon}</div><div class="dial-label">${btn.label}</div>`;
+    el.dataset.slot = slotIdx;
+    el.dataset.btnIdx = btnIdx;
+    attachDialEvents(el);
+    container.appendChild(el);
+  });
+}
+
+function attachDialEvents(el) {
+  let touchStartTime = 0;
+  let touchStartX = 0, touchStartY = 0;
+  let moved = false;
+
+  el.addEventListener('touchstart', e => {
+    touchStartTime = Date.now();
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    moved = false;
+    holdTimer = setTimeout(() => {
+      startDrag(el, e.touches[0].clientX, e.touches[0].clientY);
+    }, 400);
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+      moved = true;
+      clearTimeout(holdTimer);
+      if (!dragState) startDrag(el, touchStartX, touchStartY);
+      if (dragState) moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  el.addEventListener('touchend', e => {
+    clearTimeout(holdTimer);
+    if (dragState) {
+      endDrag(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    } else if (!moved && Date.now() - touchStartTime < 600) {
+      const screen = DIAL_BTNS[parseInt(el.dataset.btnIdx)].screen;
+      showScreen(screen);
+    }
+  }, { passive: true });
+
+  // Mouse support for desktop
+  el.addEventListener('mousedown', e => {
+    touchStartTime = Date.now();
+    touchStartX = e.clientX; touchStartY = e.clientY;
+    moved = false;
+    holdTimer = setTimeout(() => startDrag(el, e.clientX, e.clientY), 400);
+  });
+  el.addEventListener('mousemove', e => {
+    if (e.buttons !== 1) return;
+    const dx = e.clientX - touchStartX, dy = e.clientY - touchStartY;
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+      moved = true;
+      clearTimeout(holdTimer);
+      if (!dragState) startDrag(el, touchStartX, touchStartY);
+      if (dragState) moveDrag(e.clientX, e.clientY);
+    }
+  });
+  el.addEventListener('mouseup', e => {
+    clearTimeout(holdTimer);
+    if (dragState) endDrag(e.clientX, e.clientY);
+    else if (!moved) { const screen = DIAL_BTNS[parseInt(el.dataset.btnIdx)].screen; showScreen(screen); }
+  });
+}
+
+let ghost = null;
+function startDrag(el, x, y) {
+  const slotIdx = parseInt(el.dataset.slot);
+  dragState = { fromSlot: slotIdx, btnIdx: parseInt(el.dataset.btnIdx) };
+  el.classList.add('dragging');
+  ghost = el;
+}
+
+function moveDrag(x, y) {
+  if (!ghost) return;
+  const container = document.getElementById('dialContainer');
+  const rect = container.getBoundingClientRect();
+  const lx = x - rect.left - 50;
+  const ly = y - rect.top - 50;
+  ghost.style.left = lx + 'px';
+  ghost.style.top = ly + 'px';
+  ghost.style.transition = 'none';
+  // Highlight nearest slot
+  document.querySelectorAll('.dial-btn').forEach(b => b.classList.remove('drop-target'));
+  const nearest = getNearestSlot(x, y);
+  if (nearest !== null && nearest !== dragState.fromSlot) {
+    const target = document.getElementById('dial-' + nearest);
+    if (target) target.classList.add('drop-target');
+  }
+}
+
+function endDrag(x, y) {
+  if (!dragState || !ghost) { dragState = null; ghost = null; return; }
+  const nearest = getNearestSlot(x, y);
+  if (nearest !== null && nearest !== dragState.fromSlot) {
+    // Swap
+    const tmp = dialSlots[nearest];
+    dialSlots[nearest] = dialSlots[dragState.fromSlot];
+    dialSlots[dragState.fromSlot] = tmp;
+    save('dialSlots', dialSlots);
+  }
+  ghost.classList.remove('dragging');
+  document.querySelectorAll('.dial-btn').forEach(b => { b.classList.remove('drop-target'); b.style.transition = ''; });
+  dragState = null; ghost = null;
+  renderDial();
+}
+
+function getNearestSlot(clientX, clientY) {
+  const container = document.getElementById('dialContainer');
+  if (!container) return null;
+  const rect = container.getBoundingClientRect();
+  const cx = clientX - rect.left;
+  const cy = clientY - rect.top;
+  let best = null, bestDist = 999;
+  SLOT_POS.forEach((pos, i) => {
+    const dx = cx - (pos.x + 50), dy = cy - (pos.y + 50);
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < bestDist) { bestDist = d; best = i; }
+  });
+  return bestDist < 80 ? best : null;
+}
+
+// ─── TODAY SCREEN ───
+function renderToday() {
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const todayIdx = new Date().getDay();
+  const todayName = days[todayIdx];
+  const workoutIdx = dayMap[todayIdx];
+  const workout = WORKOUTS[workoutIdx];
+  const meal = MEAL_PLAN[workoutIdx];
+
+  document.getElementById('todayDateSub').textContent = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+
+  const content = document.getElementById('todayContent');
+  content.innerHTML = `
+    <!-- WORKOUT SECTION -->
+    <div style="margin:12px 16px 0;background:var(--surface);border:1px solid ${workout.color}44;border-radius:16px;overflow:hidden;">
+      <div style="background:${workout.color}22;padding:14px 16px;border-bottom:1px solid ${workout.color}33;">
+        <div style="font-family:var(--font-display);font-size:20px;letter-spacing:2px;color:${workout.color};">${workout.type}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px;">${workout.location}</div>
+      </div>
+      <div style="padding:12px 16px;">
+        <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px;padding:8px;background:var(--surface2);border-radius:8px;">${workout.note}</div>
+        ${workout.exercises.map(ex => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);">
+            <div style="font-size:14px;color:var(--text);">${ex.name}</div>
+            <div style="font-size:12px;color:var(--text2);background:var(--surface2);padding:3px 8px;border-radius:6px;">${ex.sets}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- MEALS SECTION -->
+    <div style="margin:12px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+      <div style="background:#10b98122;padding:14px 16px;border-bottom:1px solid #10b98133;">
+        <div style="font-family:var(--font-display);font-size:20px;letter-spacing:2px;color:#10b981;">TODAY'S MEALS</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px;">${meal.totals.cal} cal · ${meal.totals.pro} protein · ${meal.totals.fat} fat</div>
+      </div>
+      <div style="padding:12px 16px;">
+        <div style="font-size:12px;color:#7a9a7a;padding:8px;background:#0f1f10;border-radius:8px;margin-bottom:10px;">🥗 ${meal.prep}</div>
+        ${meal.meals.map(m => `
+          <div style="margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:600;color:#10b981;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">${m.label}</div>
+            ${m.items.map(item => `
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+                <div style="color:var(--text);flex:1;">${item.food}</div>
+                <div style="color:#e8c870;margin-left:8px;">${item.cal}</div>
+                <div style="color:#7ab3d4;margin-left:8px;">${item.pro}</div>
+              </div>`).join('')}
+            <div style="display:flex;justify-content:flex-end;gap:12px;padding:6px 0;font-size:12px;font-weight:600;">
+              <span style="color:#e8c870;">${m.total.cal} cal</span>
+              <span style="color:#7ab3d4;">${m.total.pro} pro</span>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div style="height:20px;"></div>
+  `;
+}
+// ─── NAVIGATION STACK ───
+let navStack = ['home'];
+function pushNav() { history.pushState({inApp:true}, '', window.location.href); }
+pushNav();
+window.addEventListener('popstate', () => {
+  pushNav();
+  if (navStack.length > 1) {
+    navStack.pop();
+    const prev = navStack[navStack.length - 1];
+    if (prev === 'home') _showHome();
+    else _showScreen(prev);
+  }
+});
+
+// ─── HOME STATS ───
+function renderHomeStats() {
+  const entries = load('weightLog', weightLog);
+  const start = 233;
+  const last = entries.length ? entries[entries.length - 1].weight : start;
+  const lowest = entries.length ? Math.min(...entries.map(e => e.weight)) : start;
+  const mostLost = (start - lowest).toFixed(1);
+  const mostLostNum = parseFloat(mostLost);
+  document.getElementById('homeStats').innerHTML = `
+    <div class="stat-card"><div class="stat-val" style="color:#3b82f6">${start}</div><div class="stat-label">Start lbs</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:#94a3b8">${last}</div><div class="stat-label">Last Weigh-In</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:${mostLostNum > 0 ? '#10b981' : '#ef4444'}">${mostLostNum > 0 ? '-' : '+'}${Math.abs(mostLostNum)}</div><div class="stat-label">Most Lost</div></div>
+  `;
+}
+
 // ─── INIT ───
-showHome();
+renderHomeStats();
+renderDial();
+_showHome();
 </script>
 </body>
 </html>
