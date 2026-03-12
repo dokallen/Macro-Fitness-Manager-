@@ -272,4 +272,873 @@
 </div>
 
 <!-- TRACKING SCREEN -->
-<div id="tracking-screen" cl
+<div id="tracking-screen" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showHome()">← Back</button>
+    <div class="screen-title">FOOD LOG</div>
+    <div class="screen-sub" id="trackingDate"></div>
+  </div>
+  <div class="tracking-summary">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-weight:600;font-size:15px;">Today's Macros</div>
+      <div style="font-size:12px;color:var(--text2)" id="trackingDayLabel"></div>
+    </div>
+    <div class="macro-bars" id="macroBars"></div>
+    <div id="macroStatus"></div>
+  </div>
+  <div class="add-food-btn" onclick="toggleManualInput()">
+    <div class="add-food-icon">➕</div>
+    <div><div class="add-food-text">Add Food Manually</div><div class="add-food-sub">Enter name and macros</div></div>
+  </div>
+  <div class="add-food-btn" onclick="showClaudePrompt('photo')" style="margin-top:8px;">
+    <div class="add-food-icon">📸</div>
+    <div>
+      <div class="add-food-text">Scan Food Label</div>
+      <div class="add-food-sub">Photo → macros</div>
+    </div>
+    <button class="claude-btn" onclick="event.stopPropagation();showClaudePrompt('photo')">Ask Claude</button>
+  </div>
+  <div id="manualInputArea" style="display:none">
+    <div class="manual-input">
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Add Food Entry</div>
+      <input class="input-field" id="foodName" placeholder="Food name" style="width:100%;margin-top:8px;"/>
+      <div class="input-row">
+        <div><div class="input-label">CALORIES</div><input class="input-field" id="foodCal" type="number" placeholder="0"/></div>
+        <div><div class="input-label">PROTEIN (g)</div><input class="input-field" id="foodPro" type="number" placeholder="0"/></div>
+        <div><div class="input-label">FAT (g)</div><input class="input-field" id="foodFat" type="number" placeholder="0"/></div>
+        <div><div class="input-label">CARBS (g)</div><input class="input-field" id="foodCarbs" type="number" placeholder="0"/></div>
+      </div>
+      <button class="add-entry-btn" onclick="addFoodEntry()">Add to Log</button>
+    </div>
+  </div>
+  <div id="foodLogList"></div>
+</div>
+
+<!-- WEIGH IN SCREEN -->
+<div id="weighin-screen" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showHome()">← Back</button>
+    <div class="screen-title">WEIGH IN</div>
+    <div class="screen-sub">Monday mornings only</div>
+  </div>
+  <div class="weight-chart">
+    <div style="font-weight:600;font-size:15px;margin-bottom:12px;">Progress Chart</div>
+    <canvas id="weightChart"></canvas>
+  </div>
+  <div class="manual-input" style="margin:12px 16px 0;">
+    <div style="font-size:14px;font-weight:600;">Log Today's Weight</div>
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:flex-end;">
+      <div style="flex:1"><div class="input-label">WEIGHT (lbs)</div><input class="input-field" id="newWeight" type="number" placeholder="0.0" step="0.1"/></div>
+      <button onclick="addWeightEntry()" style="background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--font-body);font-size:14px;font-weight:600;padding:12px 20px;cursor:pointer;white-space:nowrap;">Log It</button>
+    </div>
+  </div>
+  <div class="upload-area" onclick="showClaudePrompt('scale')" style="margin:12px 16px 0;">
+    <div class="upload-icon">📲</div>
+    <div class="upload-text">Upload Scale Screenshot</div>
+    <div class="upload-sub">Claude will read your weight automatically</div>
+    <button class="claude-btn" style="margin:10px auto 0;display:flex;">Ask Claude</button>
+  </div>
+  <div class="weight-entries" id="weightEntries"></div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div class="modal-overlay" id="historyModal" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="position:relative;">
+    <div class="modal-title">PROGRESS HISTORY</div>
+    <div id="historyContent"></div>
+  </div>
+</div>
+
+<!-- CLAUDE MODAL -->
+<div class="modal-overlay" id="claudeModal" onclick="closeClaudeModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="position:relative;">
+    <div class="modal-title">ASK CLAUDE</div>
+    <div id="claudeModalContent"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <button class="nav-tab active" id="nav-home" onclick="showHome()">
+    <div class="nav-tab-icon">🏠</div>
+    <div class="nav-tab-label">Home</div>
+    <div class="nav-tab-dot"></div>
+  </button>
+  <button class="nav-tab" id="nav-workout" onclick="showScreen('workout')">
+    <div class="nav-tab-icon">🏋🏾</div>
+    <div class="nav-tab-label">Workout</div>
+    <div class="nav-tab-dot"></div>
+  </button>
+  <button class="nav-tab" id="nav-meals" onclick="showScreen('meals')">
+    <div class="nav-tab-icon">🥗</div>
+    <div class="nav-tab-label">Meals</div>
+    <div class="nav-tab-dot"></div>
+  </button>
+  <button class="nav-tab" id="nav-tracking" onclick="showScreen('tracking')">
+    <div class="nav-tab-icon">📊</div>
+    <div class="nav-tab-label">Log</div>
+    <div class="nav-tab-dot"></div>
+  </button>
+  <button class="nav-tab" id="nav-weighin" onclick="showScreen('weighin')">
+    <div class="nav-tab-icon">⚖️</div>
+    <div class="nav-tab-label">Scale</div>
+    <div class="nav-tab-dot"></div>
+  </button>
+</div>
+
+<script>
+// ─── DATA ───
+const TARGETS = { cal: 1850, pro: 180, fat: 60, carbs: 163 };
+const USER = { height: "5'7\"", age: 37, startWeight: 233 };
+
+const GYM_ICONS = ['🏋🏾', '🥊', '🏃🏾', '💪🏾', '🏋🏾‍♂️'];
+let iconIdx = 0;
+setInterval(() => {
+  iconIdx = (iconIdx + 1) % GYM_ICONS.length;
+  const el = document.getElementById('workoutIcon');
+  if (el) el.textContent = GYM_ICONS[iconIdx];
+}, 2000);
+
+const WORKOUTS = [
+  { day: 'Monday', type: 'PUSH DAY', location: 'Planet Fitness', color: '#3b82f6',
+    note: 'Chest, shoulders, triceps. Compound movements first, then isolation. Rest 60–90 sec between sets.',
+    exercises: [
+      { name: 'Barbell or Dumbbell Bench Press', sets: '4×10' },
+      { name: 'Incline Dumbbell Press', sets: '3×12' },
+      { name: 'Shoulder Press (machine or DB)', sets: '3×12' },
+      { name: 'Lateral Raises', sets: '3×15' },
+      { name: 'Tricep Pushdown (cable)', sets: '3×15' },
+      { name: 'Overhead Tricep Extension', sets: '3×12' },
+    ]
+  },
+  { day: 'Tuesday', type: 'CARDIO DAY', location: 'Home', color: '#10b981',
+    note: 'Pick one: T25 cardio session OR 30–40 min treadmill brisk walk/light jog. Zone 2 — you should hold a conversation but feel your heart working. Most powerful tool for burning visceral fat.',
+    exercises: [
+      { name: '30–40 min Zone 2 Cardio', sets: 'Treadmill / Bike / Elliptical' },
+    ]
+  },
+  { day: 'Wednesday', type: 'PULL DAY', location: 'Planet Fitness', color: '#8b5cf6',
+    note: 'Back and biceps.',
+    exercises: [
+      { name: 'Lat Pulldown', sets: '4×10' },
+      { name: 'Seated Cable Row', sets: '3×12' },
+      { name: 'Single Arm Dumbbell Row', sets: '3×12 each side' },
+      { name: 'Face Pulls', sets: '3×15' },
+      { name: 'Barbell or Dumbbell Curl', sets: '3×12' },
+      { name: 'Hammer Curls', sets: '3×12' },
+    ]
+  },
+  { day: 'Thursday', type: 'ACTIVE RECOVERY', location: 'Home', color: '#f59e0b',
+    note: 'Light stretching, 20–30 min treadmill walk, or yoga on YouTube. Do not skip — recovery is where your body actually changes.',
+    exercises: [
+      { name: '20–30 min Light Walk or Stretch', sets: 'Easy pace' },
+    ]
+  },
+  { day: 'Friday', type: 'LEG DAY', location: 'Planet Fitness', color: '#ef4444',
+    note: '⚠️ NEVER train fasted on leg day. Eat Meal 1 before gym every single time.',
+    exercises: [
+      { name: 'Leg Press', sets: '4×12' },
+      { name: 'Romanian Deadlift (DB or Barbell)', sets: '3×12' },
+      { name: 'Leg Extension', sets: '3×15' },
+      { name: 'Leg Curl', sets: '3×15' },
+      { name: 'Calf Raises', sets: '4×20' },
+      { name: 'Plank', sets: '3×45 sec' },
+    ]
+  },
+  { day: 'Saturday', type: 'T25 OR FULL BODY', location: 'Home', color: '#06b6d4',
+    note: 'T25 session OR 30–45 min YouTube full body workout (Sydney Cummings, MommaStrong). Keeps calorie burn high going into rest day.',
+    exercises: [
+      { name: 'T25 or YouTube Full Body', sets: '30–45 min' },
+    ]
+  },
+  { day: 'Sunday', type: 'REST + PREP', location: 'Home', color: '#6b7280',
+    note: 'Full rest. Eat at calorie target, hydrate, and let your body recover. Complete full meal prep for the week.',
+    exercises: []
+  },
+];
+
+const MEAL_PLAN = [
+  { day: 'Monday', type: 'Push Day', color: '#3b82f6',
+    prep: 'Sun prep: grilled chicken thighs, jasmine rice (PWO), brown rice (lunch), quinoa, boil eggs, portion sweet potatoes',
+    note: 'Night before Leg Day (Friday): hit minimum 1,900 cal. Never train fasted on leg day.',
+    meals: [
+      { label: 'Breakfast ~7:00 AM', items: [
+        { food: '2 soft boiled eggs', serving: '2 large', cal: 140, pro: '12g', fat: '10g' },
+        { food: 'Canadian bacon', serving: '2 slices', cal: 60, pro: '10g', fat: '2g' },
+        { food: 'Steel cut oats', serving: '44g dry', cal: 170, pro: '5g', fat: '2.5g' },
+        { food: 'Isopure protein (mixed in)', serving: '1 scoop', cal: 100, pro: '25g', fat: '0g' },
+      ], total: { cal: 470, pro: '52g', fat: '14.5g' }},
+      { label: 'Lunch ~12:00 PM', items: [
+        { food: 'Grilled chicken thighs (boneless skinless)', serving: '8oz raw → 6oz cooked', cal: 283, pro: '41g', fat: '11g' },
+        { food: 'Brown rice (cooked)', serving: '1 cup / 125g', cal: 215, pro: '5g', fat: '2g' },
+        { food: 'Spinach (raw)', serving: '1 cup', cal: 7, pro: '1g', fat: '0g' },
+      ], total: { cal: 505, pro: '47g', fat: '13g' }},
+      { label: 'PWO Shake — Post-Workout', items: [
+        { food: 'Isopure protein', serving: '1.5 scoops', cal: 150, pro: '37.5g', fat: '0g' },
+        { food: 'Banana (medium)', serving: '1 / ~118g', cal: 105, pro: '1g', fat: '0g' },
+      ], total: { cal: 255, pro: '38.5g', fat: '0g' }},
+      { label: 'Dinner ~6:30 PM', items: [
+        { food: 'Salmon fillet', serving: '7.5oz raw → 6oz cooked', cal: 354, pro: '50g', fat: '17g' },
+        { food: 'Sweet potato (diced, cooked weight)', serving: '141g cooked', cal: 121, pro: '3g', fat: '0g' },
+        { food: 'Spinach (sauteed)', serving: '1 cup', cal: 7, pro: '1g', fat: '0g' },
+        { food: 'Jasmine rice (cooked) — PWO carb', serving: '1 cup / 125g', cal: 220, pro: '4g', fat: '0.5g' },
+      ], total: { cal: 702, pro: '58g', fat: '17.5g' }},
+    ],
+    totals: { cal: '~1,880', pro: '~183g', fat: '~57g', carbs: '~155g' }
+  },
+  { day: 'Tuesday', type: 'Cardio Day', color: '#10b981',
+    prep: 'Quick cook — stir fry shrimp takes 5 min fresh',
+    note: 'Zone 2 cardio. Fat runs lean today — room for beet/celery juice if made.',
+    meals: [
+      { label: 'Breakfast ~7:30 AM', items: [
+        { food: 'Isopure protein', serving: '1 scoop', cal: 100, pro: '25g', fat: '0g' },
+        { food: 'Steel cut oats', serving: '44g dry', cal: 170, pro: '5g', fat: '2.5g' },
+        { food: 'Banana (medium)', serving: '1', cal: 105, pro: '1g', fat: '0g' },
+      ], total: { cal: 375, pro: '31g', fat: '2.5g' }},
+      { label: 'Lunch ~12:00 PM — Stir Fry Bowl', items: [
+        { food: 'Shrimp (stir fried, garlic + low sodium soy sauce)', serving: '8.5oz raw → 7oz cooked', cal: 238, pro: '50g', fat: '3g' },
+        { food: 'Jasmine rice (cooked) — post cardio', serving: '1 cup / 125g', cal: 220, pro: '4g', fat: '0.5g' },
+        { food: 'Mixed stir fry veggies', serving: '1 cup', cal: 50, pro: '3g', fat: '0g' },
+      ], total: { cal: 508, pro: '57g', fat: '3.5g' }},
+      { label: 'Snack ~3:00 PM', items: [
+        { food: 'Oikos Triple Zero Vanilla', serving: '170g', cal: 100, pro: '17g', fat: '0g' },
+        { food: 'Berries', serving: '80g', cal: 45, pro: '1g', fat: '0g' },
+      ], total: { cal: 145, pro: '18g', fat: '0g' }},
+      { label: 'Dinner ~6:30 PM', items: [
+        { food: 'Ground turkey 93% (cooked)', serving: '8oz raw → 6oz cooked / 170g', cal: 240, pro: '38g', fat: '8.5g' },
+        { food: 'Sweet potato (diced, cooked weight)', serving: '141g cooked', cal: 121, pro: '3g', fat: '0g' },
+        { food: 'Spinach (sauteed)', serving: '1 cup', cal: 7, pro: '1g', fat: '0g' },
+        { food: 'Isopure protein (gap fill)', serving: '1 scoop', cal: 100, pro: '25g', fat: '0g' },
+      ], total: { cal: 468, pro: '67g', fat: '8.5g' }},
+    ],
+    totals: { cal: '~1,830', pro: '~184g', fat: '~44g', carbs: '~175g' }
+  },
+  { day: 'Wednesday', type: 'Pull Day', color: '#8b5cf6',
+    prep: 'Mid-week prep: grilled chicken thighs, ground beef, ground turkey, rice batch, quinoa',
+    note: 'Pasta night — feels like a break from the diet.',
+    meals: [
+      { label: 'Breakfast ~7:00 AM — HP Pancakes', items: [
+        { food: 'High protein pancakes (Oikos TZ + Isopure + egg + self-rising flour)', serving: '4 pancakes', cal: 580, pro: '60g', fat: '4g' },
+      ], total: { cal: 580, pro: '60g', fat: '4g' }},
+      { label: 'Lunch ~12:00 PM', items: [
+        { food: 'Grilled chicken thighs (boneless skinless)', serving: '8oz raw → 6oz cooked', cal: 283, pro: '41g', fat: '11g' },
+        { food: 'Quinoa (cooked)', serving: '1 cup / 185g', cal: 222, pro: '8g', fat: '3.5g' },
+        { food: 'Spinach (raw)', serving: '1 cup', cal: 7, pro: '1g', fat: '0g' },
+      ], total: { cal: 512, pro: '50g', fat: '14.5g' }},
+      { label: 'PWO Shake — Post-Workout', items: [
+        { food: 'Isopure protein', serving: '1 scoop', cal: 100, pro: '25g', fat: '0g' },
+        { food: 'Premier Protein Vanilla RTD', serving: '1 RTD', cal: 160, pro: '30g', fat: '3g' },
+      ], total: { cal: 260, pro: '55g', fat: '3g' }},
+      { label: 'Dinner ~6:30 PM — 🍝 Pasta Night', items: [
+        { food: 'Barilla Protein+ penne (cooked)', serving: '3oz dry / ~85g', cal: 290, pro: '17g', fat: '2.5g' },
+        { food: 'Ground beef 90/10', serving: '8oz raw → 6oz cooked', cal: 330, pro: '46g', fat: '15g' },
+        { food: "Rao's marinara sauce", serving: '1/2 cup', cal: 80, pro: '2g', fat: '6g' },
+        { food: 'Spinach (wilted in sauce)', serving: '1 cup', cal: 7, pro: '1g', fat: '0g' },
+      ], total: { cal: 707, pro: '66g', fat: '23.5g' }},
+    ],
+    totals: { cal: '~1,870', pro: '~183g', fat: '~52g', carbs: '~168g' }
+  },
+  { day: 'Thursday', type: 'Active Recovery', color: '#f59e0b',
+    prep: 'Using mid-week prep — zero cooking needed',
+    note: 'Light stretching + 20–30 min treadmill walk only. Full rest from lifting.',
+    meals: [
+      { label: 'Breakfast ~7:00 AM', items: [
+        { food: '2 soft boiled eggs', serving: '2 large', cal: 140, pro: '12g', fat: '10g' },
+        { food: 'Canadian bacon', serving: '2 slices', cal: 60, pro: '10g', fat: '2g' },
+        { food: 'Steel cut oats', serving: '44g dry', cal: 170, pro: '5g', fat: '2.5g' },
+        { food: 'Isopure protein (mixed in)', serving: '1 scoop', cal: 100, pro: '25g', fat: '0g' },
+      ], total: { cal: 470, pro: '52g', fat: '14.5g' }},
+      { label: 'Lunch ~12:00 PM — Protein Wrap', items: [
+        { food: 'Ground turkey 93% (from prep)', serving: '8oz raw → 6oz cooked', cal: 240, pro: '38g', fat: '8.5g' },
+        { food: 'Flour tortilla (medium)', serving: '1 / ~45g', cal: 130, pro: '3g', fat: '3g' },
+        { food: 'Romaine lettuce', serving: '1 cup', cal: 8, pro: '1g', fat: '0g' },
+        { food: 'Low sodium salsa', serving: '2 tbsp', cal: 10, pro: '0g', fat: '0g' },
+      ], total: { cal: 388, pro: '42g', fat: '11.5g' }},
+      { label: 'Snack ~4:00 PM', items: [
+        { food: 'Oikos Triple Zero Vanilla', serving: '170g', cal: 100, pro: '17g', fat: '0g' },
+        { food: 'Berries', serving: '80g', cal: 45, pro: '1g', fat: '0g' },
+      ], total: { cal: 145, pro: '18g', fat: '0g' }},
+      { label: 'Dinner ~6:30 PM', items: [
+        { food: 'Salmon fillet', serving: '6.5oz raw → 5oz cooked', cal: 295, pro: '41g', fat: '14g' },
+        { food: 'Brown rice (cooked)', serving: '1 cup / 125g', cal: 215, pro: '5g', fat: '2g' },
+        { food: 'Asparagus', serving: '10 spears', cal: 30, pro: '3g', fat: '0g' },
+        { food: 'Isopure protein (gap fill)', serving: '1 scoop', cal: 100, pro: '25g', fat: '0g' },
+      ], total: { cal: 640, pro: '74g', fat: '16g' }},
+    ],
+    totals: { cal: '~1,860', pro: '~188g', fat: '~54g', carbs: '~148g' }
+  },
+  { day: 'Friday', type: 'Leg Day', color: '#ef4444',
+    prep: 'CRITICAL: Eat minimum 1,900 cal — never train fasted on leg day',
+    note: 'Eat Meal 1 before gym EVERY time. Pizza dinner built into macro targets.',
+    meals: [
+      { label: 'Breakfast ~7:00 AM — EAT BEFORE GYM ⚠️', items: [
+        { food: 'Steel cut oats', serving: '44g dry', cal: 170, pro: '5g', fat: '2.5g' },
+        { food: 'Isopure protein', serving: '1 scoop', cal: 100, pro: '25g', fat: '0g' },
+        { food: 'Banana (medium)', serving: '1', cal: 105, pro: '1g', fat: '0g' },
+        { food: '2 soft boiled eggs', serving: '2 large', cal: 140, pro: '12g', fat: '10g' },
+      ], total: { cal: 515, pro: '43g', fat: '12.5g' }},
+      { label: 'PWO Shake — Post-Workout', items: [
+        { food: 'Isopure protein', serving: '1.5 scoops', cal: 150, pro: '37.5g', fat: '0g' },
+        { food: 'Banana (medium)', serving: '1', cal: 105, pro: '1g', fat: '0g' },
+      ], total: { cal: 255, pro: '38.5g', fat: '0g' }},
+      { label: 'Lunch ~1:00 PM', items: [
+        { food: 'Ground beef 90/10 (from prep)', serving: '8oz raw → 6oz cooked', cal: 330, pro: '46g', fat: '15g' },
+        { food: 'Jasmine rice (cooked) — post workout', serving: '1 cup / 125g', cal: 220, pro: '4g', fat: '0.5g' },
+        { food: 'Spinach (raw)', serving: '1 cup', cal: 7, pro: '1g', fat: '0g' },
+      ], total: { cal: 557, pro: '51g', fat: '15.5g' }},
+      { label: 'Dinner ~6:30 PM — 🍕 Pizza Night', items: [
+        { food: 'High protein pepperoni pizza (Greek yogurt base + turkey pep)', serving: '1 whole pizza', cal: 780, pro: '58g', fat: '28g' },
+      ], total: { cal: 780, pro: '58g', fat: '28g' }},
+    ],
+    totals: { cal: '~1,940', pro: '~185g', fat: '~58g', carbs: '~170g' }
+  },
+  { day: 'Saturday', type: 'T25 or Full Body', color: '#06b6d4',
+    prep: 'Shrimp cooks fresh in 5 min. Grilled legs fresh off grill.',
+    note: 'Grilled legs are a treat — skin-on pushes fat up so breakfast and lunch run lean. Add 0.5 scoop Isopure if protein falls short.',
+    meals: [
+      { label: 'Breakfast ~8:00 AM', items: [
+        { food: 'Isopure protein', serving: '1 scoop', cal: 100, pro: '25g', fat: '0g' },
+        { food: 'Steel cut oats', serving: '44g dry', cal: 170, pro: '5g', fat: '2.5g' },
+        { food: 'Blueberries', serving: '80g', cal: 45, pro: '1g', fat: '0g' },
+        { food: '2 soft boiled eggs', serving: '2 large', cal: 140, pro: '12g', fat: '10g' },
+      ], total: { cal: 455, pro: '43g', fat: '12.5g' }},
+      { label: 'Lunch ~12:30 PM — Shrimp Bowl', items: [
+        { food: 'Shrimp (cooked)', serving: '8.5oz raw → 7oz cooked', cal: 238, pro: '50g', fat: '3g' },
+        { food: 'Brown rice (cooked)', serving: '1 cup / 125g', cal: 215, pro: '5g', fat: '2g' },
+        { food: 'Broccoli (steamed)', serving: '1 cup', cal: 55, pro: '4g', fat: '0g' },
+      ], total: { cal: 508, pro: '59g', fat: '5g' }},
+      { label: 'Snack ~3:30 PM', items: [
+        { food: 'Oikos Triple Zero Vanilla', serving: '170g', cal: 100, pro: '17g', fat: '0g' },
+        { food: 'Berries', serving: '80g', cal: 45, pro: '1g', fat: '0g' },
+      ], total: { cal: 145, pro: '18g', fat: '0g' }},
+      { label: 'Dinner ~6:30 PM — 🍗 Grilled Legs + Roasted Potatoes', items: [
+        { food: 'Grilled chicken legs (bone-in, skin-on)', serving: '2 legs / ~280g cooked', cal: 480, pro: '54g', fat: '28g' },
+        { food: 'Roasted gold potatoes', serving: '150g raw', cal: 130, pro: '3g', fat: '0g' },
+        { food: 'Asparagus', serving: '10 spears', cal: 30, pro: '3g', fat: '0g' },
+      ], total: { cal: 640, pro: '60g', fat: '28g' }},
+    ],
+    totals: { cal: '~1,870', pro: '~182g', fat: '~57g', carbs: '~160g' }
+  },
+  { day: 'Sunday', type: 'Rest + Full Prep', color: '#6b7280',
+    prep: 'Full prep: grill chicken thighs, cook ground beef/turkey, jasmine + brown rice, quinoa, boil eggs, portion sweet potatoes — covers Mon–Wed',
+    note: 'Full rest from exercise. Prep after breakfast. Sunday protein runs high — fine, it is a floor not a ceiling.',
+    meals: [
+      { label: 'Breakfast ~9:00 AM — HP Pancakes', items: [
+        { food: 'High protein pancakes (Oikos TZ + Isopure + egg + self-rising flour)', serving: '4 pancakes', cal: 580, pro: '60g', fat: '4g' },
+      ], total: { cal: 580, pro: '60g', fat: '4g' }},
+      { label: 'Lunch ~1:30 PM', items: [
+        { food: 'Grilled chicken thighs (boneless skinless)', serving: '8oz raw → 6oz cooked', cal: 283, pro: '41g', fat: '11g' },
+        { food: 'Quinoa (cooked)', serving: '1 cup / 185g', cal: 222, pro: '8g', fat: '3.5g' },
+        { food: 'Spinach (raw)', serving: '1 cup', cal: 7, pro: '1g', fat: '0g' },
+      ], total: { cal: 512, pro: '49g', fat: '14.5g' }},
+      { label: 'Snack ~4:00 PM', items: [
+        { food: 'Isopure protein', serving: '1 scoop', cal: 100, pro: '25g', fat: '0g' },
+        { food: 'Berries', serving: '80g', cal: 45, pro: '1g', fat: '0g' },
+      ], total: { cal: 145, pro: '26g', fat: '0g' }},
+      { label: 'Dinner ~6:30 PM — 🍕 Pizza Night', items: [
+        { food: 'High protein pepperoni pizza (Greek yogurt base + turkey pep)', serving: '1 whole pizza', cal: 780, pro: '58g', fat: '28g' },
+      ], total: { cal: 780, pro: '58g', fat: '28g' }},
+    ],
+    totals: { cal: '~1,860', pro: '~189g', fat: '~50g', carbs: '~158g' }
+  },
+];
+
+const GROCERY = [
+  { section: 'PROTEINS', items: [
+    { name: 'Boneless skinless chicken thighs', amount: '2 lbs' },
+    { name: 'Ground turkey 93%', amount: '1 lb' },
+    { name: 'Ground beef 90/10', amount: '1.5 lbs' },
+    { name: 'Salmon fillets', amount: '3 fillets (5–6oz each)' },
+    { name: 'Shrimp', amount: '1 lb' },
+    { name: 'Chicken legs', amount: '4 legs' },
+    { name: 'Eggs', amount: '1 dozen' },
+    { name: 'Canadian bacon', amount: '1 pack' },
+    { name: 'Turkey pepperoni', amount: '1 pack' },
+  ]},
+  { section: 'DAIRY / SHAKES', items: [
+    { name: 'Oikos Triple Zero Vanilla', amount: '4–6 cups' },
+    { name: 'Premier Protein Vanilla RTD', amount: '1–2' },
+    { name: 'Isopure protein powder', amount: 'Check stock' },
+    { name: 'Part-skim mozzarella', amount: '1 bag' },
+  ]},
+  { section: 'GRAINS / CARBS', items: [
+    { name: 'Quinoa', amount: '1 bag' },
+    { name: 'Jasmine rice', amount: '1 bag' },
+    { name: 'Brown rice', amount: '1 bag' },
+    { name: 'Steel cut oats', amount: 'Check stock' },
+    { name: 'Barilla Protein+ penne', amount: '1 box' },
+    { name: 'Flour tortillas', amount: 'Mission Carb Balance if 2x+/wk' },
+    { name: 'Gold potatoes', amount: '1 small bag' },
+    { name: 'Self-rising flour', amount: 'Check stock' },
+  ]},
+  { section: 'PRODUCE', items: [
+    { name: 'Spinach', amount: '1 large bag' },
+    { name: 'Asparagus', amount: '1 bunch' },
+    { name: 'Romaine lettuce', amount: '1 head' },
+    { name: 'Blueberries or mixed berries', amount: '1 pint' },
+    { name: 'Bananas', amount: '4–5' },
+    { name: 'Broccoli', amount: '1 head' },
+    { name: 'Mushrooms', amount: '1 pack' },
+    { name: 'Bell peppers', amount: '2–3' },
+    { name: 'Onions', amount: '1 bag' },
+  ]},
+  { section: 'PANTRY', items: [
+    { name: "Rao's marinara sauce", amount: '1 jar' },
+    { name: 'Low sodium salsa', amount: '1 jar' },
+    { name: 'Cooking spray', amount: 'Check stock' },
+  ]},
+];
+
+// ─── STATE ───
+function load(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } }
+let groceryChecked = load('groceryChecked', {});
+let workoutLogs = load('workoutLogs', {});
+let foodLog = load('foodLog', {});
+let weightLog = load('weightLog', [{"date":"Feb 23","weight":233},{"date":"Mar 2","weight":227},{"date":"Mar 9","weight":232.4}]);
+let currentWorkoutWeek = 3;
+let currentWorkoutDay = new Date().getDay();
+const dayMap = [6, 0, 1, 2, 3, 4, 5];
+let selectedWorkoutDay = dayMap[currentWorkoutDay];
+
+function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+
+// ─── NAVIGATION ───
+function showHome() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('home').style.display = 'flex';
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('nav-home').classList.add('active');
+}
+
+function showScreen(name) {
+  document.getElementById('home').style.display = 'none';
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(name + '-screen').classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'workout') renderWorkout();
+  if (name === 'meals') renderMeals();
+  if (name === 'tracking') renderTracking();
+  if (name === 'weighin') renderWeighIn();
+}
+
+// ─── WORKOUT ───
+function renderWorkout() {
+  const sel = document.getElementById('workoutWeekSelector');
+  sel.innerHTML = '';
+  for (let w = 1; w <= 6; w++) {
+    const pill = document.createElement('div');
+    pill.className = 'week-pill' + (w === currentWorkoutWeek ? ' active' : '');
+    pill.textContent = 'Week ' + w;
+    pill.onclick = () => { currentWorkoutWeek = w; renderWorkout(); };
+    sel.appendChild(pill);
+  }
+
+  const content = document.getElementById('workoutContent');
+  content.innerHTML = '';
+
+  WORKOUTS.forEach((workout, idx) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const isSelected = idx === selectedWorkoutDay;
+    card.innerHTML = `
+      <div class="card-header" onclick="toggleCard(this, ${idx})">
+        <div>
+          <span class="day-chip" style="background:${workout.color}22;color:${workout.color}">${workout.day.toUpperCase()} · ${workout.type}</span>
+          <div class="card-sub">${workout.location}</div>
+        </div>
+        <span class="chevron ${isSelected ? 'open' : ''}">›</span>
+      </div>
+      <div class="card-body ${isSelected ? 'open' : ''}">
+        <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:12px;padding:8px;background:var(--surface2);border-radius:8px;">${workout.note}</div>
+        ${workout.exercises.map(ex => {
+          const key = `w${currentWorkoutWeek}_d${idx}_${ex.name}`;
+          const saved = workoutLogs[key] || '';
+          return `<div class="exercise-row">
+            <div class="exercise-name">${ex.name}</div>
+            <div class="exercise-sets">${ex.sets}</div>
+            ${workout.exercises.length > 1 ? `<input class="weight-input" type="number" placeholder="lbs" value="${saved}" onchange="logWeight('${key}', this.value)" step="2.5"/><span class="weight-unit">lbs</span>` : ''}
+          </div>`;
+        }).join('')}
+      </div>`;
+    content.appendChild(card);
+  });
+}
+
+function toggleCard(header, idx) {
+  selectedWorkoutDay = idx;
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.chevron');
+  const isOpen = body.classList.contains('open');
+  document.querySelectorAll('.card-body').forEach(b => b.classList.remove('open'));
+  document.querySelectorAll('.chevron').forEach(c => c.classList.remove('open'));
+  if (!isOpen) { body.classList.add('open'); chevron.classList.add('open'); }
+}
+
+function logWeight(key, val) {
+  workoutLogs[key] = val;
+  save('workoutLogs', workoutLogs);
+}
+
+function saveWorkout() {
+  const btn = document.querySelector('.save-btn');
+  btn.textContent = '✅ Saved!';
+  btn.style.background = 'var(--accent2)';
+  setTimeout(() => { btn.textContent = "Save Today's Workout"; btn.style.background = 'var(--accent)'; }, 2000);
+}
+
+function showHistoryModal() {
+  const modal = document.getElementById('historyModal');
+  const content = document.getElementById('historyContent');
+  const weeks = {};
+  Object.entries(workoutLogs).forEach(([key, val]) => {
+    const match = key.match(/w(\d+)_d(\d+)_(.+)/);
+    if (match && val) {
+      const [, w, d, ex] = match;
+      if (!weeks[w]) weeks[w] = {};
+      if (!weeks[w][d]) weeks[w][d] = [];
+      weeks[w][d].push({ ex, val });
+    }
+  });
+  content.innerHTML = Object.keys(weeks).sort((a,b) => b-a).map(w => `
+    <div class="history-week">
+      <div class="history-week-title">WEEK ${w}</div>
+      ${Object.keys(weeks[w]).map(d => `
+        <div class="history-entry">
+          <div class="history-date">${WORKOUTS[d]?.day || 'Day ' + d}</div>
+          <div class="history-weights">
+            ${weeks[w][d].map(e => `<div class="history-chip">${e.ex.split('(')[0].trim()}: ${e.val}lbs</div>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>`).join('') || '<div style="color:var(--text2);text-align:center;padding:20px;">No workout history yet. Start logging weights!</div>';
+  modal.classList.add('open');
+}
+
+function closeModal() { document.getElementById('historyModal').classList.remove('open'); }
+
+// ─── MEALS ───
+function renderMeals() {
+  renderMealPlan();
+  renderGrocery();
+}
+
+function showMealTab(tab) {
+  document.getElementById('mealPlanContent').style.display = tab === 'plan' ? 'block' : 'none';
+  document.getElementById('groceryContent').style.display = tab === 'grocery' ? 'block' : 'none';
+  document.getElementById('planTab').style.background = tab === 'plan' ? 'var(--accent)' : 'var(--surface)';
+  document.getElementById('planTab').style.color = tab === 'plan' ? '#fff' : 'var(--text2)';
+  document.getElementById('planTab').style.border = tab === 'plan' ? 'none' : '1px solid var(--border)';
+  document.getElementById('groceryTab').style.background = tab === 'grocery' ? 'var(--accent)' : 'var(--surface)';
+  document.getElementById('groceryTab').style.color = tab === 'grocery' ? '#fff' : 'var(--text2)';
+  document.getElementById('groceryTab').style.border = tab === 'grocery' ? 'none' : '1px solid var(--border)';
+}
+
+function renderMealPlan() {
+  const content = document.getElementById('mealPlanContent');
+  content.innerHTML = '';
+  MEAL_PLAN.forEach((day, di) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-header" onclick="toggleMealCard(this)">
+        <div>
+          <span class="day-chip" style="background:${day.color}22;color:${day.color}">${day.day.toUpperCase()} · ${day.type.toUpperCase()}</span>
+          <div class="card-sub">${day.totals.cal} cal · ${day.totals.pro} protein · ${day.totals.fat} fat</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+      <div class="card-body">
+        <div style="font-size:11px;color:#7a9a7a;line-height:1.5;margin-bottom:8px;padding:8px;background:#0f1f10;border-radius:8px;">🥗 ${day.prep}</div>
+        ${day.meals.map(meal => `
+          <div class="meal-section-label">${meal.label}</div>
+          <div class="meal-col-headers"><div>Food</div><div style="text-align:right">Serving</div><div style="text-align:right">Cal</div><div style="text-align:right">Pro</div><div style="text-align:right">Fat</div></div>
+          ${meal.items.map(item => `
+            <div class="meal-item">
+              <div class="meal-food">${item.food}</div>
+              <div class="meal-serving">${item.serving}</div>
+              <div class="meal-cal">${item.cal}</div>
+              <div class="meal-pro">${item.pro}</div>
+              <div class="meal-fat">${item.fat}</div>
+            </div>`).join('')}
+          <div class="meal-total-row">
+            <div style="color:var(--text2);font-style:italic">Total</div><div></div>
+            <div style="color:#e8c870;text-align:right">${meal.total.cal}</div>
+            <div style="color:#7ab3d4;text-align:right">${meal.total.pro}</div>
+            <div style="color:#d4a57a;text-align:right">${meal.total.fat}</div>
+          </div>`).join('')}
+        <div class="day-total-bar">
+          <div><div class="dt-val" style="color:#e8c870">${day.totals.cal}</div><div class="dt-label">CAL</div></div>
+          <div><div class="dt-val" style="color:#7ab3d4">${day.totals.pro}</div><div class="dt-label">PROTEIN</div></div>
+          <div><div class="dt-val" style="color:#d4a57a">${day.totals.fat}</div><div class="dt-label">FAT</div></div>
+          <div><div class="dt-val" style="color:#a07ad4">${day.totals.carbs}</div><div class="dt-label">CARBS</div></div>
+        </div>
+        ${day.note ? `<div style="background:#1a1200;border:1px solid #5a4a00;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;color:#c8a830;line-height:1.5;">⚠ ${day.note}</div>` : ''}
+      </div>`;
+    content.appendChild(card);
+  });
+}
+
+function toggleMealCard(header) {
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.chevron');
+  body.classList.toggle('open');
+  chevron.classList.toggle('open');
+}
+
+function renderGrocery() {
+  const content = document.getElementById('groceryContent');
+  const total = GROCERY.reduce((sum, s) => sum + s.items.length, 0);
+  const checked = Object.values(groceryChecked).filter(Boolean).length;
+  content.innerHTML = `
+    <div class="grocery-progress">
+      <div class="progress-text">${checked} of ${total} items checked</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${(checked/total)*100}%"></div></div>
+    </div>
+    <div style="padding:0 16px;margin-top:8px;">
+      <button onclick="resetGrocery()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:var(--font-body);font-size:12px;padding:6px 12px;cursor:pointer;">Reset List</button>
+    </div>`;
+  GROCERY.forEach(section => {
+    const div = document.createElement('div');
+    div.className = 'grocery-section';
+    div.innerHTML = `<div class="grocery-section-title">${section.section}</div>` +
+      section.items.map(item => {
+        const key = section.section + '_' + item.name;
+        const checked = groceryChecked[key];
+        return `<div class="grocery-item ${checked ? 'checked' : ''}" onclick="toggleGrocery('${key}', this)">
+          <div class="grocery-check">${checked ? '✓' : ''}</div>
+          <div class="grocery-name">${item.name}</div>
+          <div class="grocery-amount">${item.amount}</div>
+        </div>`;
+      }).join('');
+    content.appendChild(div);
+  });
+}
+
+function toggleGrocery(key, el) {
+  groceryChecked[key] = !groceryChecked[key];
+  save('groceryChecked', groceryChecked);
+  el.classList.toggle('checked');
+  const check = el.querySelector('.grocery-check');
+  check.textContent = groceryChecked[key] ? '✓' : '';
+  renderGroceryProgress();
+}
+
+function renderGroceryProgress() {
+  const total = GROCERY.reduce((sum, s) => sum + s.items.length, 0);
+  const checked = Object.values(groceryChecked).filter(Boolean).length;
+  const pt = document.querySelector('.progress-text');
+  const pf = document.querySelector('.progress-fill');
+  if (pt) pt.textContent = `${checked} of ${total} items checked`;
+  if (pf) pf.style.width = `${(checked/total)*100}%`;
+}
+
+function resetGrocery() {
+  groceryChecked = {};
+  save('groceryChecked', groceryChecked);
+  renderGrocery();
+}
+
+// ─── TRACKING ───
+function getTodayKey() { return new Date().toISOString().split('T')[0]; }
+
+function renderTracking() {
+  const today = getTodayKey();
+  const log = foodLog[today] || [];
+  const totals = log.reduce((acc, f) => ({ cal: acc.cal + (+f.cal||0), pro: acc.pro + (+f.pro||0), fat: acc.fat + (+f.fat||0), carbs: acc.carbs + (+f.carbs||0) }), { cal:0, pro:0, fat:0, carbs:0 });
+
+  const dateEl = document.getElementById('trackingDate');
+  const dayLabel = document.getElementById('trackingDayLabel');
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  dateEl.textContent = new Date().toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+  dayLabel.textContent = days[new Date().getDay()];
+
+  const bars = document.getElementById('macroBars');
+  const macros = [
+    { label: 'Calories', val: totals.cal, target: TARGETS.cal, color: '#e8c870', unit: '' },
+    { label: 'Protein', val: totals.pro, target: TARGETS.pro, color: '#7ab3d4', unit: 'g' },
+    { label: 'Fat', val: totals.fat, target: TARGETS.fat, color: '#d4a57a', unit: 'g' },
+    { label: 'Carbs', val: totals.carbs, target: TARGETS.carbs, color: '#a07ad4', unit: 'g' },
+  ];
+  bars.innerHTML = macros.map(m => {
+    const pct = Math.min((m.val / m.target) * 100, 100);
+    const over = m.val > m.target * 1.15;
+    const close = m.val > m.target * 0.85 && m.val <= m.target * 1.15;
+    const good = m.val >= m.target * 0.85 && m.val <= m.target * 1.05;
+    const barColor = m.label === 'Calories' && m.val > TARGETS.cal ? 'var(--red)' : good ? 'var(--green)' : close ? 'var(--yellow)' : m.val > m.target ? 'var(--red)' : m.color;
+    const arrow = m.label === 'Protein' && m.val < m.target ? ' ⬆️' : '';
+    return `<div class="macro-bar-row">
+      <div class="macro-bar-label">${m.label}</div>
+      <div class="macro-bar-track"><div class="macro-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+      <div class="macro-bar-val" style="color:${barColor}">${m.val}${m.unit}${arrow}</div>
+    </div>`;
+  }).join('');
+
+  const status = document.getElementById('macroStatus');
+  const calOver = totals.cal > TARGETS.cal;
+  const proShort = totals.pro < TARGETS.pro * 0.85;
+  const fatOver = totals.fat > TARGETS.fat;
+  if (calOver) {
+    status.innerHTML = `<div class="macro-status" style="background:#ef444422;color:#ef4444">🔴 Calories over ceiling — ${totals.cal} / ${TARGETS.cal}</div>`;
+  } else if (fatOver) {
+    status.innerHTML = `<div class="macro-status" style="background:#ef444422;color:#ef4444">🔴 Fat over limit — ${totals.fat}g / ${TARGETS.fat}g</div>`;
+  } else if (proShort) {
+    status.innerHTML = `<div class="macro-status" style="background:#f59e0b22;color:#f59e0b">🟡 Protein short — ${totals.pro}g / ${TARGETS.pro}g ⬆️ Eat more protein</div>`;
+  } else if (totals.cal > 0) {
+    status.innerHTML = `<div class="macro-status" style="background:#10b98122;color:#10b981">🟢 On track — great job today!</div>`;
+  } else {
+    status.innerHTML = `<div class="macro-status" style="background:var(--surface2);color:var(--text2)">Log your first meal to see status</div>`;
+  }
+
+  const logList = document.getElementById('foodLogList');
+  logList.innerHTML = '';
+  if (log.length === 0) {
+    logList.innerHTML = '<div style="text-align:center;color:var(--text3);font-size:13px;padding:20px;">No food logged today yet</div>';
+  } else {
+    log.forEach((item, i) => {
+      const el = document.createElement('div');
+      el.className = 'food-log-item';
+      el.innerHTML = `<div><div class="food-log-name">${item.name}</div><div class="food-log-macros">${item.cal} cal · ${item.pro}g protein · ${item.fat}g fat · ${item.carbs}g carbs</div></div>
+        <button class="food-log-del" onclick="deleteFoodEntry(${i})">×</button>`;
+      logList.appendChild(el);
+    });
+  }
+}
+
+function toggleManualInput() {
+  const area = document.getElementById('manualInputArea');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+function addFoodEntry() {
+  const name = document.getElementById('foodName').value;
+  if (!name) return;
+  const entry = {
+    name,
+    cal: document.getElementById('foodCal').value || 0,
+    pro: document.getElementById('foodPro').value || 0,
+    fat: document.getElementById('foodFat').value || 0,
+    carbs: document.getElementById('foodCarbs').value || 0,
+  };
+  const today = getTodayKey();
+  if (!foodLog[today]) foodLog[today] = [];
+  foodLog[today].push(entry);
+  save('foodLog', foodLog);
+  ['foodName','foodCal','foodPro','foodFat','foodCarbs'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('manualInputArea').style.display = 'none';
+  renderTracking();
+}
+
+function deleteFoodEntry(idx) {
+  const today = getTodayKey();
+  foodLog[today].splice(idx, 1);
+  save('foodLog', foodLog);
+  renderTracking();
+}
+
+// ─── WEIGH IN ───
+function renderWeighIn() {
+  const entries = JSON.parse(localStorage.getItem('weightLog') || JSON.stringify(weightLog));
+  const entriesEl = document.getElementById('weightEntries');
+  entriesEl.innerHTML = '<div style="font-family:var(--font-display);font-size:16px;letter-spacing:2px;color:var(--text2);padding:16px 0 8px;">LOG HISTORY</div>';
+  [...entries].reverse().forEach((e, i, arr) => {
+    const prev = arr[i + 1];
+    const diff = prev ? (e.weight - prev.weight).toFixed(1) : null;
+    const diffColor = diff === null ? 'var(--text2)' : diff < 0 ? 'var(--green)' : diff > 0 ? 'var(--red)' : 'var(--text2)';
+    const diffText = diff === null ? '' : (diff > 0 ? '+' : '') + diff + ' lbs';
+    const el = document.createElement('div');
+    el.className = 'weight-entry';
+    el.innerHTML = `<div><div class="weight-entry-date">${e.date}</div></div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        ${diff !== null ? `<div class="weight-entry-diff" style="color:${diffColor}">${diffText}</div>` : ''}
+        <div class="weight-entry-val">${e.weight}</div>
+        <div style="font-size:12px;color:var(--text2)">lbs</div>
+      </div>`;
+    entriesEl.appendChild(el);
+  });
+  drawWeightChart(entries);
+}
+
+function addWeightEntry() {
+  const val = parseFloat(document.getElementById('newWeight').value);
+  if (!val) return;
+  const entries = JSON.parse(localStorage.getItem('weightLog') || JSON.stringify(weightLog));
+  const date = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric' });
+  entries.push({ date, weight: val });
+  localStorage.setItem('weightLog', JSON.stringify(entries));
+  weightLog = entries;
+  document.getElementById('newWeight').value = '';
+  renderWeighIn();
+}
+
+function drawWeightChart(entries) {
+  const canvas = document.getElementById('weightChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = 320;
+  ctx.scale(2, 2);
+  const w = canvas.offsetWidth / 2;
+  const h = 160;
+  const pad = { t: 20, r: 20, b: 30, l: 40 };
+  const weights = entries.map(e => e.weight);
+  const minW = Math.min(...weights) - 2;
+  const maxW = Math.max(...weights) + 2;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#1e2d42';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + ((h - pad.t - pad.b) / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+    const val = maxW - ((maxW - minW) / 4) * i;
+    ctx.fillStyle = '#475569'; ctx.font = '10px DM Sans'; ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(0), pad.l - 4, y + 4);
+  }
+  const xStep = (w - pad.l - pad.r) / Math.max(entries.length - 1, 1);
+  const yScale = (h - pad.t - pad.b) / (maxW - minW);
+  ctx.beginPath();
+  entries.forEach((e, i) => {
+    const x = pad.l + i * xStep;
+    const y = pad.t + (maxW - e.weight) * yScale;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2; ctx.stroke();
+  entries.forEach((e, i) => {
+    const x = pad.l + i * xStep;
+    const y = pad.t + (maxW - e.weight) * yScale;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#3b82f6'; ctx.fill();
+    ctx.fillStyle = '#e2e8f0'; ctx.font = 'bold 10px DM Sans'; ctx.textAlign = 'center';
+    ctx.fillText(e.weight, x, y - 8);
+    ctx.fillStyle = '#475569'; ctx.font = '9px DM Sans';
+    ctx.fillText(e.date, x, h - pad.b + 14);
+  });
+}
+
+// ─── CLAUDE MODAL ───
+function showClaudePrompt(type) {
+  const modal = document.getElementById('claudeModal');
+  const content = document.getElementById('claudeModalContent');
+  if (type === 'photo') {
+    content.innerHTML = `
+      <p style="color:var(--text2);font-size:14px;line-height:1.6;margin-bottom:16px;">Claude will read your food label or identify your meal and calculate the macros automatically.</p>
+      <p style="color:var(--text2);font-size:13px;line-height:1.6;margin-bottom:16px;">To use this feature, take a photo of your food label or meal and paste it into a <strong style="color:var(--text)">new Claude chat</strong> with the message:</p>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;color:#7ab3d4;margin-bottom:16px;">"Read this nutrition label and give me the calories, protein, fat, and carbs per serving."</div>
+      <p style="color:var(--text3);font-size:12px;">Then manually enter the values in the Add Food section. Full in-app scanning coming soon.</p>
+      <button onclick="closeClaudeModal()" style="width:100%;margin-top:12px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--font-body);font-size:14px;font-weight:600;padding:12px;cursor:pointer;">Got It</button>`;
+  } else {
+    content.innerHTML = `
+      <p style="color:var(--text2);font-size:14px;line-height:1.6;margin-bottom:16px;">Upload your scale screenshot to a <strong style="color:var(--text)">new Claude chat</strong> with the message:</p>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;color:#7ab3d4;margin-bottom:16px;">"What weight does this scale show?"</div>
+      <p style="color:var(--text3);font-size:12px;">Then enter the number in the weight input above. Full screenshot parsing coming in the next update.</p>
+      <button onclick="closeClaudeModal()" style="width:100%;margin-top:12px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--font-body);font-size:14px;font-weight:600;padding:12px;cursor:pointer;">Got It</button>`;
+  }
+  modal.classList.add('open');
+}
+
+function closeClaudeModal() { document.getElementById('claudeModal').classList.remove('open'); }
+
+// ─── INIT ───
+showHome();
+</script>
+</body>
+</html>
