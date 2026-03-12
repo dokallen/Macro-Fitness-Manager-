@@ -710,6 +710,8 @@ let selectedWorkoutDay = dayMap[currentWorkoutDay];
 function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
 
 // ─── NAVIGATION ───
+let navStack = ['home'];
+
 function _showHome() {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('home').style.display = 'flex';
@@ -1374,7 +1376,6 @@ function renderToday() {
   `;
 }
 // ─── NAVIGATION STACK ───
-let navStack = ['home'];
 function pushNav() { history.pushState({inApp:true}, '', window.location.href); }
 pushNav();
 window.addEventListener('popstate', () => {
