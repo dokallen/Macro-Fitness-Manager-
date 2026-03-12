@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#080c12"/>
+<title>Derak's Fit App</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #080c12;
+    --surface: #0f1520;
+    --surface2: #141c2a;
+    --border: #1e2d42;
+    --accent: #3b82f6;
+    --accent2: #10b981;
+    --accent3: #f59e0b;
+    --red: #ef4444;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #475569;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; overflow-x: hidden; }
+  
+  /* HOME */
+  .home { min-height: 100vh; display: flex; flex-direction: column; padding: 0 0 100px; }
+  .home-header { padding: 50px 24px 32px; background: linear-gradient(180deg, #0a1628 0%, transparent 100%); }
+  .home-greeting { font-family: var(--font-display); font-size: 42px; letter-spacing: 2px; color: var(--text); line-height: 1; }
+  .home-sub { font-size: 13px; color: var(--text2); margin-top: 6px; letter-spacing: 1px; }
+  .week-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: 2px; padding: 4px 10px; border-radius: 20px; margin-top: 12px; }
+  
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 20px 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 12px; text-align: center; }
+  .stat-val { font-family: var(--font-display); font-size: 26px; letter-spacing: 1px; }
+  .stat-label { font-size: 10px; color: var(--text2); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+  .nav-circles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; padding: 0 20px; margin-bottom: 16px; }
+  .nav-circle-full { grid-column: span 2; }
+  .nav-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; min-height: 130px; }
+  .nav-btn:active { transform: scale(0.97); }
+  .nav-btn::before { content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity 0.2s; }
+  .nav-btn.workout::before { background: radial-gradient(circle at 30% 30%, #3b82f620, transparent 60%); }
+  .nav-btn.meals::before { background: radial-gradient(circle at 30% 30%, #10b98120, transparent 60%); }
+  .nav-btn.tracking::before { background: radial-gradient(circle at 30% 30%, #f59e0b20, transparent 60%); }
+  .nav-btn.weighin::before { background: radial-gradient(circle at 30% 30%, #8b5cf620, transparent 60%); }
+  .nav-btn:active::before { opacity: 1; }
+  .nav-icon { font-size: 36px; }
+  .nav-label { font-family: var(--font-display); font-size: 20px; letter-spacing: 2px; color: var(--text); }
+  .nav-desc { font-size: 11px; color: var(--text2); text-align: center; }
+  .nav-dot { width: 6px; height: 6px; border-radius: 50%; position: absolute; top: 14px; right: 14px; }
+  .nav-btn.workout .nav-dot { background: var(--accent); }
+  .nav-btn.meals .nav-dot { background: var(--accent2); }
+  .nav-btn.tracking .nav-dot { background: var(--accent3); }
+  .nav-btn.weighin .nav-dot { background: #8b5cf6; }
+
+  /* SCREENS */
+  .screen { display: none; min-height: 100vh; flex-direction: column; padding-bottom: 100px; }
+  .screen.active { display: flex; }
+  
+  .screen-header { padding: 50px 20px 16px; background: var(--bg); position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--border); }
+  .back-btn { display: flex; align-items: center; gap: 8px; background: none; border: none; color: var(--accent); font-family: var(--font-body); font-size: 14px; cursor: pointer; margin-bottom: 10px; padding: 0; }
+  .screen-title { font-family: var(--font-display); font-size: 32px; letter-spacing: 2px; color: var(--text); }
+  .screen-sub { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; margin: 12px 16px 0; overflow: hidden; }
+  .card-header { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .card-title { font-weight: 600; font-size: 15px; color: var(--text); }
+  .card-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .card-body { padding: 0 16px 16px; display: none; }
+  .card-body.open { display: block; }
+  .chevron { color: var(--text3); font-size: 18px; transition: transform 0.2s; }
+  .chevron.open { transform: rotate(90deg); }
+
+  /* WORKOUT */
+  .day-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 1px; margin-bottom: 10px; }
+  .exercise-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .exercise-row:last-child { border-bottom: none; }
+  .exercise-name { font-size: 14px; color: var(--text); flex: 1; }
+  .exercise-sets { font-size: 12px; color: var(--text2); margin-right: 12px; }
+  .weight-input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 6px 10px; width: 80px; text-align: center; }
+  .weight-input:focus { outline: none; border-color: var(--accent); }
+  .weight-unit { font-size: 11px; color: var(--text3); margin-left: 4px; }
+  .save-btn { width: calc(100% - 32px); margin: 16px 16px 0; background: var(--accent); border: none; border-radius: 12px; color: #fff; font-family: var(--font-body); font-size: 15px; font-weight: 600; padding: 14px; cursor: pointer; }
+  .save-btn:active { opacity: 0.8; }
+  .history-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text2); font-family: var(--font-body); font-size: 12px; padding: 6px 12px; cursor: pointer; margin: 8px 16px 0; }
+
+  /* WEEK SELECTOR */
+  .week-selector { display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto; scrollbar-width: none; }
+  .week-selector::-webkit-scrollbar { display: none; }
+  .week-pill { flex-shrink: 0; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text2); }
+  .week-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* MEAL PLAN */
+  .meal-item { display: grid; grid-template-columns: 1fr 70px 44px 44px 44px; gap: 4px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; align-items: center; }
+  .meal-item:last-child { border-bottom: none; }
+  .meal-food { color: var(--text); line-height: 1.3; }
+  .meal-serving { color: var(--text3); font-size: 11px; text-align: right; }
+  .meal-cal { color: #e8c870; text-align: right; font-weight: 500; }
+  .meal-pro { color: #7ab3d4; text-align: right; font-weight: 500; }
+  .meal-fat { color: #d4a57a; text-align: right; font-weight: 500; }
+  .meal-col-headers { display: grid; grid-template-columns: 1fr 70px 44px 44px 44px; gap: 4px; padding: 6px 0; font-size: 10px; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; }
+  .meal-total-row { display: grid; grid-template-columns: 1fr 70px 44px 44px 44px; gap: 4px; padding: 8px 0 0; font-size: 13px; font-weight: 600; border-top: 1px solid var(--border); margin-top: 4px; }
+  .meal-section-label { font-size: 12px; font-weight: 600; color: var(--accent2); letter-spacing: 1px; text-transform: uppercase; padding: 10px 0 4px; }
+  .day-total-bar { background: var(--surface2); border-radius: 10px; padding: 12px 14px; margin-top: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+  .dt-val { font-family: var(--font-display); font-size: 20px; letter-spacing: 1px; }
+  .dt-label { font-size: 10px; color: var(--text2); letter-spacing: 1px; }
+
+  /* GROCERY */
+  .grocery-section { padding: 0 16px; margin-top: 12px; }
+  .grocery-section-title { font-family: var(--font-display); font-size: 16px; letter-spacing: 2px; color: var(--accent); margin: 16px 0 8px; }
+  .grocery-item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s; }
+  .grocery-item.checked { opacity: 0.5; }
+  .grocery-item.checked .grocery-name { text-decoration: line-through; }
+  .grocery-check { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .grocery-item.checked .grocery-check { background: var(--accent2); border-color: var(--accent2); }
+  .grocery-name { font-size: 14px; color: var(--text); flex: 1; }
+  .grocery-amount { font-size: 12px; color: var(--text2); }
+  .grocery-progress { padding: 12px 16px 0; }
+  .progress-bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .progress-fill { height: 100%; background: var(--accent2); border-radius: 3px; transition: width 0.3s; }
+  .progress-text { font-size: 12px; color: var(--text2); }
+
+  /* MEAL TRACKING */
+  .tracking-summary { margin: 12px 16px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+  .macro-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .macro-bar-row { display: flex; align-items: center; gap: 10px; }
+  .macro-bar-label { font-size: 12px; color: var(--text2); width: 60px; }
+  .macro-bar-track { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .macro-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .macro-bar-val { font-size: 12px; font-weight: 600; width: 70px; text-align: right; }
+  .macro-status { display: flex; align-items: center; gap: 6px; margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 500; }
+  .add-food-btn { margin: 12px 16px 0; background: var(--surface); border: 1px solid var(--accent); border-radius: 14px; padding: 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .add-food-icon { width: 40px; height: 40px; background: var(--accent)20; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .add-food-text { font-size: 15px; font-weight: 500; color: var(--text); }
+  .add-food-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .claude-btn { background: linear-gradient(135deg, #1e40af, #7c3aed); border: none; border-radius: 10px; color: #fff; font-family: var(--font-body); font-size: 13px; font-weight: 600; padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .food-log-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin: 6px 16px 0; }
+  .food-log-name { font-size: 14px; color: var(--text); }
+  .food-log-macros { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .food-log-del { background: none; border: none; color: var(--text3); font-size: 18px; cursor: pointer; padding: 4px; }
+  .manual-input { margin: 12px 16px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+  .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .input-field { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 8px 12px; width: 100%; }
+  .input-field:focus { outline: none; border-color: var(--accent); }
+  .input-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; letter-spacing: 1px; }
+  .add-entry-btn { width: 100%; margin-top: 10px; background: var(--accent2); border: none; border-radius: 10px; color: #fff; font-family: var(--font-body); font-size: 14px; font-weight: 600; padding: 12px; cursor: pointer; }
+
+  /* WEIGH IN */
+  .weight-chart { margin: 12px 16px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+  .weight-entries { padding: 0 16px; margin-top: 8px; }
+  .weight-entry { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; }
+  .weight-entry-date { font-size: 12px; color: var(--text2); }
+  .weight-entry-val { font-family: var(--font-display); font-size: 24px; letter-spacing: 1px; color: var(--text); }
+  .weight-entry-diff { font-size: 12px; font-weight: 600; }
+  .upload-area { margin: 12px 16px 0; border: 2px dashed var(--border); border-radius: 14px; padding: 30px 20px; text-align: center; cursor: pointer; }
+  .upload-area:active { border-color: var(--accent); }
+  .upload-icon { font-size: 36px; margin-bottom: 8px; }
+  .upload-text { font-size: 14px; color: var(--text2); }
+  .upload-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+  /* MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: #000000cc; z-index: 200; display: none; align-items: flex-end; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 24px 24px 0 0; padding: 24px 20px 40px; width: 100%; max-height: 85vh; overflow-y: auto; }
+  .modal-title { font-family: var(--font-display); font-size: 24px; letter-spacing: 2px; margin-bottom: 16px; }
+  .modal-close { position: absolute; right: 20px; top: 20px; background: var(--surface2); border: none; border-radius: 50%; width: 32px; height: 32px; color: var(--text2); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+  /* BOTTOM NAV */
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); display: flex; padding: 8px 0 20px; z-index: 100; }
+  .nav-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 6px 0; background: none; border: none; }
+  .nav-tab-icon { font-size: 22px; }
+  .nav-tab-label { font-size: 10px; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; }
+  .nav-tab.active .nav-tab-label { color: var(--accent); }
+  .nav-tab-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); margin-top: 2px; opacity: 0; }
+  .nav-tab.active .nav-tab-dot { opacity: 1; }
+
+  /* HISTORY MODAL */
+  .history-week { margin-bottom: 16px; }
+  .history-week-title { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 8px; letter-spacing: 1px; }
+  .history-entry { background: var(--surface2); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; }
+  .history-date { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
+  .history-weights { display: flex; flex-wrap: wrap; gap: 6px; }
+  .history-chip { background: var(--border); border-radius: 6px; padding: 3px 8px; font-size: 12px; color: var(--text2); }
+
+  .section-divider { height: 1px; background: var(--border); margin: 16px 16px 0; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
+  .note-box { background: #1a1200; border: 1px solid #5a4a00; border-radius: 10px; padding: 10px 14px; margin: 10px 16px 0; font-size: 12px; color: #c8a830; line-height: 1.6; }
+  .prep-box { background: #0f1f10; border: 1px solid #2a4a2a; border-radius: 10px; padding: 10px 14px; margin: 10px 16px 0; font-size: 12px; color: #7a9a7a; line-height: 1.5; }
+
+  canvas { width: 100%; height: 160px; }
+  
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn 0.3s ease forwards; }
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<div id="home" class="home active-page">
+  <div class="home-header">
+    <div class="home-greeting">DERAK'S<br/>FIT APP</div>
+    <div class="home-sub">6-WEEK FAT LOSS PROGRAM</div>
+    <div class="week-badge">⚡ WEEK 3 ACTIVE</div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-val" style="color:#3b82f6">233</div><div class="stat-label">Start lbs</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:#10b981">227</div><div class="stat-label">Best lbs</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:#f59e0b">-6</div><div class="stat-label">Lost lbs</div></div>
+  </div>
+  <div class="nav-circles">
+    <div class="nav-btn workout" onclick="showScreen('workout')">
+      <div class="nav-dot"></div>
+      <div class="nav-icon" id="workoutIcon">🏋🏾</div>
+      <div class="nav-label">Workout</div>
+      <div class="nav-desc">Track sets & weights</div>
+    </div>
+    <div class="nav-btn meals" onclick="showScreen('meals')">
+      <div class="nav-dot"></div>
+      <div class="nav-icon">🥗</div>
+      <div class="nav-label">Meal Plan</div>
+      <div class="nav-desc">Plan + groceries</div>
+    </div>
+    <div class="nav-btn tracking" onclick="showScreen('tracking')">
+      <div class="nav-dot"></div>
+      <div class="nav-icon">📊</div>
+      <div class="nav-label">Food Log</div>
+      <div class="nav-desc">Track your macros</div>
+    </div>
+    <div class="nav-btn weighin" onclick="showScreen('weighin')">
+      <div class="nav-dot"></div>
+      <div class="nav-icon">⚖️</div>
+      <div class="nav-label">Weigh In</div>
+      <div class="nav-desc">Track progress</div>
+    </div>
+  </div>
+</div>
+
+<!-- WORKOUT SCREEN -->
+<div id="workout-screen" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showHome()">← Back</button>
+    <div class="screen-title">WORKOUT</div>
+    <div class="screen-sub">Log weights · Track progress</div>
+  </div>
+  <div class="week-selector" id="workoutWeekSelector"></div>
+  <div id="workoutContent"></div>
+  <button class="save-btn" onclick="saveWorkout()">Save Today's Workout</button>
+  <button class="history-btn" onclick="showHistoryModal()">📈 View Progress History</button>
+</div>
+
+<!-- MEALS SCREEN -->
+<div id="meals-screen" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showHome()">← Back</button>
+    <div class="screen-title">MEAL PLAN</div>
+    <div class="screen-sub">Week 4 · Mar 16–22</div>
+  </div>
+  <div style="display:flex;gap:8px;padding:12px 16px 0;">
+    <button onclick="showMealTab('plan')" id="planTab" style="flex:1;padding:8px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-family:var(--font-body);font-size:13px;font-weight:600;cursor:pointer;">Meal Plan</button>
+    <button onclick="showMealTab('grocery')" id="groceryTab" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text2);font-family:var(--font-body);font-size:13px;font-weight:600;cursor:pointer;">Groceries</button>
+  </div>
+  <div id="mealPlanContent"></div>
+  <div id="groceryContent" style="display:none"></div>
+</div>
+
+<!-- TRACKING SCREEN -->
+<div id="tracking-screen" cl
