@@ -275,7 +275,7 @@
     <button onclick="showMealTab('grocery')" id="groceryTab" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text2);font-family:var(--font-body);font-size:13px;font-weight:600;cursor:pointer;">Groceries</button><button onclick="showMealTab('recipes')" id="recipesTab" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text2);font-family:var(--font-body);font-size:13px;font-weight:600;cursor:pointer;">Recipes</button>
   </div>
   <div id="mealPlanContent"></div>
-  <div id="groceryContent" style="display:none"></div>
+  <div id="groceryContent" style="display:none"></div><div id="recipeContent" style="display:none"></div>
 </div>
 
 <!-- TRACKING SCREEN -->
@@ -840,16 +840,21 @@ function renderMeals() {
   renderMealPlan();
   renderGrocery();
 }
-
 function showMealTab(tab) {
   document.getElementById('mealPlanContent').style.display = tab === 'plan' ? 'block' : 'none';
   document.getElementById('groceryContent').style.display = tab === 'grocery' ? 'block' : 'none';
+  document.getElementById('recipeContent').style.display = tab === 'recipes' ? 'block' : 'none';
   document.getElementById('planTab').style.background = tab === 'plan' ? 'var(--accent)' : 'var(--surface)';
   document.getElementById('planTab').style.color = tab === 'plan' ? '#fff' : 'var(--text2)';
   document.getElementById('planTab').style.border = tab === 'plan' ? 'none' : '1px solid var(--border)';
   document.getElementById('groceryTab').style.background = tab === 'grocery' ? 'var(--accent)' : 'var(--surface)';
   document.getElementById('groceryTab').style.color = tab === 'grocery' ? '#fff' : 'var(--text2)';
   document.getElementById('groceryTab').style.border = tab === 'grocery' ? 'none' : '1px solid var(--border)';
+  document.getElementById('recipesTab').style.background = tab === 'recipes' ? 'var(--accent)' : 'var(--surface)';
+  document.getElementById('recipesTab').style.color = tab === 'recipes' ? '#fff' : 'var(--text2)';
+  document.getElementById('recipesTab').style.border = tab === 'recipes' ? 'none' : '1px solid var(--border)';
+  if (tab === 'recipes') renderRecipes();
+}
 }
 
 function renderMealPlan() {
