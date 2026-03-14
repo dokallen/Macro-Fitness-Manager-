@@ -1165,158 +1165,124 @@ const DIAL_BTNS = [
   { id: 'weighin',  icon: '⚖️', label: 'SCALE',    screen: 'weighin' },
 ];
 
-// Slot 0 = center, slots 1-4 = outer (top, right, bottom, left)
-let dialSlots = load('dialSlots', [0,1,2,3,4]); // index into DIAL_BTNS
+const DIAL_RADIUS = 95;
+const DIAL_CENTER = 140;
+let dialRotation = load('dialRotation', 270); // 270 = first item starts at top
 
-const SLOT_POS = [
-  { x: 90, y: 90 },   // 0 center
-  { x: 90, y: 0 },    // 1 top
-  { x: 180, y: 90 },  // 2 right
-  { x: 90, y: 180 },  // 3 bottom
-  { x: 0, y: 90 },    // 4 left
-];
+function getActiveIndex() {
+  const n = DIAL_BTNS.length;
+  const step = 360 / n;
+  let best = 0, bestDiff = 999;
+  for (let i = 0; i < n; i++) {
+    let a = ((dialRotation + i * step) % 360 + 360) % 360;
+    let diff = Math.abs(a - 270);
+    if (diff > 180) diff = 360 - diff;
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  }
+  return best;
+}
 
-let dragState = null;
-let holdTimer = null;
-let spinStartAngle = null;
-let spinLastAngle = null;
+function snapDial() {
+  const n = DIAL_BTNS.length;
+  const step = 360 / n;
+  let snapDelta = 0, bestDiff = 999;
+  for (let i = 0; i < n; i++) {
+    let a = ((dialRotation + i * step) % 360 + 360) % 360;
+    let diff = a - 270;
+    while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
+    if (Math.abs(diff) < bestDiff) { bestDiff = Math.abs(diff); snapDelta = diff; }
+  }
+  dialRotation -= snapDelta;
+  save('dialRotation', dialRotation);
+}
 
 function renderDial() {
   const container = document.getElementById('dialContainer');
   if (!container) return;
-  container.innerHTML = '';
-  dialSlots.forEach((btnIdx, slotIdx) => {
-    const btn = DIAL_BTNS[btnIdx];
-    const pos = SLOT_POS[slotIdx];
-    const el = document.createElement('div');
-    el.className = 'dial-btn' + (slotIdx === 0 ? ' center' : '');
-    el.id = 'dial-' + slotIdx;
-    el.style.left = pos.x + 'px';
-    el.style.top = pos.y + 'px';
-    el.innerHTML = `<div class="dial-icon">${btn.icon}</div><div class="dial-label">${btn.label}</div>`;
-    el.dataset.slot = slotIdx;
-    el.dataset.btnIdx = btnIdx;
-    attachDialEvents(el);
-    container.appendChild(el);
-  });
-}
+  const n = DIAL_BTNS.length;
+  const step = 360 / n;
+  const activeIdx = getActiveIndex();
 
-function attachDialEvents(el) {
-  let touchStartTime = 0;
-  let touchStartX = 0, touchStartY = 0;
-  let moved = false;
-
-  el.addEventListener('touchstart', e => {
-    touchStartTime = Date.now();
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-    moved = false;
-    holdTimer = setTimeout(() => {
-      startDrag(el, e.touches[0].clientX, e.touches[0].clientY);
-    }, 400);
-  }, { passive: true });
-
-  el.addEventListener('touchmove', e => {
-    const dx = e.touches[0].clientX - touchStartX;
-    const dy = e.touches[0].clientY - touchStartY;
-    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
-      moved = true;
-      clearTimeout(holdTimer);
-      if (!dragState) startDrag(el, touchStartX, touchStartY);
-      if (dragState) moveDrag(e.touches[0].clientX, e.touches[0].clientY);
-    }
-    e.preventDefault();
-  }, { passive: false });
-
-  el.addEventListener('touchend', e => {
-    clearTimeout(holdTimer);
-    if (dragState) {
-      endDrag(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-    } else if (!moved && Date.now() - touchStartTime < 600) {
-      const screen = DIAL_BTNS[parseInt(el.dataset.btnIdx)].screen;
-      showScreen(screen);
-    }
-  }, { passive: true });
-
-  // Mouse support for desktop
-  el.addEventListener('mousedown', e => {
-    touchStartTime = Date.now();
-    touchStartX = e.clientX; touchStartY = e.clientY;
-    moved = false;
-    holdTimer = setTimeout(() => startDrag(el, e.clientX, e.clientY), 400);
-  });
-  el.addEventListener('mousemove', e => {
-    if (e.buttons !== 1) return;
-    const dx = e.clientX - touchStartX, dy = e.clientY - touchStartY;
-    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
-      moved = true;
-      clearTimeout(holdTimer);
-      if (!dragState) startDrag(el, touchStartX, touchStartY);
-      if (dragState) moveDrag(e.clientX, e.clientY);
-    }
-  });
-  el.addEventListener('mouseup', e => {
-    clearTimeout(holdTimer);
-    if (dragState) endDrag(e.clientX, e.clientY);
-    else if (!moved) { const screen = DIAL_BTNS[parseInt(el.dataset.btnIdx)].screen; showScreen(screen); }
-  });
-}
-
-let ghost = null;
-function startDrag(el, x, y) {
-  const slotIdx = parseInt(el.dataset.slot);
-  dragState = { fromSlot: slotIdx, btnIdx: parseInt(el.dataset.btnIdx) };
-  el.classList.add('dragging');
-  ghost = el;
-}
-
-function moveDrag(x, y) {
-  if (!ghost) return;
-  const container = document.getElementById('dialContainer');
-  const rect = container.getBoundingClientRect();
-  const lx = x - rect.left - 50;
-  const ly = y - rect.top - 50;
-  ghost.style.left = lx + 'px';
-  ghost.style.top = ly + 'px';
-  ghost.style.transition = 'none';
-  // Highlight nearest slot
-  document.querySelectorAll('.dial-btn').forEach(b => b.classList.remove('drop-target'));
-  const nearest = getNearestSlot(x, y);
-  if (nearest !== null && nearest !== dragState.fromSlot) {
-    const target = document.getElementById('dial-' + nearest);
-    if (target) target.classList.add('drop-target');
+  if (container.querySelectorAll('.dial-btn').length !== n) {
+    container.innerHTML = '<div class="dial-ring"></div>';
+    DIAL_BTNS.forEach((btn, i) => {
+      const el = document.createElement('div');
+      el.className = 'dial-btn';
+      el.dataset.btnIdx = i;
+      el.innerHTML = `<div class="dial-icon">${btn.icon}</div><div class="dial-label">${btn.label}</div>`;
+      container.appendChild(el);
+    });
   }
-}
 
-function endDrag(x, y) {
-  if (!dragState || !ghost) { dragState = null; ghost = null; return; }
-  const nearest = getNearestSlot(x, y);
-  if (nearest !== null && nearest !== dragState.fromSlot) {
-    // Swap
-    const tmp = dialSlots[nearest];
-    dialSlots[nearest] = dialSlots[dragState.fromSlot];
-    dialSlots[dragState.fromSlot] = tmp;
-    save('dialSlots', dialSlots);
-  }
-  ghost.classList.remove('dragging');
-  document.querySelectorAll('.dial-btn').forEach(b => { b.classList.remove('drop-target'); b.style.transition = ''; });
-  dragState = null; ghost = null;
-  renderDial();
-}
-
-function getNearestSlot(clientX, clientY) {
-  const container = document.getElementById('dialContainer');
-  if (!container) return null;
-  const rect = container.getBoundingClientRect();
-  const cx = clientX - rect.left;
-  const cy = clientY - rect.top;
-  let best = null, bestDist = 999;
-  SLOT_POS.forEach((pos, i) => {
-    const dx = cx - (pos.x + 50), dy = cy - (pos.y + 50);
-    const d = Math.sqrt(dx*dx + dy*dy);
-    if (d < bestDist) { bestDist = d; best = i; }
+  container.querySelectorAll('.dial-btn').forEach((el, i) => {
+    const angleDeg = ((dialRotation + i * step) % 360 + 360) % 360;
+    const rad = angleDeg * Math.PI / 180;
+    const x = DIAL_CENTER + DIAL_RADIUS * Math.cos(rad);
+    const y = DIAL_CENTER + DIAL_RADIUS * Math.sin(rad);
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.classList.toggle('active-slot', i === activeIdx);
   });
-  return bestDist < 80 ? best : null;
+}
+
+function initDialEvents() {
+  const container = document.getElementById('dialContainer');
+  if (!container) return;
+
+  let startAngle = 0, lastAngle = 0, startRotation = 0, isDragging = false, totalDelta = 0;
+
+  function getAngle(cx, cy) {
+    const rect = container.getBoundingClientRect();
+    return Math.atan2(cy - rect.top - DIAL_CENTER, cx - rect.left - DIAL_CENTER) * 180 / Math.PI;
+  }
+
+  function onStart(x, y) {
+    startAngle = getAngle(x, y);
+    lastAngle = startAngle;
+    startRotation = dialRotation;
+    isDragging = true;
+    totalDelta = 0;
+  }
+  function onMove(x, y) {
+    if (!isDragging) return;
+    const current = getAngle(x, y);
+    totalDelta += Math.abs(current - lastAngle);
+    lastAngle = current;
+    dialRotation = startRotation + (current - startAngle);
+    renderDial();
+  }
+  function onEnd(x, y) {
+    if (!isDragging) return;
+    isDragging = false;
+    if (totalDelta < 8) {
+      // Tap — find which button was touched
+      const rect = container.getBoundingClientRect();
+      const lx = x - rect.left, ly = y - rect.top;
+      const n = DIAL_BTNS.length;
+      const step = 360 / n;
+      let tapped = -1, best = 65;
+      for (let i = 0; i < n; i++) {
+        const angleDeg = ((dialRotation + i * step) % 360 + 360) % 360;
+        const rad = angleDeg * Math.PI / 180;
+        const bx = DIAL_CENTER + DIAL_RADIUS * Math.cos(rad);
+        const by = DIAL_CENTER + DIAL_RADIUS * Math.sin(rad);
+        const d = Math.sqrt((lx - bx) ** 2 + (ly - by) ** 2);
+        if (d < best) { best = d; tapped = i; }
+      }
+      if (tapped >= 0) showScreen(DIAL_BTNS[tapped].screen);
+    } else {
+      snapDial();
+      renderDial();
+    }
+  }
+
+  container.addEventListener('touchstart', e => onStart(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+  container.addEventListener('touchmove', e => { onMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+  container.addEventListener('touchend', e => onEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY), { passive: true });
+  container.addEventListener('mousedown', e => onStart(e.clientX, e.clientY));
+  window.addEventListener('mousemove', e => { if (isDragging) onMove(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', e => { if (isDragging) onEnd(e.clientX, e.clientY); });
 }
 
 // ─── TODAY SCREEN ───
