@@ -280,7 +280,9 @@ canvas{display:block;width:100%!important;max-width:100%;}
   <div class="reset-row">
     <button class="rbtn" onclick="confirmResetWorkouts()">Reset Week</button>
     <button class="rbtn danger" onclick="confirmClearWeightLogs()">Clear Weights</button>
+    <button class="rbtn" onclick="showPage('progression')" style="border-color:var(--accent2);color:var(--accent2);">Progression</button>
   </div>
+  <div id="workoutWeeklySummary" style="padding:0 16px;margin-top:4px;"></div>
   <div id="workoutDays" style="padding:0 16px 8px;margin-top:4px;"></div>
 </div>
 
@@ -296,6 +298,21 @@ canvas{display:block;width:100%!important;max-width:100%;}
   <input type="file" id="calburnInput" accept="image/*" style="display:none;" onchange="handleImageUpload(this,'calburn')"/>
   <div id="wdCalResult" style="margin:10px 16px 0;display:none;"></div>
   <button class="save-btn" onclick="saveWorkoutDetail()">Save Workout</button>
+</div>
+
+<!-- PROGRESSION SCREEN -->
+<div id="progression-screen" class="page">
+  <div class="ph"><button class="back-btn" onclick="goBack()">← Back</button><div class="pt">PROGRESSION</div><div class="ps" id="progSub">Training history & insights</div></div>
+  <div id="progContent" style="padding:0 16px 20px;"></div>
+</div>
+
+<!-- POST-WORKOUT OVERLAY -->
+<div id="postWorkoutOverlay" style="display:none;position:fixed;inset:0;background:#000d;z-index:900;overflow-y:auto;">
+  <div style="min-height:100vh;display:flex;align-items:flex-end;justify-content:center;">
+    <div style="background:var(--surface);border-radius:24px 24px 0 0;width:100%;max-width:480px;padding:24px 20px 40px;">
+      <div id="postWorkoutContent"></div>
+    </div>
+  </div>
 </div>
 
 <!-- MEALS -->
@@ -595,6 +612,9 @@ let coachHistory=[];
 let mpbStep=0;
 let mpbAnswers={};
 let mpbGenerating=false;
+let sessionLogs=ld('sessionLogs',[]);
+let workoutPlan=ld('workoutPlan',null);
+let progressionNotes=ld('progressionNotes',[]);
 
 // ═══ HELPERS ═══
 function getProgramWeek(){const s=new Date(USER.programStart),n=new Date();return Math.max(Math.floor((n-s)/(7*24*60*60*1000))+1,1);}
@@ -629,6 +649,7 @@ function showPage(name,push=true){
   else if(name==='calendar')renderCalendar();
   else if(name==='coach-chooser')renderCoachChooser();
   else if(name==='meal-builder'){mpbStep=0;mpbAnswers={};renderMPBStep();}
+  else if(name==='progression')renderProgressionPage();
 }
 function goBack(){if(navStack.length>1){navStack.pop();showPage(navStack[navStack.length-1],false);}else showPage('home',false);}
 function openSubPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const el=document.getElementById(id);if(el)el.classList.add('active');navStack.push(id.replace('-screen',''));}
@@ -729,6 +750,7 @@ function getDayOrder(){return sundayAtTop?[0,1,2,3,4,5,6]:[1,2,3,4,5,6,0];}
 function renderWorkout(){
   const wk=getWeekKey(),sel=workoutSels[wk]||{},todayIdx=new Date().getDay();
   document.getElementById('workoutSub').textContent='Week '+getProgramWeek()+' · '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  renderWorkoutWeeklySummary();
   const c=document.getElementById('workoutDays');c.innerHTML='';
   getDayOrder().forEach(dayIdx=>{
     const dayName=DAYS[dayIdx],isToday=dayIdx===todayIdx,isSunday=dayIdx===0;
@@ -793,11 +815,21 @@ function openWorkoutDetail(dayIdx,wtId){
 function saveEquipChoice(n,v){equipmentChoices[n]=v;sv('equipmentChoices',equipmentChoices);}
 function logSetWeight(n,s,v){const wk=getWeekKey();if(!workoutLogs[wk])workoutLogs[wk]={};if(!workoutLogs[wk][currentDetailDay])workoutLogs[wk][currentDetailDay]={};workoutLogs[wk][currentDetailDay][`${n}_set${s}`]=v;sv('workoutLogs',workoutLogs);}
 function saveWorkoutDetail(){
-  // Save then auto-navigate back to workout list
   const btn=document.querySelector('#workout-detail-screen .save-btn');
   btn.textContent='✅ Saved!';btn.style.background='var(--accent2)';
+  // Build session log entry
+  const wk=getWeekKey();
+  const wt=WORKOUT_TYPES.find(w=>w.id===currentDetailWorkout);
+  const savedWeights=(workoutLogs[wk]||{})[currentDetailDay]||{};
+  const exList=(wt?.exercises||[]).map(ex=>({name:ex.n,sets:ex.s,weights:Object.entries(savedWeights).filter(([k])=>k.startsWith(ex.n+'_set')).map(([,v])=>+v).filter(v=>v>0)}));
+  const calBurnedEl=document.getElementById('wdCalResult');
+  const calMatch=calBurnedEl?.textContent?.match(/(\d+)\s*cal/i);
+  const calBurned=calMatch?+calMatch[1]:0;
+  const session={date:getTodayKey(),weekKey:wk,workoutId:currentDetailWorkout,workoutName:wt?.name||'Workout',dayIdx:currentDetailDay,exercises:exList,calBurned,savedAt:Date.now()};
+  sessionLogs.unshift(session);if(sessionLogs.length>100)sessionLogs.length=100;
+  sv('sessionLogs',sessionLogs);
   showToast('Workout saved!');
-  setTimeout(()=>{btn.textContent='Save Workout';btn.style.background='var(--accent)';showPage('workout');},1200);
+  setTimeout(()=>{btn.textContent='Save Workout';btn.style.background='var(--accent)';showPage('workout');showPostWorkoutSummary(session);},1200);
 }
 function confirmResetWorkouts(){showConfirm('Reset Week','Clear this week\'s workout selections?',[{label:'Reset',cls:'danger',fn:()=>{const wk=getWeekKey();delete workoutSels[wk];sv('workoutSels',workoutSels);renderWorkout();}},{label:'Cancel',cls:'no',fn:null}]);}
 function confirmClearWeightLogs(){showConfirm('Clear Weight Logs','Clear all logged set weights for this week?',[{label:'Clear',cls:'danger',fn:()=>{const wk=getWeekKey();delete workoutLogs[wk];sv('workoutLogs',workoutLogs);renderWorkout();showToast('Weight logs cleared');}},{label:'Cancel',cls:'no',fn:null}]);}
@@ -1770,6 +1802,221 @@ function logMealFromPlanData(meal){
   const entry={name:meal.name,time:new Date().toTimeString().slice(0,5),cal:meal.cal||0,pro:meal.pro||0,fat:meal.fat||0,carbs:meal.carbs||0,sodium:0,fiber:0,sugar:0};
   const k=getTodayKey();if(!foodLog[k])foodLog[k]=[];foodLog[k].push(entry);sv('foodLog',foodLog);
   showToast('✅ '+meal.name+' logged');renderToday();
+}
+</script>
+<script>
+// ═══ WORKOUT PROGRESSION ═══
+
+function getSessionsThisWeek(){
+  const wk=getWeekKey();
+  return sessionLogs.filter(s=>s.weekKey===wk);
+}
+
+function getWeeklyWorkoutStats(weekKey){
+  const wk=weekKey||getWeekKey();
+  const sessions=sessionLogs.filter(s=>s.weekKey===wk);
+  const totalCal=sessions.reduce((a,s)=>a+(s.calBurned||0),0);
+  const totalVol=sessions.reduce((a,s)=>a+s.exercises.reduce((b,ex)=>b+ex.weights.reduce((c,w)=>c+w,0),0),0);
+  const days=new Set(sessions.map(s=>s.dayIdx)).size;
+  return{sessions:sessions.length,calBurned:totalCal,volume:totalVol,days};
+}
+
+function renderWorkoutWeeklySummary(){
+  const el=document.getElementById('workoutWeeklySummary');if(!el)return;
+  const stats=getWeeklyWorkoutStats();
+  const thisWeekSessions=getSessionsThisWeek();
+  // Plateau check: same weight last 3+ sessions of same exercise
+  const plateauAlert=checkPlateauAlert();
+  const streakSessions=thisWeekSessions.length;
+  if(streakSessions===0&&!plateauAlert){el.innerHTML='';return;}
+  let html=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 14px 10px;margin-bottom:8px;">`;
+  html+=`<div style="font-family:var(--fd);font-size:13px;letter-spacing:2px;color:var(--accent2);margin-bottom:10px;">THIS WEEK</div>`;
+  html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">`;
+  html+=`<div><div style="font-family:var(--fd);font-size:22px;color:var(--text);">${stats.sessions}</div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;">SESSIONS</div></div>`;
+  html+=`<div><div style="font-family:var(--fd);font-size:22px;color:var(--text);">${stats.calBurned||'—'}</div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;">CAL BURNED</div></div>`;
+  html+=`<div><div style="font-family:var(--fd);font-size:22px;color:var(--text);">${stats.volume>0?Math.round(stats.volume/1000)+'k':'—'}</div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;">LBS MOVED</div></div>`;
+  html+=`</div>`;
+  if(plateauAlert){html+=`<div style="margin-top:10px;background:#f59e0b11;border:1px solid #f59e0b44;border-radius:10px;padding:9px 12px;font-size:12px;color:var(--accent3);">⚠️ ${plateauAlert}</div>`;}
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+function checkPlateauAlert(){
+  // Check if no workout logged in 5+ days
+  if(sessionLogs.length===0)return null;
+  const last=new Date(sessionLogs[0].date);
+  const daysSince=Math.floor((Date.now()-last)/(86400000));
+  if(daysSince>=5)return`No workout logged in ${daysSince} days. Time to get back on track.`;
+  // Check same weight stagnation on a key exercise (bench, squat etc) across last 3+ sessions
+  const keyEx=['Bench Press','Leg Press','Lat Pulldown'];
+  for(const exName of keyEx){
+    const recent=sessionLogs.slice(0,6).flatMap(s=>s.exercises.filter(e=>e.name===exName).flatMap(e=>e.weights.length?[Math.max(...e.weights)]:[]));
+    if(recent.length>=3){
+      const top=recent[0];const same=recent.slice(0,3).every(w=>w===top&&top>0);
+      if(same)return`${exName} weight (${top}lbs) unchanged for ${recent.length}+ sessions. Consider progressing.`;
+    }
+  }
+  return null;
+}
+
+function showPostWorkoutSummary(session){
+  const overlay=document.getElementById('postWorkoutOverlay');
+  const cont=document.getElementById('postWorkoutContent');
+  if(!overlay||!cont)return;
+  const wt=WORKOUT_TYPES.find(w=>w.id===session.workoutId);
+  const weekStats=getWeeklyWorkoutStats();
+  const exSummary=session.exercises.filter(e=>e.weights.length>0).map(e=>`${e.name}: ${e.weights.join('/')+'lbs'}`).join(', ')||'Bodyweight / cardio session';
+  cont.innerHTML=`
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:40px;margin-bottom:6px;">${wt?.icon||'🏋🏾'}</div>
+      <div style="font-family:var(--fd);font-size:28px;letter-spacing:2px;">${session.workoutName.toUpperCase()} DONE</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px;">${new Date(session.date).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:16px;">
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 6px;">
+        <div style="font-family:var(--fd);font-size:22px;">${session.calBurned||'—'}</div>
+        <div style="font-size:10px;color:var(--text3);letter-spacing:1px;">CAL</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 6px;">
+        <div style="font-family:var(--fd);font-size:22px;">${weekStats.sessions}</div>
+        <div style="font-size:10px;color:var(--text3);letter-spacing:1px;">THIS WEEK</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 6px;">
+        <div style="font-family:var(--fd);font-size:22px;">${getProgramWeek()}</div>
+        <div style="font-size:10px;color:var(--text3);letter-spacing:1px;">PROG WEEK</div>
+      </div>
+    </div>
+    ${exSummary?`<div style="background:var(--surface2);border-radius:12px;padding:12px;font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:14px;">${exSummary}</div>`:''}
+    <div id="pwoFeedback" style="background:linear-gradient(135deg,#0d1e33,#111827);border:1px solid var(--accent)33;border-radius:14px;padding:14px;font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px;min-height:60px;"><span style="color:var(--text3);">Loading coach feedback...</span></div>
+    <button onclick="document.getElementById('postWorkoutOverlay').style.display='none'" style="width:100%;background:var(--accent);border:none;border-radius:14px;color:#fff;font-family:var(--fd);font-size:20px;letter-spacing:2px;padding:16px;cursor:pointer;">CLOSE</button>
+  `;
+  overlay.style.display='block';
+  fetchPostWorkoutFeedback(session,exSummary,weekStats);
+}
+
+async function fetchPostWorkoutFeedback(session,exSummary,weekStats){
+  const el=document.getElementById('pwoFeedback');if(!el)return;
+  const coach=getCoach();
+  try{
+    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',max_tokens:200,
+      system:`You are ${coach.name}, a fitness coach. ${coach.personality} Be direct, personal, motivating. 2-3 sentences max.`,
+      messages:[{role:'user',content:`My workout today: ${session.workoutName}. Exercises: ${exSummary||'cardio/bodyweight'}. ${session.calBurned?'Burned ~'+session.calBurned+' cal.':''} Week ${getProgramWeek()} of my program. ${weekStats.sessions} workouts this week so far. Give me post-workout feedback.`}]
+    })});
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'Great work today. Keep showing up.';
+    if(el)el.innerHTML=`<div style="font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:6px;">${coach.name.toUpperCase()}</div>${text}`;
+    // Save note
+    const note={date:getTodayKey(),type:'session',message:text,workoutName:session.workoutName};
+    progressionNotes.unshift(note);if(progressionNotes.length>50)progressionNotes.length=50;
+    sv('progressionNotes',progressionNotes);
+  }catch(e){if(el)el.innerHTML='Great session. Keep the momentum going.';}
+}
+
+function renderProgressionPage(){
+  const el=document.getElementById('progContent');if(!el)return;
+  const weekStats=getWeeklyWorkoutStats();
+  const plateau=checkPlateauAlert();
+  const recentSessions=sessionLogs.slice(0,10);
+  const recentNotes=progressionNotes.slice(0,5);
+
+  let html='';
+
+  // This week card
+  html+=`<div style="background:linear-gradient(135deg,#0d1e33,#111827);border:1px solid var(--accent)44;border-radius:16px;padding:16px;margin-top:14px;margin-bottom:10px;">`;
+  html+=`<div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:12px;">WEEK ${getProgramWeek()} STATS</div>`;
+  html+=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">`;
+  html+=`<div style="background:#ffffff08;border-radius:12px;padding:12px;"><div style="font-family:var(--fd);font-size:26px;">${weekStats.sessions}</div><div style="font-size:11px;color:var(--text3);">SESSIONS</div></div>`;
+  html+=`<div style="background:#ffffff08;border-radius:12px;padding:12px;"><div style="font-family:var(--fd);font-size:26px;">${weekStats.calBurned||0}</div><div style="font-size:11px;color:var(--text3);">CAL BURNED</div></div>`;
+  html+=`<div style="background:#ffffff08;border-radius:12px;padding:12px;"><div style="font-family:var(--fd);font-size:26px;">${weekStats.volume>0?Math.round(weekStats.volume/1000)+'k':'—'}</div><div style="font-size:11px;color:var(--text3);">LBS MOVED</div></div>`;
+  html+=`<div style="background:#ffffff08;border-radius:12px;padding:12px;"><div style="font-family:var(--fd);font-size:26px;">${getProgramWeek()}</div><div style="font-size:11px;color:var(--text3);">PROG WEEK</div></div>`;
+  html+=`</div></div>`;
+
+  // Plateau/alert banner
+  if(plateau){
+    html+=`<div style="background:#f59e0b11;border:1px solid #f59e0b55;border-radius:14px;padding:14px;margin-bottom:10px;">`;
+    html+=`<div style="font-family:var(--fd);font-size:13px;letter-spacing:2px;color:var(--accent3);margin-bottom:6px;">PLATEAU ALERT</div>`;
+    html+=`<div style="font-size:13px;color:var(--text2);">${plateau}</div>`;
+    html+=`<button onclick="getPlateauAdvice()" style="margin-top:10px;background:var(--accent3);border:none;border-radius:10px;color:#000;font-family:var(--fd);font-size:14px;letter-spacing:1px;padding:10px 16px;cursor:pointer;">ASK COACH</button>`;
+    html+=`</div>`;
+  }
+
+  // Recent sessions
+  if(recentSessions.length){
+    html+=`<div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--text2);margin:16px 0 8px;">RECENT SESSIONS</div>`;
+    recentSessions.forEach(s=>{
+      const wt=WORKOUT_TYPES.find(w=>w.id===s.workoutId);
+      const vol=s.exercises.reduce((a,e)=>a+e.weights.reduce((b,w)=>b+w,0),0);
+      html+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:7px;display:flex;align-items:center;gap:12px;">`;
+      html+=`<div style="font-size:28px;">${wt?.icon||'🏋🏾'}</div>`;
+      html+=`<div style="flex:1;"><div style="font-size:14px;font-weight:600;">${s.workoutName}</div><div style="font-size:11px;color:var(--text3);margin-top:2px;">${s.date} · ${s.calBurned?s.calBurned+' cal':'No calorie data'}</div></div>`;
+      html+=`${vol>0?`<div style="text-align:right;"><div style="font-family:var(--fd);font-size:16px;color:var(--accent2);">${Math.round(vol/1000)}k</div><div style="font-size:9px;color:var(--text3);">LBS</div></div>`:''}`;
+      html+=`</div>`;
+    });
+  } else {
+    html+=`<div style="text-align:center;padding:40px 20px;color:var(--text3);font-size:14px;">No sessions logged yet.<br/>Save your first workout to start tracking progression.</div>`;
+  }
+
+  // Coach notes
+  if(recentNotes.length){
+    html+=`<div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--text2);margin:16px 0 8px;">COACH NOTES</div>`;
+    recentNotes.forEach(n=>{
+      const coach=getCoach();
+      html+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:7px;">`;
+      html+=`<div style="font-size:10px;color:var(--accent);letter-spacing:1px;margin-bottom:5px;">${(n.workoutName||'Note').toUpperCase()} · ${n.date}</div>`;
+      html+=`<div style="font-size:13px;color:var(--text2);line-height:1.6;">${n.message}</div>`;
+      html+=`</div>`;
+    });
+  }
+
+  // Weekly summary button
+  html+=`<button onclick="getWeeklySummary()" style="width:100%;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:14px;color:var(--text);font-family:var(--fd);font-size:18px;letter-spacing:2px;padding:16px;cursor:pointer;">🧠 WEEKLY AI SUMMARY</button>`;
+  html+=`<div id="weeklySummaryResult" style="margin-top:8px;"></div>`;
+
+  el.innerHTML=html;
+}
+
+async function getWeeklySummary(){
+  const el=document.getElementById('weeklySummaryResult');if(!el)return;
+  el.innerHTML=`<div style="padding:14px;text-align:center;color:var(--text3);font-size:13px;">Generating weekly summary...</div>`;
+  const coach=getCoach();
+  const stats=getWeeklyWorkoutStats();
+  const sessions=getSessionsThisWeek();
+  const workoutNames=sessions.map(s=>s.workoutName).join(', ')||'none';
+  const totalPro=Object.keys(foodLog).filter(k=>k>=getWeekKey()).reduce((a,k)=>a+getTotals(k).pro,0);
+  try{
+    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',max_tokens:300,
+      system:`You are ${coach.name}. ${coach.personality} Write a concise weekly performance review. 3-4 sentences.`,
+      messages:[{role:'user',content:`Week ${getProgramWeek()} summary: ${stats.sessions} workouts (${workoutNames}), ${stats.calBurned} total cal burned, ${Math.round(stats.volume/1000)||0}k lbs total volume, avg protein ~${Math.round(totalPro/(stats.sessions||1))}g per workout day. Give me a week in review.`}]
+    })});
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'Strong week. Keep building.';
+    el.innerHTML=`<div style="background:linear-gradient(135deg,#0d1e33,#111827);border:1px solid var(--accent)44;border-radius:14px;padding:16px;">
+      <div style="font-size:10px;color:var(--accent);letter-spacing:1px;margin-bottom:8px;">${coach.name.toUpperCase()} · WEEK ${getProgramWeek()} REVIEW</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.7;">${text}</div>
+    </div>`;
+    const note={date:getTodayKey(),type:'weekly',message:text};
+    progressionNotes.unshift(note);if(progressionNotes.length>50)progressionNotes.length=50;
+    sv('progressionNotes',progressionNotes);
+  }catch(e){el.innerHTML=`<div style="padding:14px;color:var(--red);font-size:13px;">Could not load summary.</div>`;}
+}
+
+async function getPlateauAdvice(){
+  const coach=getCoach();
+  const plateau=checkPlateauAlert();
+  try{
+    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',max_tokens:250,
+      system:`You are ${coach.name}. ${coach.personality} Give direct, actionable advice. 2-3 sentences.`,
+      messages:[{role:'user',content:`Alert: ${plateau}. I'm in week ${getProgramWeek()} of my program. How should I break through this plateau?`}]
+    })});
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'Try deloading 10-15% this week, then push harder next week.';
+    showConfirm('Coach Advice',text,[{label:'Got it',cls:'yes',fn:null}]);
+    const note={date:getTodayKey(),type:'plateau',message:text};
+    progressionNotes.unshift(note);sv('progressionNotes',progressionNotes);
+  }catch(e){showToast('Could not get advice right now');}
 }
 </script>
 </body>
