@@ -1676,15 +1676,30 @@ async function generateMealPlan(){
     const resp = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       model:'claude-sonnet-4-20250514',
       max_tokens:4000,
-      system:`You are a precision nutrition coach. Build a 7-day meal plan for Derak.
-TARGETS: 1800-1900 calories/day | 180g+ protein (hard floor) | ≤60g fat (hard ceiling).
-Sunday night MUST be ≥1900 cal (night before Leg Day Monday or Push Day).
-Rotate proteins — chicken breast max 2x per week.
-PANTRY: ${pantryStr}
-SAVED RECIPES: ${recipeNames}
-Prioritize pantry items and saved recipes. Fill gaps with simple high-protein meals.
-Each meal must have: slot (Breakfast/Lunch/Dinner/Snack/Pre-workout/Post-workout), name, cal, pro, fat, carbs, pantryBased (bool), recipeKey (string or null).
-Respond ONLY with valid JSON matching this exact structure — no markdown, no explanation.`,
+      system:`You are a precision nutrition coach building a high-variety 7-day meal plan for body recomposition: fat loss + muscle retention.
+
+HARD TARGETS (hit these every day):
+- Calories: 1800–1900 kcal
+- Protein: 180g minimum (hard floor — never skip)
+- Fat: 40–60g (ceiling 60g)
+- Carbs: fill remaining calories
+
+VARIETY RULES (strictly enforced):
+- Use at least 8 DIFFERENT protein sources across the week: chicken breast, turkey, salmon, shrimp, lean ground beef, tuna, tilapia or cod, eggs, Greek yogurt, cottage cheese, bison, pork tenderloin — mix freely
+- NO protein repeats back-to-back in the same slot (e.g. no chicken lunch two days in a row)
+- Each breakfast must be different. Each dinner must be different. No copy-paste meals.
+- Include at least 1 seafood dinner, 1 red meat dinner, 1 egg-based breakfast, 1 overnight oats or grain breakfast
+- Vary cooking methods: grilled, baked, stir-fried, air-fried, bowl-style, wrap, salad
+
+MEAL TYPES per day: Breakfast, Lunch, Dinner, Snack (1–2). Pre-workout or Post-workout shake optional on training days.
+
+Sunday dinner must be ≥1900 cal total for the day (pre-leg/push day).
+
+PANTRY BONUS (use if it makes sense, not required): ${pantryStr}
+SAVED RECIPES (can reference by name): ${recipeNames}
+
+Each meal object must have: slot, name, cal, pro, fat, carbs, pantryBased (bool), recipeKey (null unless from saved recipes).
+Respond ONLY with valid JSON. No markdown, no commentary.`,
       messages:[{role:'user',content:`Build a 7-day meal plan starting week of ${weekLabel}. Return JSON:\n{"planWeek":"Week of ${weekLabel}","days":[{"day":"Monday","workoutType":"Push","meals":[{"slot":"Breakfast","name":"","cal":0,"pro":0,"fat":0,"carbs":0,"pantryBased":true,"recipeKey":null}],"dayTotals":{"cal":0,"pro":0,"fat":0,"carbs":0}}],"groceryNeeded":[]}`}]
     })});
     const data = await resp.json();
@@ -1776,7 +1791,7 @@ async function swapMeal(dayKey, mealIdx){
     const pantryStr = getPantryList().join(', ')||'Standard items';
     const resp = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       model:'claude-sonnet-4-20250514',max_tokens:600,
-      messages:[{role:'user',content:`Give 3 alternative meals for the ${meal.slot} slot on ${dayName}. Must fit ~${meal.cal} cal, ~${meal.pro}g protein, ≤${meal.fat}g fat. Use these pantry items if possible: ${pantryStr}. Respond ONLY in JSON: {"alternatives":[{"name":"","cal":0,"pro":0,"fat":0,"carbs":0,"recipeKey":null}]}`}]
+      messages:[{role:'user',content:`Give 3 alternative meals for the ${meal.slot} slot on ${dayName}. Current meal: "${meal.name}". Targets: ~${meal.cal} cal, ~${meal.pro}g protein, ≤${meal.fat}g fat. Each alternative MUST use a DIFFERENT protein source than the current meal and from each other — be creative (salmon, shrimp, turkey, bison, tuna, eggs, cottage cheese, etc.). Respond ONLY in JSON: {"alternatives":[{"name":"","cal":0,"pro":0,"fat":0,"carbs":0,"recipeKey":null}]}`}]
     })});
     const data = await resp.json();
     const raw = data.content?.[0]?.text||'{}';
