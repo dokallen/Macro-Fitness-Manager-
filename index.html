@@ -192,7 +192,30 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100
 .sc-tabs::-webkit-scrollbar{display:none;}
 .sc-tab{flex-shrink:0;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text2);}
 .sc-tab.active{background:var(--accent2);border-color:var(--accent2);color:#fff;}
-canvas{width:100%;height:160px;}
+.toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--accent2);color:#fff;padding:10px 22px;border-radius:12px;font-family:var(--fb);font-size:13px;font-weight:600;z-index:500;opacity:0;pointer-events:none;transition:opacity .3s;white-space:nowrap;}
+.toast.show{opacity:1;}
+.today-log-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
+.today-log-row:last-child{border-bottom:none;}
+.plan-log-btn{background:var(--accent2);border:none;border-radius:8px;color:#fff;font-family:var(--fb);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;flex-shrink:0;margin-left:8px;}
+.mpb-step{padding:20px 16px;}
+.mpb-q{font-size:16px;font-weight:600;margin-bottom:14px;line-height:1.4;}
+.mpb-opt{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;cursor:pointer;transition:all .15s;}
+.mpb-opt.sel{border-color:var(--accent2);background:#0f2010;}
+.mpb-opt-icon{font-size:20px;flex-shrink:0;}
+.mpb-opt-label{font-size:14px;font-weight:500;}
+.mpb-multi{font-size:11px;color:var(--text3);margin-bottom:10px;letter-spacing:1px;}
+.mpb-next{width:100%;margin-top:14px;background:var(--accent);border:none;border-radius:12px;color:#fff;font-family:var(--fb);font-size:14px;font-weight:600;padding:13px;cursor:pointer;}
+.mpb-next:disabled{background:var(--surface2);color:var(--text3);cursor:not-allowed;}
+.mpb-progress{display:flex;gap:4px;padding:0 16px;margin-top:12px;}
+.mpb-dot{flex:1;height:3px;border-radius:2px;background:var(--border);}
+.mpb-dot.done{background:var(--accent2);}
+.mpb-dot.active{background:var(--accent);}
+.cbtn.green{background:var(--accent2);color:#fff;}
+.gen-plan-day{margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.gen-plan-day-hdr{padding:12px 14px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.gen-plan-day-title{font-family:var(--fd);font-size:16px;letter-spacing:2px;}
+.gen-plan-meal{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.gen-plan-meal:last-child{border-bottom:none;}
 .toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--accent2);color:#fff;padding:10px 22px;border-radius:12px;font-family:var(--fb);font-size:13px;font-weight:600;z-index:500;opacity:0;pointer-events:none;transition:opacity .3s;white-space:nowrap;}
 .toast.show{opacity:1;}
 .today-log-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
@@ -340,6 +363,33 @@ canvas{width:100%;height:160px;}
   <div id="todayContent"></div>
 </div>
 
+<!-- QUICK LOG -->
+<div id="quicklog-screen" class="page">
+  <div class="ph"><button class="back-btn" onclick="goBack()">← Back</button><div class="pt">QUICK LOG</div><div class="ps">Add food to today's log</div></div>
+  <div class="sc-tabs" id="qlTabs"></div>
+  <div id="qlList"></div>
+  <div class="man-inp">
+    <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Manual Entry</div>
+    <input class="inf" id="qlName" placeholder="Food name" style="width:100%;margin-top:6px;" onblur="if(this.value&&!document.getElementById('qlCal').value)qlSmartCalc()"/>
+    <div class="ig">
+      <div><div class="il">CALORIES</div><input class="inf" id="qlCal" type="number" placeholder="0"/></div>
+      <div><div class="il">PROTEIN (g)</div><input class="inf" id="qlPro" type="number" placeholder="0"/></div>
+      <div><div class="il">FAT (g)</div><input class="inf" id="qlFat" type="number" placeholder="0"/></div>
+      <div><div class="il">CARBS (g)</div><input class="inf" id="qlCarbs" type="number" placeholder="0"/></div>
+    </div>
+    <button onclick="qlSmartCalc()" style="width:100%;margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:var(--fb);font-size:13px;font-weight:600;padding:9px;cursor:pointer;">🧠 Smart Calculate</button>
+    <button class="aeb" onclick="qlAddEntry()">Add to Log</button>
+  </div>
+  <div style="height:16px;"></div>
+</div>
+
+<!-- MEAL PLAN BUILDER -->
+<div id="mealbuilder-screen" class="page">
+  <div class="ph"><button class="back-btn" onclick="goBack()">← Back</button><div class="pt">BUILD PLAN</div><div class="ps">Personalize your week</div></div>
+  <div class="mpb-progress" id="mpbProgress"></div>
+  <div id="mpbContent"></div>
+</div>
+
 <!-- CONFIRM -->
 <div class="conf-ov" id="confOv">
   <div class="conf-box">
@@ -348,6 +398,9 @@ canvas{width:100%;height:160px;}
     <div class="conf-btns" id="confBtns"></div>
   </div>
 </div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
@@ -499,6 +552,7 @@ function renderHome(){
   document.getElementById('homeStats').innerHTML=`
     <div class="stat-card"><div class="sv" style="color:#3b82f6">${USER.startWeight}</div><div class="sd">lbs</div><div class="sl">Start Weight</div><div style="font-size:10px;color:var(--text3);margin-top:3px;">${USER.programStart}</div></div>
     <div class="stat-card"><div class="sv" style="color:#94a3b8">${last.weight}</div><div class="sd">lbs</div><div class="sl">Last Weigh-In</div><div style="font-size:10px;color:var(--text3);margin-top:3px;">${last.date}</div></div>`;
+  checkWeeklyMealPrompt();
 }
 
 // ═══ DIAL ═══
@@ -588,11 +642,12 @@ function openWorkoutDetail(dayIdx,wtId){
     const numSets=parseSetCount(ex.s);
     const block=document.createElement('div');block.className='ex-block';
     const savedEquip=equipmentChoices[ex.n]||'';
+    const timeBased=!ex.s.match(/^\d+[x×]/i);
     let setHtml='';
-    if(numSets>1){setHtml='<div class="set-inputs">';for(let s=1;s<=numSets;s++){const val=saved[`${ex.n}_set${s}`]||'';setHtml+=`<div class="set-inp-wrap"><div class="set-lbl">SET ${s}</div><input class="w-inp" type="number" placeholder="lbs" value="${val}" step="2.5" onchange="logSetWeight('${ex.n}',${s},this.value)"/></div>`;}setHtml+='</div>';}
+    if(!timeBased&&numSets>1){setHtml='<div class="set-inputs">';for(let s=1;s<=numSets;s++){const val=saved[`${ex.n}_set${s}`]||'';setHtml+=`<div class="set-inp-wrap"><div class="set-lbl">SET ${s}</div><input class="w-inp" type="number" placeholder="lbs" value="${val}" step="2.5" onchange="logSetWeight('${ex.n}',${s},this.value)"/></div>`;}setHtml+='</div>';}
     const equipOpts=['','Barbell','Dumbbell','Machine','Cable','Smith Machine','Bodyweight','Resistance Band'];
-    const equipSel=`<select class="equip-sel" onchange="saveEquipChoice('${ex.n.replace(/'/g,"\\'")}',this.value)">${equipOpts.map(o=>`<option value="${o}"${savedEquip===o?' selected':''}>${o||'Select Equipment'}</option>`).join('')}</select>`;
-    block.innerHTML=`<div class="ex-header"><div class="ex-name">${ex.n}</div><div class="ex-sets-label">${ex.s}</div></div>${equipSel}${setHtml}`;
+    const equipSel=timeBased?'':`<select class="equip-sel" onchange="saveEquipChoice('${ex.n.replace(/'/g,"\\'")}',this.value)">${equipOpts.map(o=>`<option value="${o}"${savedEquip===o?' selected':''}>${o||'Select Equipment'}</option>`).join('')}</select>`;
+    block.innerHTML=`<div class="ex-header"><div class="ex-name">${ex.n}</div><div class="ex-sets-label" style="color:${timeBased?'var(--accent2)':'var(--text2)'};">${ex.s}</div></div>${equipSel}${setHtml}`;
     c.appendChild(block);
   });
   document.getElementById('wdCalResult').style.display='none';
@@ -625,6 +680,10 @@ function showMealTab(tab){
 }
 function renderMealPlan(){
   const c=document.getElementById('mealPlanContent');c.innerHTML='';
+  // Build Plan button
+  const bb=document.createElement('div');bb.style.cssText='margin:10px 16px 0;';
+  bb.innerHTML=`<button onclick="startMealPlanBuilder()" style="width:100%;background:linear-gradient(135deg,#0f2a1a,#0a1f2a);border:1px solid var(--accent2);border-radius:12px;color:var(--accent2);font-family:var(--fb);font-size:13px;font-weight:600;padding:12px;cursor:pointer;">✨ Build New Personalized Plan</button>`;
+  c.appendChild(bb);
   const planData=[
     {type:'Push Day',color:'#3b82f6',totals:{cal:'~1,880',pro:'~183g',fat:'~57g',carbs:'~181g'},prep:'Sun prep: chicken thighs, jasmine rice, brown rice, quinoa, boil eggs, sweet potatoes',note:'Night before Leg Day: hit minimum 1,900 cal.',meals:[{label:'Breakfast',idx:0},{label:'Lunch',idx:2},{label:'Protein Shake',idx:12},{label:'Dinner',idx:13}]},
     {type:'Cardio Day',color:'#10b981',totals:{cal:'~1,830',pro:'~184g',fat:'~44g',carbs:'~162g'},prep:'Quick cook — stir fry shrimp takes 5 min fresh',note:'Zone 2 cardio day.',meals:[{label:'Breakfast',idx:0},{label:'Lunch',idx:3},{label:'Snack',idx:7},{label:'Dinner',idx:14}]},
@@ -866,7 +925,7 @@ function renderToday(){
   const calC=t.cal>TARGETS.cal?'var(--red)':calPct>85?'var(--green)':'#e8c870';
   const proC=t.pro>=TARGETS.pro?'var(--green)':proPct>85?'var(--yellow)':'#7ab3d4';
   const fatC=t.fat>TARGETS.fat?'var(--red)':'#d4a57a';
-  const macroHtml=`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-family:var(--fd);font-size:18px;letter-spacing:2px;">TODAY'S MACROS</div><button onclick="showPage('tracking')" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:var(--fb);font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer;">+ LOG FOOD</button></div><div class="mbr"><div class="mbl">Calories</div><div class="mbt"><div class="mbf" style="width:${calPct}%;background:${calC};"></div></div><div class="mbv" style="color:${calC};">${t.cal}/${TARGETS.cal}</div></div><div class="mbr"><div class="mbl">Protein</div><div class="mbt"><div class="mbf" style="width:${proPct}%;background:${proC};"></div></div><div class="mbv" style="color:${proC};">${t.pro}g/${TARGETS.pro}g</div></div><div class="mbr"><div class="mbl">Fat</div><div class="mbt"><div class="mbf" style="width:${fatPct}%;background:${fatC};"></div></div><div class="mbv" style="color:${fatC};">${t.fat}g/${TARGETS.fat}g</div></div></div>`;
+  const macroHtml=`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-family:var(--fd);font-size:18px;letter-spacing:2px;">TODAY'S MACROS</div><button onclick="openQuickLog()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:var(--fb);font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer;">+ LOG FOOD</button></div><div class="mbr"><div class="mbl">Calories</div><div class="mbt"><div class="mbf" style="width:${calPct}%;background:${calC};"></div></div><div class="mbv" style="color:${calC};">${t.cal}/${TARGETS.cal}</div></div><div class="mbr"><div class="mbl">Protein</div><div class="mbt"><div class="mbf" style="width:${proPct}%;background:${proC};"></div></div><div class="mbv" style="color:${proC};">${t.pro}g/${TARGETS.pro}g</div></div><div class="mbr"><div class="mbl">Fat</div><div class="mbt"><div class="mbf" style="width:${fatPct}%;background:${fatC};"></div></div><div class="mbv" style="color:${fatC};">${t.fat}g/${TARGETS.fat}g</div></div></div>`;
 
   // Workout
   const wtHtml=wt?`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid ${wt.color}44;border-radius:16px;overflow:hidden;"><div style="background:${wt.color}22;padding:12px 16px;border-bottom:1px solid ${wt.color}33;"><div style="font-family:var(--fd);font-size:20px;letter-spacing:2px;color:${wt.color};">${wt.name.toUpperCase()}</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">${wt.loc}</div></div><div style="padding:10px 16px;"><div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px;padding:8px;background:var(--surface2);border-radius:8px;">${wt.note}</div>${wt.exercises.map(ex=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);"><div style="font-size:14px;">${ex.n}</div><div style="font-size:12px;color:var(--text2);background:var(--surface2);padding:3px 8px;border-radius:6px;">${ex.s}</div></div>`).join('')}</div></div>` : `<div style="margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">🏋🏾</div><div style="font-size:14px;color:var(--text2);">No workout selected today</div><button onclick="showPage('workout')" style="margin-top:10px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--fb);font-size:13px;font-weight:600;padding:9px 18px;cursor:pointer;">Select Workout</button></div>`;
@@ -987,6 +1046,101 @@ function addLongPress(el,cb){let t=null;el.addEventListener('touchstart',()=>{t=
 function pushHistory(){history.pushState({inApp:true},'',window.location.href);}
 pushHistory();
 window.addEventListener('popstate',()=>{pushHistory();goBack();});
+
+// ═══ TOAST ═══
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+// ═══ WEEKLY MEAL PLAN PROMPT ═══
+let generatedMealPlan=ld('generatedMealPlan',null);
+let lastMealPlanWeek=ld('lastMealPlanWeek','');
+let mpbAnswers={};
+let mpbStep=0;
+
+function checkWeeklyMealPrompt(){
+  const cur=getWeekKey();
+  if(lastMealPlanWeek===cur)return;
+  const dayOfWeek=new Date().getDay();
+  if(dayOfWeek===1||!generatedMealPlan){
+    setTimeout(()=>{
+      showConfirm('🗓 New Week — Meal Plan',generatedMealPlan?'Keep last week\'s plan or build a new one?':'No meal plan set. Build one now?',[
+        {label:'Build New Plan',cls:'yes',fn:()=>{lastMealPlanWeek=cur;sv('lastMealPlanWeek',lastMealPlanWeek);startMealPlanBuilder();}},
+        {label:'Keep Current',cls:'no',fn:()=>{lastMealPlanWeek=cur;sv('lastMealPlanWeek',lastMealPlanWeek);}},
+      ]);
+    },800);
+  }
+}
+
+// ═══ MEAL PLAN BUILDER ═══
+const MPB_QUESTIONS=[
+  {id:'proteins',q:'Which proteins are you feeling this week?',multi:true,opts:[{icon:'🍗',l:'Chicken'},{icon:'🐟',l:'Salmon'},{icon:'🍤',l:'Shrimp'},{icon:'🥩',l:'Ground Beef'},{icon:'🦃',l:'Ground Turkey'},{icon:'🥚',l:'Eggs'},{icon:'🥓',l:'Canadian Bacon'}]},
+  {id:'avoid',q:'Anything you want to avoid this week?',multi:true,opts:[{icon:'🍚',l:'No Rice'},{icon:'🍝',l:'No Pasta'},{icon:'✅',l:'Nothing — all good'}]},
+  {id:'prep',q:'How much do you want to meal prep?',multi:false,opts:[{icon:'📦',l:'Heavy prep — cook everything Sunday'},{icon:'⚖️',l:'Mixed — some prep, some fresh'},{icon:'🔥',l:'Minimal — cook most things fresh'}]},
+  {id:'breakfasts',q:'Which breakfasts do you want this week?',multi:true,opts:[{icon:'🥣',l:'Eggs & Oats'},{icon:'🥞',l:'HP Pancakes'},{icon:'🥯',l:'Sola Bagel'},{icon:'🔄',l:'Rotate all of them'}]},
+  {id:'dinners',q:'Which dinner styles do you want?',multi:true,opts:[{icon:'🍕',l:'Pizza Night'},{icon:'🍝',l:'Pasta Night'},{icon:'🐟',l:'Salmon'},{icon:'🍗',l:'Grilled Chicken'},{icon:'🌯',l:'Ground Meat + Rice'}]},
+  {id:'cravings',q:'Any cravings or special requests?',multi:false,opts:[{icon:'⚡',l:'High protein priority'},{icon:'🪶',l:'Lighter meals'},{icon:'🫙',l:'More variety'},{icon:'👌',l:'No preferences — surprise me'}]},
+];
+function startMealPlanBuilder(){mpbAnswers={};mpbStep=0;openSubPage('mealbuilder-screen');renderMPBStep();}
+function renderMPBStep(){
+  const q=MPB_QUESTIONS[mpbStep];
+  document.getElementById('mpbProgress').innerHTML=MPB_QUESTIONS.map((_,i)=>`<div class="mpb-dot ${i<mpbStep?'done':i===mpbStep?'active':''}"></div>`).join('');
+  const selected=mpbAnswers[q.id]||[];
+  document.getElementById('mpbContent').innerHTML=`<div class="mpb-step"><div class="mpb-q">${q.q}</div>${q.multi?'<div class="mpb-multi">SELECT ALL THAT APPLY</div>':''}${q.opts.map(o=>`<div class="mpb-opt${selected.includes(o.l)?' sel':''}" onclick="mpbToggle('${q.id}','${o.l}',${q.multi})"><div class="mpb-opt-icon">${o.icon}</div><div class="mpb-opt-label">${o.l}</div>${selected.includes(o.l)?'<div style="margin-left:auto;color:var(--accent2);font-size:18px;">✓</div>':''}</div>`).join('')}<button class="mpb-next" onclick="mpbAdvance()" ${selected.length===0?'disabled':''}>${mpbStep<MPB_QUESTIONS.length-1?'Next →':'Build My Plan 🚀'}</button></div>`;
+}
+function mpbToggle(id,val,multi){
+  if(!mpbAnswers[id])mpbAnswers[id]=[];
+  if(multi){const i=mpbAnswers[id].indexOf(val);if(i>=0)mpbAnswers[id].splice(i,1);else mpbAnswers[id].push(val);}
+  else{mpbAnswers[id]=[val];}
+  renderMPBStep();
+}
+function mpbAdvance(){if(mpbStep<MPB_QUESTIONS.length-1){mpbStep++;renderMPBStep();}else{generateMealPlan();}}
+async function generateMealPlan(){
+  document.getElementById('mpbContent').innerHTML=`<div style="text-align:center;padding:60px 20px;"><div style="font-size:48px;margin-bottom:16px;">🤖</div><div style="font-family:var(--fd);font-size:22px;letter-spacing:2px;margin-bottom:8px;">BUILDING YOUR PLAN</div><div style="font-size:13px;color:var(--text2);">Personalizing your week...</div></div>`;
+  const prompt=`Build a 7-day meal plan for Derak. Preferences: Proteins: ${(mpbAnswers.proteins||[]).join(', ')}. Avoid: ${(mpbAnswers.avoid||[]).join(', ')}. Prep style: ${(mpbAnswers.prep||[]).join(', ')}. Breakfasts: ${(mpbAnswers.breakfasts||[]).join(', ')}. Dinners: ${(mpbAnswers.dinners||[]).join(', ')}. Requests: ${(mpbAnswers.cravings||[]).join(', ')}. Daily targets: ${TARGETS.cal} cal, ${TARGETS.pro}g protein, max ${TARGETS.fat}g fat. CRITICAL: Friday (Leg Day) must hit 1,900+ cal. Reply ONLY with valid JSON: {"days":[{"day":"Monday","workout":"Push Day","meals":[{"type":"Breakfast","name":"","cal":0,"pro":0,"fat":0,"carbs":0}],"totalCal":0,"totalPro":0}],"groceryList":["item"]}`;
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,system:'You are a fitness nutrition coach. Reply only with valid JSON, no markdown.',messages:[{role:'user',content:prompt}]})});
+    const data=await resp.json();
+    const raw=data.content[0].text.replace(/```json|```/g,'').trim();
+    const plan=JSON.parse(raw);
+    generatedMealPlan=plan;sv('generatedMealPlan',plan);
+    if(plan.groceryList&&plan.groceryList.length){let ci=grocItems.findIndex(s=>s.section==='THIS WEEK');if(ci<0){grocItems.push({section:'THIS WEEK',items:[]});ci=grocItems.length-1;}grocItems[ci].items=plan.groceryList.map(i=>({name:i,amount:''}));sv('grocItems',grocItems);}
+    let html=`<div style="padding:12px 16px 0;"><div style="font-family:var(--fd);font-size:22px;letter-spacing:2px;color:var(--accent2);">YOUR WEEK IS READY 🎉</div><div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Grocery list added automatically</div></div>`;
+    (plan.days||[]).forEach(day=>{html+=`<div class="gen-plan-day"><div class="gen-plan-day-hdr"><div class="gen-plan-day-title">${day.day.toUpperCase()}</div><div style="font-size:11px;color:var(--text2);">${day.totalCal} cal · ${day.totalPro}g pro</div></div>${(day.meals||[]).map(m=>`<div class="gen-plan-meal"><div><div style="font-size:13px;font-weight:500;">${m.name}</div><div style="font-size:11px;color:var(--text2);">${m.type} · ${m.cal} cal · ${m.pro}g pro</div></div></div>`).join('')}</div>`;});
+    html+=`<div style="padding:14px 16px;"><button onclick="goBack()" style="width:100%;background:var(--accent2);border:none;border-radius:12px;color:#fff;font-family:var(--fb);font-size:14px;font-weight:600;padding:13px;cursor:pointer;">✅ Save & Done</button></div>`;
+    document.getElementById('mpbContent').innerHTML=html;
+  }catch(e){
+    document.getElementById('mpbContent').innerHTML=`<div style="padding:20px 16px;"><div style="background:#1a0a0a;border:1px solid var(--red);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:13px;color:var(--red);font-weight:600;margin-bottom:4px;">⚠ API Not Connected Yet</div><div style="font-size:12px;color:var(--text2);line-height:1.6;">Set up the Vercel proxy first, then the meal plan builder will work automatically. Your preferences have been saved.</div></div><button onclick="goBack()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-family:var(--fb);font-size:14px;font-weight:600;padding:13px;cursor:pointer;">← Go Back</button></div>`;
+  }
+}
+
+// ═══ QUICK LOG ═══
+let qlActiveTab=MEAL_TABS[0];
+function openQuickLog(){qlActiveTab=MEAL_TABS[0];openSubPage('quicklog-screen');renderQuickLog();}
+function renderQuickLog(){
+  const tabs=document.getElementById('qlTabs'),list=document.getElementById('qlList');
+  tabs.innerHTML=MEAL_TABS.map(t=>`<div class="sc-tab${t===qlActiveTab?' active':''}" onclick="qlSetTab('${t}')">${t}</div>`).join('');
+  list.innerHTML='';
+  if(qlActiveTab==='My Foods'){
+    if(!customFoods.length){list.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;padding:16px;">No saved foods yet.</div>';return;}
+    customFoods.forEach((ml)=>{const btn=document.createElement('div');btn.className='meal-sc-btn';btn.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;"><div><div class="meal-sc-name">${ml.name}</div><div class="meal-sc-mac">${ml.cal} cal · ${ml.pro}g pro · ${ml.fat}g fat</div></div><div style="font-size:11px;color:var(--accent2);font-weight:600;">+ ADD</div></div>`;btn.onclick=()=>{const k=getTodayKey();if(!foodLog[k])foodLog[k]=[];foodLog[k].push({name:ml.name,time:new Date().toTimeString().slice(0,5),cal:ml.cal,pro:ml.pro,fat:ml.fat,carbs:ml.carbs,sodium:ml.sodium||0,fiber:ml.fiber||0,sugar:ml.sugar||0});sv('foodLog',foodLog);showToast('✅ '+ml.name+' logged');goBack();};list.appendChild(btn);});return;
+  }
+  const filtered=MEALS.filter(m=>{const lbl=m.label.toLowerCase();if(qlActiveTab==='Breakfast')return lbl.includes('breakfast');if(qlActiveTab==='Lunch')return lbl.includes('lunch');if(qlActiveTab==='Snack')return lbl.includes('snack');if(qlActiveTab==='Protein Shake')return lbl.includes('protein shake');if(qlActiveTab==='Dinner')return lbl.includes('dinner');return false;});
+  if(!filtered.length){list.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">No meals found</div>';return;}
+  filtered.forEach(ml=>{const btn=document.createElement('div');btn.className='meal-sc-btn';const clean=ml.label.replace(/^(Breakfast|Lunch|Snack|Protein Shake|Dinner)\s*[–-]\s*/i,'').trim();btn.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;"><div><div class="meal-sc-name">${clean}</div><div class="meal-sc-mac">${ml.cal} cal · ${ml.pro}g pro · ${ml.fat}g fat · ${ml.carbs}g carbs</div></div><div style="font-size:11px;color:var(--accent2);font-weight:600;margin-left:10px;">+ ADD</div></div>`;btn.onclick=()=>{const k=getTodayKey();if(!foodLog[k])foodLog[k]=[];foodLog[k].push({name:clean,time:new Date().toTimeString().slice(0,5),cal:ml.cal,pro:ml.pro,fat:ml.fat,carbs:ml.carbs,sodium:ml.sodium||0,fiber:ml.fiber||0,sugar:ml.sugar||0});sv('foodLog',foodLog);showToast('✅ '+clean+' logged');goBack();};list.appendChild(btn);});
+}
+window.qlSetTab=function(t){qlActiveTab=t;renderQuickLog();};
+function qlSmartCalc(){
+  const name=document.getElementById('qlName').value.trim().toLowerCase();if(!name)return;
+  let cal=0,pro=0,fat=0,carbs=0;
+  if(name.includes('chicken')&&name.includes('thigh')){cal=283;pro=41;fat=11;carbs=0;}else if(name.includes('salmon')){cal=354;pro=50;fat=17;carbs=0;}else if(name.includes('shrimp')){cal=238;pro=50;fat=3;carbs=0;}else if(name.includes('ground beef')){cal=330;pro=46;fat=15;carbs=0;}else if(name.includes('ground turkey')){cal=240;pro=38;fat=8;carbs=0;}else if(name.includes('egg')){cal=70;pro=6;fat=5;carbs=0;}else if(name.includes('oat')){cal=170;pro=5;fat=3;carbs=30;}else if(name.includes('isopure')||name.includes('protein powder')){cal=100;pro=25;fat=0;carbs=0;}else if(name.includes('banana')){cal=105;pro=1;fat=0;carbs=27;}else if(name.includes('sweet potato')){cal=120;pro=2;fat=0;carbs=28;}else if(name.includes('pizza')){cal=780;pro=58;fat=28;carbs=60;}else if(name.includes('pancake')){cal=580;pro=60;fat=4;carbs=55;}else if(name.includes('sola')||name.includes('bagel')){cal=150;pro=11;fat=4;carbs=24;}else if(name.includes('laughing cow')){cal=70;pro=3;fat=4;carbs=2;}else if(name.includes('canadian bacon')){cal=60;pro=10;fat=2;carbs=0;}else{cal=200;pro=15;fat=8;carbs=20;}
+  document.getElementById('qlCal').value=cal;document.getElementById('qlPro').value=pro;document.getElementById('qlFat').value=fat;document.getElementById('qlCarbs').value=carbs;
+}
+function qlAddEntry(){
+  const name=document.getElementById('qlName').value.trim();if(!name)return;
+  const entry={name,time:new Date().toTimeString().slice(0,5),cal:+document.getElementById('qlCal').value||0,pro:+document.getElementById('qlPro').value||0,fat:+document.getElementById('qlFat').value||0,carbs:+document.getElementById('qlCarbs').value||0,sodium:0,fiber:0,sugar:0};
+  const k=getTodayKey();if(!foodLog[k])foodLog[k]=[];foodLog[k].push(entry);sv('foodLog',foodLog);
+  ['qlName','qlCal','qlPro','qlFat','qlCarbs'].forEach(id=>document.getElementById(id).value='');
+  showToast('✅ '+name+' logged');goBack();
+}
 
 // ═══ DEEP LINK PARSER ═══
 function checkDeepLink(){
