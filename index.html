@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="theme-color" content="#080c12"/>
+<link rel="manifest" href="/manifest.json"/>
 <title>Macro Fit</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -573,33 +574,19 @@ function animDial(target,cb){if(rafId){cancelAnimationFrame(rafId);rafId=null;}c
 function startMomentum(){if(rafId){cancelAnimationFrame(rafId);rafId=null;}function spin(){dialVel*=0.988;dialRot+=dialVel;renderDial();if(Math.abs(dialVel)>0.15){rafId=requestAnimationFrame(spin);}else{rafId=null;animDial(dialSnap(),null);}}rafId=requestAnimationFrame(spin);}
 function initDial(){
   const c=document.getElementById('dialContainer');if(!c)return;
-  let startA=0,startRot=0,lastA=0,isDrag=false,startX=0,startY=0,startDist=0;
+  let startA=0,startRot=0,lastA=0,isDrag=false,totalPx=0,peakDist=0,lastX=0,lastY=0;
   const vbuf=[];
-  function getAngle(x,y){const r=c.getBoundingClientRect();return Math.atan2(y-r.top-DC,x-r.left-DC)*180/Math.PI;}
-  function getDist(x,y){const r=c.getBoundingClientRect();return Math.hypot(x-r.left-DC,y-r.top-DC);}
-  function onStart(x,y){if(rafId){cancelAnimationFrame(rafId);rafId=null;}startA=getAngle(x,y);lastA=startA;startRot=dialRot;isDrag=true;dialVel=0;vbuf.length=0;startX=x;startY=y;startDist=getDist(x,y);}
-  function onMove(x,y){if(!isDrag)return;const now=performance.now(),cur=getAngle(x,y);let d=cur-lastA;if(d>180)d-=360;if(d<-180)d+=360;lastA=cur;vbuf.push({v:d,t:now});while(vbuf.length&&vbuf[0].t<now-80)vbuf.shift();dialRot=startRot+(cur-startA);renderDial();const r=c.getBoundingClientRect();const dot=document.getElementById('dialCenter');if(dot)dot.classList.toggle('lit',Math.hypot(x-r.left-DC,y-r.top-DC)<52);}
-  function onEnd(x,y){
-    if(!isDrag)return;isDrag=false;
-    const dot=document.getElementById('dialCenter');if(dot)dot.classList.remove('lit');
-    const pixelMoved=Math.hypot(x-startX,y-startY);
-    const endDist=getDist(x,y);
-    // FIXED: use pixel movement for tap detection, not angular delta
-    const isTap=pixelMoved<14;
-    if(isTap){
-      const r=c.getBoundingClientRect(),lx=x-r.left,ly=y-r.top;
-      const n=DIAL_BTNS.length,step=360/n;let best=-1,bd=62;
-      for(let i=0;i<n;i++){const deg=((dialRot+i*step)%360+360)%360,rad=deg*Math.PI/180,bx=DC+DR*Math.cos(rad),by=DC+DR*Math.sin(rad),d=Math.hypot(lx-bx,ly-by);if(d<bd){bd=d;best=i;}}
-      if(best>=0)showPage(DIAL_BTNS[best].screen);
-      return;
-    }
-    // Slide to center: finger moved inward significantly and ended near center
-    if(endDist<62&&startDist>70){animDial(dialSnap(),()=>showPage(DIAL_BTNS[dialActive()].screen));return;}
-    // Fling
-    const recent=vbuf.slice(-6);const smoothV=recent.length?recent.reduce((s,e)=>s+e.v,0)/recent.length:0;
-    dialVel=smoothV;
-    if(Math.abs(dialVel)>1.5){startMomentum();}else{dialVel=0;animDial(dialSnap(),null);}
-  }
+  function angle(x,y){const r=c.getBoundingClientRect();return Math.atan2(y-r.top-DC,x-r.left-DC)*180/Math.PI;}
+  function cdist(x,y){const r=c.getBoundingClientRect();return Math.hypot(x-r.left-DC,y-r.top-DC);}
+  function onStart(x,y){if(rafId){cancelAnimationFrame(rafId);rafId=null;}startA=angle(x,y);lastA=startA;startRot=dialRot;isDrag=true;totalPx=0;dialVel=0;vbuf.length=0;peakDist=cdist(x,y);lastX=x;lastY=y;}
+  function onMove(x,y){if(!isDrag)return;const now=performance.now(),cur=angle(x,y);let d=cur-lastA;if(d>180)d-=360;if(d<-180)d+=360;totalPx+=Math.hypot(x-lastX,y-lastY);lastX=x;lastY=y;lastA=cur;vbuf.push({v:d,t:now});while(vbuf.length&&vbuf[0].t<now-80)vbuf.shift();dialRot=startRot+(cur-startA);renderDial();const ed=cdist(x,y);if(ed>peakDist)peakDist=ed;const dot=document.getElementById('dialCenter');if(dot)dot.classList.toggle('lit',ed<70);}
+  function onEnd(x,y){if(!isDrag)return;isDrag=false;const dot=document.getElementById('dialCenter');if(dot)dot.classList.remove('lit');const endDist=cdist(x,y);
+    // Tap: barely moved — find nearest button and navigate
+    if(totalPx<14){const r=c.getBoundingClientRect(),lx=x-r.left,ly=y-r.top,n=DIAL_BTNS.length,step=360/n;let best=-1,bd=62;for(let i=0;i<n;i++){const deg=((dialRot+i*step)%360+360)%360,rad=deg*Math.PI/180,bx=DC+DR*Math.cos(rad),by=DC+DR*Math.sin(rad),d=Math.hypot(lx-bx,ly-by);if(d<bd){bd=d;best=i;}}if(best>=0)showPage(DIAL_BTNS[best].screen);return;}
+    // Slide to center: finger ended near center OR moved significantly inward
+    if(endDist<70||(endDist<peakDist-35&&endDist<peakDist*0.75)){animDial(dialSnap(),()=>showPage(DIAL_BTNS[dialActive()].screen));return;}
+    // Fling/spin
+    const recent=vbuf.slice(-6);const smoothV=recent.length?recent.reduce((s,e)=>s+e.v,0)/recent.length:0;dialVel=smoothV;if(Math.abs(dialVel)>1.5){startMomentum();}else{dialVel=0;animDial(dialSnap(),null);}}
   c.addEventListener('touchstart',e=>onStart(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
   c.addEventListener('touchmove',e=>{onMove(e.touches[0].clientX,e.touches[0].clientY);e.preventDefault();},{passive:false});
   c.addEventListener('touchend',e=>onEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY),{passive:true});
