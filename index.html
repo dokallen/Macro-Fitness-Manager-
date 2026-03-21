@@ -571,12 +571,29 @@ function animDial(target,cb){if(rafId){cancelAnimationFrame(rafId);rafId=null;}c
 function startMomentum(){if(rafId){cancelAnimationFrame(rafId);rafId=null;}function spin(){dialVel*=0.988;dialRot+=dialVel;renderDial();if(Math.abs(dialVel)>0.15){rafId=requestAnimationFrame(spin);}else{rafId=null;animDial(dialSnap(),null);}}rafId=requestAnimationFrame(spin);}
 function initDial(){
   const c=document.getElementById('dialContainer');if(!c)return;
-  let startA=0,startRot=0,lastA=0,isDrag=false,totalDelta=0,startDist=0;
+  let startA=0,startRot=0,lastA=0,isDrag=false,totalDelta=0,startDist=0,lastDist=0;
   const vbuf=[];
   function angle(x,y){const r=c.getBoundingClientRect();return Math.atan2(y-r.top-DC,x-r.left-DC)*180/Math.PI;}
-  function onStart(x,y){if(rafId){cancelAnimationFrame(rafId);rafId=null;}startA=angle(x,y);lastA=startA;startRot=dialRot;isDrag=true;totalDelta=0;dialVel=0;vbuf.length=0;const r=c.getBoundingClientRect();startDist=Math.hypot(x-r.left-DC,y-r.top-DC);}
-  function onMove(x,y){if(!isDrag)return;const now=performance.now(),cur=angle(x,y);let d=cur-lastA;if(d>180)d-=360;if(d<-180)d+=360;totalDelta+=Math.abs(d);lastA=cur;vbuf.push({v:d,t:now});while(vbuf.length&&vbuf[0].t<now-80)vbuf.shift();dialRot=startRot+(cur-startA);renderDial();const r=c.getBoundingClientRect(),fx=x-r.left,fy=y-r.top;const dot=document.getElementById('dialCenter');if(dot)dot.classList.toggle('lit',Math.hypot(fx-DC,fy-DC)<50);}
-  function onEnd(x,y){if(!isDrag)return;isDrag=false;const dot=document.getElementById('dialCenter');if(dot)dot.classList.remove('lit');if(totalDelta<4){const r=c.getBoundingClientRect(),lx=x-r.left,ly=y-r.top,n=DIAL_BTNS.length,step=360/n;let best=-1,bd=62;for(let i=0;i<n;i++){const deg=((dialRot+i*step)%360+360)%360,rad=deg*Math.PI/180,bx=DC+DR*Math.cos(rad),by=DC+DR*Math.sin(rad),d=Math.hypot(lx-bx,ly-by);if(d<bd){bd=d;best=i;}}if(best>=0)showPage(DIAL_BTNS[best].screen);return;}const r=c.getBoundingClientRect(),fx=x-r.left,fy=y-r.top;const endDist=Math.hypot(fx-DC,fy-DC);if(endDist<68&&startDist>55){animDial(dialSnap(),()=>showPage(DIAL_BTNS[dialActive()].screen));return;}const recent=vbuf.slice(-6);const smoothV=recent.length?recent.reduce((s,e)=>s+e.v,0)/recent.length:0;dialVel=smoothV;if(Math.abs(dialVel)>1.5){startMomentum();}else{dialVel=0;animDial(dialSnap(),()=>showPage(DIAL_BTNS[dialActive()].screen));}}
+  function onStart(x,y){if(rafId){cancelAnimationFrame(rafId);rafId=null;}startA=angle(x,y);lastA=startA;startRot=dialRot;isDrag=true;totalDelta=0;dialVel=0;vbuf.length=0;const r=c.getBoundingClientRect();startDist=Math.hypot(x-r.left-DC,y-r.top-DC);lastDist=startDist;}
+  function onMove(x,y){if(!isDrag)return;const now=performance.now(),cur=angle(x,y);let d=cur-lastA;if(d>180)d-=360;if(d<-180)d+=360;totalDelta+=Math.abs(d);lastA=cur;vbuf.push({v:d,t:now});while(vbuf.length&&vbuf[0].t<now-80)vbuf.shift();dialRot=startRot+(cur-startA);renderDial();const r=c.getBoundingClientRect(),fx=x-r.left,fy=y-r.top;lastDist=Math.hypot(fx-DC,fy-DC);const dot=document.getElementById('dialCenter');if(dot)dot.classList.toggle('lit',lastDist<55);}
+  function onEnd(x,y){
+    if(!isDrag)return;isDrag=false;
+    const dot=document.getElementById('dialCenter');if(dot)dot.classList.remove('lit');
+    const r=c.getBoundingClientRect(),fx=x-r.left,fy=y-r.top;
+    const endDist=Math.hypot(fx-DC,fy-DC);
+    const radialDrag=startDist-endDist; // positive = dragged inward
+    // CENTER DRAG: started on a button and dragged inward 45+ px toward center
+    if(radialDrag>45&&startDist>60){animDial(dialSnap(),()=>showPage(DIAL_BTNS[dialActive()].screen));return;}
+    // TAP: raised threshold to 12deg to reduce accidental triggers
+    if(totalDelta<12){
+      const n=DIAL_BTNS.length,step=360/n;let best=-1,bd=52;
+      for(let i=0;i<n;i++){const deg=((dialRot+i*step)%360+360)%360,rad=deg*Math.PI/180,bx=DC+DR*Math.cos(rad),by=DC+DR*Math.sin(rad),d=Math.hypot(fx-bx,fy-by);if(d<bd){bd=d;best=i;}}
+      if(best>=0)showPage(DIAL_BTNS[best].screen);return;
+    }
+    // FLING
+    const recent=vbuf.slice(-6);const smoothV=recent.length?recent.reduce((s,e)=>s+e.v,0)/recent.length:0;
+    dialVel=smoothV;if(Math.abs(dialVel)>1.5){startMomentum();}else{dialVel=0;animDial(dialSnap(),null);}
+  }
   c.addEventListener('touchstart',e=>onStart(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
   c.addEventListener('touchmove',e=>{onMove(e.touches[0].clientX,e.touches[0].clientY);e.preventDefault();},{passive:false});
   c.addEventListener('touchend',e=>onEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY),{passive:true});
