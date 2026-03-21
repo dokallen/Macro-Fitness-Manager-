@@ -692,13 +692,20 @@ function animDial(target,cb){if(rafId){cancelAnimationFrame(rafId);rafId=null;}c
 function startMomentum(){if(rafId){cancelAnimationFrame(rafId);rafId=null;}function spin(){dialVel*=0.988;dialRot+=dialVel;renderDial();if(Math.abs(dialVel)>0.15){rafId=requestAnimationFrame(spin);}else{rafId=null;animDial(dialSnap(),null);}}rafId=requestAnimationFrame(spin);}
 function initDial(){
   const c=document.getElementById('dialContainer');if(!c)return;
-  let startA=0,startRot=0,lastA=0,isDrag=false,totalPx=0,lastX=0,lastY=0,triggered=false;
+  let startA=0,startRot=0,lastA=0,isDrag=false,totalPx=0,lastX=0,lastY=0,triggered=false,startBtnIdx=-1;
   const vbuf=[];
   function angle(x,y){const r=c.getBoundingClientRect();return Math.atan2(y-r.top-DC,x-r.left-DC)*180/Math.PI;}
   function cdist(x,y){const r=c.getBoundingClientRect();return Math.hypot(x-r.left-DC,y-r.top-DC);}
+  function nearestBtn(x,y){
+    const r=c.getBoundingClientRect(),lx=x-r.left,ly=y-r.top;
+    const n=DIAL_BTNS.length,step=360/n;let best=-1,bd=999;
+    for(let i=0;i<n;i++){const deg=((dialRot+i*step)%360+360)%360,rad=deg*Math.PI/180,bx=DC+DR*Math.cos(rad),by=DC+DR*Math.sin(rad),dist=Math.hypot(lx-bx,ly-by);if(dist<bd){bd=dist;best=i;}}
+    return best;
+  }
   function onStart(x,y){
     if(rafId){cancelAnimationFrame(rafId);rafId=null;}
     startA=angle(x,y);lastA=startA;startRot=dialRot;isDrag=true;totalPx=0;dialVel=0;vbuf.length=0;triggered=false;lastX=x;lastY=y;
+    startBtnIdx=nearestBtn(x,y);
   }
   function onMove(x,y){
     if(!isDrag||triggered)return;
@@ -709,12 +716,13 @@ function initDial(){
     dialRot=startRot+(cur-startA);renderDial();
     const ed=cdist(x,y);
     const dot=document.getElementById('dialCenter');
-    if(dot)dot.classList.toggle('lit',ed<65);
-    // Trigger navigation as soon as finger enters center zone during a drag
-    if(ed<58&&totalPx>20){
+    if(dot)dot.classList.toggle('lit',ed<80);
+    // Trigger: finger inside center zone with movement — use the button the drag started on
+    if(ed<80&&totalPx>15){
       triggered=true;isDrag=false;
       if(dot)dot.classList.remove('lit');
-      animDial(dialSnap(),()=>showPage(DIAL_BTNS[dialActive()].screen));
+      const targetIdx=startBtnIdx>=0?startBtnIdx:dialActive();
+      animDial(dialSnap(),()=>showPage(DIAL_BTNS[targetIdx].screen));
     }
   }
   function onEnd(x,y){
@@ -723,22 +731,24 @@ function initDial(){
     if(triggered)return;
     const endDist=cdist(x,y);
     // Tap detection
-    if(totalPx<14){
-      const r=c.getBoundingClientRect(),lx=x-r.left,ly=y-r.top;
-      const n=DIAL_BTNS.length,step=360/n;let best=-1,bd=55;
-      for(let i=0;i<n;i++){const deg=((dialRot+i*step)%360+360)%360,rad=deg*Math.PI/180,bx=DC+DR*Math.cos(rad),by=DC+DR*Math.sin(rad),dist=Math.hypot(lx-bx,ly-by);if(dist<bd){bd=dist;best=i;}}
+    if(totalPx<12){
+      const best=nearestBtn(x,y);
       if(best>=0)showPage(DIAL_BTNS[best].screen);
       return;
     }
-    // Fallback: ended near center
-    if(endDist<65){animDial(dialSnap(),()=>showPage(DIAL_BTNS[dialActive()].screen));return;}
+    // Ended near center without triggering mid-move (slow drag)
+    if(endDist<80){
+      const targetIdx=startBtnIdx>=0?startBtnIdx:dialActive();
+      animDial(dialSnap(),()=>showPage(DIAL_BTNS[targetIdx].screen));return;
+    }
     // Fling
     const recent=vbuf.slice(-6);const smoothV=recent.length?recent.reduce((s,e)=>s+e.v,0)/recent.length:0;
     dialVel=smoothV;if(Math.abs(dialVel)>1.5){startMomentum();}else{dialVel=0;animDial(dialSnap(),null);}
   }
-  c.addEventListener('touchstart',e=>onStart(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
+  // passive:false on touchstart so e.preventDefault() in touchmove takes effect immediately (prevents iOS scroll hijack)
+  c.addEventListener('touchstart',e=>{e.preventDefault();onStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
   c.addEventListener('touchmove',e=>{onMove(e.touches[0].clientX,e.touches[0].clientY);e.preventDefault();},{passive:false});
-  c.addEventListener('touchend',e=>onEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY),{passive:true});
+  c.addEventListener('touchend',e=>{e.preventDefault();onEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY);},{passive:false});
   c.addEventListener('mousedown',e=>{e.preventDefault();onStart(e.clientX,e.clientY);});
   window.addEventListener('mousemove',e=>{if(isDrag)onMove(e.clientX,e.clientY);});
   window.addEventListener('mouseup',e=>{if(isDrag)onEnd(e.clientX,e.clientY);});
@@ -852,16 +862,49 @@ function renderMeals(){
 
   if(activeMealTabSel==='plan'){
     if(!weeklyMealPlan){
-      const pantryCount = getPantryList().length;
       content.innerHTML = `
         <div style="padding:20px 16px;">
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;">
-            <div style="font-family:var(--fd);font-size:16px;letter-spacing:2px;margin-bottom:6px;">PANTRY STATUS</div>
-            <div style="font-size:13px;color:var(--text2);">You have <span style="color:var(--accent2);font-weight:600;">${pantryCount} items</span> on hand</div>
-            <button onclick="showPage('pantry')" style="margin-top:10px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:var(--fb);font-size:13px;font-weight:600;padding:10px;cursor:pointer;">Update Pantry →</button>
+          <div style="font-family:var(--fd);font-size:22px;letter-spacing:2px;margin-bottom:4px;">BUILD YOUR PLAN</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">1,800–1,900 cal · 180g+ protein · High variety</div>
+
+          <div onclick="generateMealPlan()" style="background:linear-gradient(135deg,#0d1e33,#1a1040);border:1.5px solid var(--accent);border-radius:16px;padding:18px 16px;margin-bottom:12px;cursor:pointer;transition:opacity .15s;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="font-size:32px;">⚡</div>
+              <div>
+                <div style="font-family:var(--fd);font-size:20px;letter-spacing:2px;color:var(--accent);">QUICK GENERATE</div>
+                <div style="font-size:12px;color:var(--text2);margin-top:3px;">AI picks a fully balanced week — diverse proteins, perfect macros, ready in seconds</div>
+              </div>
+            </div>
           </div>
-          <button onclick="generateMealPlan()" style="width:100%;background:linear-gradient(135deg,var(--accent),#7c3aed);border:none;border-radius:14px;color:#fff;font-family:var(--fd);font-size:22px;letter-spacing:2px;padding:18px;cursor:pointer;">🧠 GENERATE 7-DAY PLAN</button>
-          <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:8px;">AI builds your plan using pantry items · 1,800–1,900 cal · 180g+ protein</div>
+
+          <div onclick="showMealPrefSheet()" style="background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:18px 16px;cursor:pointer;transition:opacity .15s;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="font-size:32px;">🎛️</div>
+              <div>
+                <div style="font-family:var(--fd);font-size:20px;letter-spacing:2px;">SET PREFERENCES</div>
+                <div style="font-size:12px;color:var(--text2);margin-top:3px;">Tell the AI your favorite proteins, foods to avoid, meal timing, and more</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="mealPrefSheet" style="display:none;margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;">
+            <div style="font-family:var(--fd);font-size:16px;letter-spacing:2px;margin-bottom:14px;">YOUR PREFERENCES</div>
+
+            <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Proteins you love (pick any)</div>
+            <div id="prefProteins" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;">
+              ${['Chicken','Turkey','Salmon','Shrimp','Lean Beef','Tuna','Tilapia','Eggs','Bison','Pork Loin','Greek Yogurt','Cottage Cheese'].map(p=>`<div onclick="togglePref('prot','${p}',this)" style="padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);font-size:12px;cursor:pointer;">${p}</div>`).join('')}
+            </div>
+
+            <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Foods to avoid</div>
+            <textarea id="prefAvoid" placeholder="e.g. pork, shellfish, dairy..." rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:13px;padding:10px;resize:none;"></textarea>
+
+            <div style="font-size:12px;color:var(--text2);margin:12px 0 6px;">Meal timing preference</div>
+            <div id="prefTiming" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px;">
+              ${['3 meals + snacks','4-5 small meals','2 big meals','Intermittent fasting'].map(t=>`<div onclick="togglePref('time','${t}',this)" style="padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);font-size:12px;cursor:pointer;">${t}</div>`).join('')}
+            </div>
+
+            <button onclick="generateMealPlanWithPrefs()" style="width:100%;background:linear-gradient(135deg,var(--accent),#7c3aed);border:none;border-radius:12px;color:#fff;font-family:var(--fd);font-size:20px;letter-spacing:2px;padding:14px;cursor:pointer;">🧠 BUILD MY PLAN</button>
+          </div>
         </div>
       `;
     } else {
@@ -871,8 +914,8 @@ function renderMeals(){
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--text2);">${plan.planWeek||'THIS WEEK'}</div>
             <div style="display:flex;gap:6px;">
-              <button onclick="weeklyMealPlan=null;sv('weeklyMealPlan',null);renderMeals();" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text3);font-family:var(--fb);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;">Clear</button>
-              <button onclick="generateMealPlan()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:var(--fb);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;">Regen</button>
+              <button onclick="weeklyMealPlan=null;sv('weeklyMealPlan',null);renderMeals();" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text3);font-family:var(--fb);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;">New Plan</button>
+              <button onclick="generateMealPlan()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:var(--fb);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;">Regen ⚡</button>
             </div>
           </div>
           ${(plan.days||[]).map((day,i)=>renderMealPlanCard(day,i)).join('')}
@@ -1662,10 +1705,12 @@ function saveAnalyzedRecipeInner(adjusted){
 </script>
 <script>
 // ═══ MEAL PLAN GENERATOR ═══
-async function generateMealPlan(){
+async function generateMealPlan(prefs={}){
   const pantryList = getPantryList();
-  const pantryStr = pantryList.length ? pantryList.join(', ') : 'Standard grocery items';
+  const pantryStr = pantryList.length ? pantryList.join(', ') : 'none specified';
   const recipeNames = recipeLibrary.map(r=>r.name+' ('+r.macrosPerServing.cal+'cal, '+r.macrosPerServing.pro+'g pro)').join(', ')||'None yet';
+  const prefLine = prefs.preferredProteins?`\nUSER PREFERENCES: Favorite proteins: ${prefs.preferredProteins}. Avoid: ${prefs.avoid||'nothing'}. Meal timing: ${prefs.mealTiming||'3 meals + snacks'}.`:'';
+
 
   const planTab = document.getElementById('mealTabContent');
   if(planTab) planTab.innerHTML = '<div style="text-align:center;padding:40px 20px;"><div style="font-size:32px;margin-bottom:12px;">🧠</div><div style="font-family:var(--fd);font-size:24px;letter-spacing:2px;color:var(--accent);">BUILDING YOUR PLAN</div><div style="font-size:13px;color:var(--text2);margin-top:8px;">AI is crafting your 7-day meal plan...</div><div style="margin-top:20px;" class="prog-bar"><div class="prog-fill" style="width:100%;animation:none;background:linear-gradient(90deg,var(--accent),var(--accent2));"></div></div></div>';
@@ -1697,7 +1742,7 @@ Sunday dinner must be ≥1900 cal total for the day (pre-leg/push day).
 
 PANTRY BONUS (use if it makes sense, not required): ${pantryStr}
 SAVED RECIPES (can reference by name): ${recipeNames}
-
+${prefLine}
 Each meal object must have: slot, name, cal, pro, fat, carbs, pantryBased (bool), recipeKey (null unless from saved recipes).
 Respond ONLY with valid JSON. No markdown, no commentary.`,
       messages:[{role:'user',content:`Build a 7-day meal plan starting week of ${weekLabel}. Return JSON:\n{"planWeek":"Week of ${weekLabel}","days":[{"day":"Monday","workoutType":"Push","meals":[{"slot":"Breakfast","name":"","cal":0,"pro":0,"fat":0,"carbs":0,"pantryBased":true,"recipeKey":null}],"dayTotals":{"cal":0,"pro":0,"fat":0,"carbs":0}}],"groceryNeeded":[]}`}]
@@ -1718,25 +1763,24 @@ Respond ONLY with valid JSON. No markdown, no commentary.`,
 function renderMealPlanCard(day, idx){
   const dayKey = day.day+'_'+idx;
   const isExpanded = ld('mpExpanded_'+dayKey, false);
-  const wColors={'Push':'#3b82f6','Pull':'#8b5cf6','Legs':'#ef4444','Cardio':'#10b981','Active Recovery':'#f59e0b','T25':'#06b6d4','Rest':'#6b7280'};
-  const wc = wColors[day.workoutType]||'#475569';
   const t = day.dayTotals||{};
-  const proOk = t.pro>=180;
-  const fatOk = t.fat<=60;
-  const calOk = t.cal>=1800&&t.cal<=2000;
-  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:10px;overflow:hidden;">
+  const proOk = t.pro>=175;
+  const fatOk = t.fat<=65;
+  const calOk = t.cal>=1700&&t.cal<=2050;
+  // Build inline warning text instead of mystery icons
+  const warnings=[];
+  if(!proOk&&t.pro>0) warnings.push(`${t.pro}g protein — low`);
+  if(!fatOk&&t.fat>0) warnings.push(`${t.fat}g fat — over limit`);
+  const borderColor = (!proOk||!fatOk)?'var(--accent3)':'var(--border)';
+  return `<div style="background:var(--surface);border:1px solid ${borderColor};border-radius:14px;margin-bottom:10px;overflow:hidden;">
     <div style="padding:12px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="toggleMPDay('${dayKey}')">
       <div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <div style="font-family:var(--fd);font-size:18px;letter-spacing:2px;">${day.day.toUpperCase()}</div>
-          <div style="background:${wc}22;color:${wc};font-size:10px;font-weight:600;letter-spacing:1px;padding:2px 8px;border-radius:20px;">${day.workoutType||'Rest'}</div>
-        </div>
-        <div style="font-size:12px;color:${calOk?'var(--accent2)':t.cal>2000?'var(--red)':'var(--accent3)'};">${t.cal||0} cal</div>
-        <div style="font-size:11px;color:var(--text3);">${t.pro||0}g pro · ${t.fat||0}g fat · ${t.carbs||0}g carbs</div>
+        <div style="font-family:var(--fd);font-size:18px;letter-spacing:2px;margin-bottom:4px;">${day.day.toUpperCase()}</div>
+        <div style="font-size:12px;color:${calOk?'var(--accent2)':t.cal>2050?'var(--red)':'var(--accent3)'};">${t.cal||0} cal · ${t.pro||0}g pro · ${t.fat||0}g fat</div>
+        ${warnings.length?`<div style="font-size:10px;color:var(--accent3);margin-top:2px;">${warnings.join(' · ')}</div>`:''}
       </div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        ${!proOk?'<div title="Low protein" style="color:var(--red);font-size:14px;">⚠️</div>':''}
-        ${!fatOk?'<div title="Over fat limit" style="color:var(--red);font-size:14px;">🔴</div>':''}
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${day.workoutType&&day.workoutType!=='Rest'?`<button onclick="event.stopPropagation();getMealCoachTip('${dayKey}','${day.workoutType||''}')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--accent2);font-size:11px;font-weight:600;padding:4px 8px;cursor:pointer;">Coach 💬</button>`:''}
         <div style="color:var(--text3);font-size:18px;" id="mpChev_${dayKey}">${isExpanded?'▾':'›'}</div>
       </div>
     </div>
@@ -1820,6 +1864,48 @@ function logMealFromPlanData(meal){
 }
 </script>
 <script>
+// ═══ MEAL PLAN PREFERENCES ═══
+let _mealPrefs={prot:[],time:[]};
+
+function showMealPrefSheet(){
+  _mealPrefs={prot:[],time:[]};
+  const sheet=document.getElementById('mealPrefSheet');
+  if(sheet)sheet.style.display=sheet.style.display==='none'?'block':'none';
+}
+
+function togglePref(type,val,el){
+  const arr=_mealPrefs[type];
+  const idx=arr.indexOf(val);
+  if(idx>=0){arr.splice(idx,1);el.style.background='var(--surface2)';el.style.borderColor='var(--border)';el.style.color='var(--text)';}
+  else{arr.push(val);el.style.background=type==='prot'?'#0d1e33':'#0d200d';el.style.borderColor=type==='prot'?'var(--accent)':'var(--accent2)';el.style.color=type==='prot'?'var(--accent)':'var(--accent2)';}
+}
+
+async function generateMealPlanWithPrefs(){
+  const prots=_mealPrefs.prot.length?_mealPrefs.prot.join(', '):'Any lean protein';
+  const timing=_mealPrefs.time[0]||'3 meals + snacks';
+  const avoid=(document.getElementById('prefAvoid')?.value||'').trim()||'nothing';
+  await generateMealPlan({preferredProteins:prots,mealTiming:timing,avoid});
+}
+
+async function getMealCoachTip(dayKey,workoutType){
+  const coach=getCoach();
+  const dayIdx=parseInt(dayKey.split('_').pop());
+  const day=weeklyMealPlan?.days?.[dayIdx];
+  const meals=(day?.meals||[]).map(m=>m.name).join(', ')||'your planned meals';
+  const t=day?.dayTotals||{};
+  showToast('Getting coach tip...');
+  try{
+    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',max_tokens:200,
+      system:`You are ${coach.name}. ${coach.personality} Give a short, practical nutrition tip for this workout day. 2 sentences max.`,
+      messages:[{role:'user',content:`It's a ${workoutType} day. My meals are: ${meals}. Totals: ${t.cal||0} cal, ${t.pro||0}g protein. Any timing or nutrition tips for this workout type?`}]
+    })});
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'Fuel up 60-90 min before training. Make sure you hit your protein target today.';
+    showConfirm(coach.name+' on '+workoutType+' Day',text,[{label:'Got it',cls:'yes',fn:null}]);
+  }catch(e){showToast('Could not get tip right now');}
+}
+
 // ═══ WORKOUT PROGRESSION ═══
 
 function getSessionsThisWeek(){
