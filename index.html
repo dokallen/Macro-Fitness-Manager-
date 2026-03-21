@@ -402,9 +402,9 @@ canvas{display:block;width:100% !important;max-width:100%;}
 
 <!-- COACH CHOOSER -->
 <div id="coach-chooser-screen" class="page">
-  <div class="ph"><button class="back-btn" onclick="goBack()">← Back</button><div class="pt">CHOOSE COACH</div><div class="ps">Pick your training personality</div></div>
+  <div class="ph"><button class="back-btn" onclick="goBack()">← Back</button><div class="pt">CHOOSE COACH</div><div class="ps">Tap to select — saves instantly</div></div>
   <div class="coach-grid" id="coachGrid"></div>
-  <div style="padding:0 16px 16px;"><button onclick="saveCoachChoice()" class="aeb">Set My Coach</button></div>
+  <div style="height:16px;"></div>
 </div>
 
 <!-- CONFIRM -->
@@ -421,7 +421,7 @@ canvas{display:block;width:100% !important;max-width:100%;}
       <div style="font-size:11px;color:#c4b5fd;" id="coachCtx">Ask me anything</div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
-      <button onclick="showPage('coach-chooser')" style="font-size:11px;color:#c4b5fd;text-decoration:none;background:#ffffff18;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;font-family:var(--fb);">Switch Coach</button>
+      <button onclick="switchCoach()" style="font-size:11px;color:#c4b5fd;text-decoration:none;background:#ffffff18;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;font-family:var(--fb);">Switch Coach</button>
       <a href="https://claude.ai/project/01jnfxp3qresvygnr0gb9d7vha" target="_blank" style="font-size:11px;color:#c4b5fd;text-decoration:none;background:#ffffff18;padding:5px 10px;border-radius:8px;">Project ↗</a>
       <button onclick="toggleCoach()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:0;">✕</button>
     </div>
@@ -608,12 +608,13 @@ function renderObStep(){
     </div>`;
   } else if(obStep===1){
     c.innerHTML=`<div class="ob-step">
-      <div class="ob-q">Tell us about your body</div>
+      <div class="ob-q">Let's build your profile</div>
       <div class="ob-input-row">
         <div class="ob-input-wrap"><div class="ob-lbl">AGE</div><input class="ob-inp" id="obAge" type="number" placeholder="25" value="${obData.age||''}"/></div>
         <div class="ob-input-wrap"><div class="ob-lbl">SEX</div><select class="ob-inp" id="obSex"><option value="male"${obData.sex==='male'?' selected':''}>Male</option><option value="female"${obData.sex==='female'?' selected':''}>Female</option><option value="other"${obData.sex==='other'?' selected':''}>Other</option></select></div>
-        <div class="ob-input-wrap"><div class="ob-lbl">HEIGHT (inches)</div><input class="ob-inp" id="obHeight" type="number" placeholder="67" value="${obData.heightIn||''}"/></div>
-        <div class="ob-input-wrap"><div class="ob-lbl">WEIGHT (lbs)</div><input class="ob-inp" id="obWeight" type="number" placeholder="185" step="0.1" value="${obData.weight||''}"/></div>
+        <div class="ob-input-wrap"><div class="ob-lbl">HEIGHT (ft)</div><input class="ob-inp" id="obFt" type="number" placeholder="5" min="4" max="7" value="${obData.heightFt||''}"/></div>
+        <div class="ob-input-wrap"><div class="ob-lbl">HEIGHT (in)</div><input class="ob-inp" id="obIn" type="number" placeholder="7" min="0" max="11" value="${obData.heightInch||''}"/></div>
+        <div class="ob-input-wrap" style="grid-column:1/-1;"><div class="ob-lbl">WEIGHT (lbs)</div><input class="ob-inp" id="obWeight" type="number" placeholder="185" step="0.1" value="${obData.weight||''}"/></div>
       </div>
       <button class="ob-next" onclick="obNext1()">Next →</button>
     </div>`;
@@ -627,9 +628,9 @@ function renderObStep(){
   } else if(obStep===3){
     const acts=[{icon:'🛋️',l:'Sedentary',d:'Little or no exercise',v:1.2},{icon:'🚶',l:'Lightly Active',d:'1–3 days/week',v:1.375},{icon:'🏃',l:'Moderately Active',d:'3–5 days/week',v:1.55},{icon:'💪',l:'Very Active',d:'6–7 days/week',v:1.725},{icon:'⚡',l:'Extra Active',d:'Twice daily training',v:1.9}];
     c.innerHTML=`<div class="ob-step">
-      <div class="ob-q">How active are you?</div>
-      ${acts.map(a=>`<div class="ob-opt${obData.actMult===a.v?' sel':''}" onclick="obSelectAct(${a.v})"><div class="ob-opt-icon">${a.icon}</div><div><div class="ob-opt-label">${a.l}</div><div class="ob-opt-desc">${a.d}</div></div></div>`).join('')}
-      <button class="ob-next" onclick="obNext3()" ${!obData.actMult?'disabled':''}>Calculate My Plan →</button>
+      <div class="ob-q">How often do you train?</div>
+      ${acts.map(a=>`<div class="ob-opt${obData.actMult===a.v?' sel':''}" data-v="${a.v}" onclick="obSelectAct(${a.v})"><div class="ob-opt-icon">${a.icon}</div><div><div class="ob-opt-label">${a.l}</div><div class="ob-opt-desc">${a.d}</div></div></div>`).join('')}
+      <button class="ob-next" id="obActNext" onclick="obNext3()" ${!obData.actMult?'disabled':''}>Calculate My Plan →</button>
     </div>`;
   } else if(obStep===4){
     // Calculate TDEE
@@ -668,14 +669,17 @@ function renderObStep(){
 }
 function obNext0(){const n=document.getElementById('obName').value.trim();if(!n)return;obData.name=n;obStep++;renderObStep();}
 function obNext1(){
-  const a=+document.getElementById('obAge').value,h=+document.getElementById('obHeight').value,w=+document.getElementById('obWeight').value;
-  if(!a||!h||!w)return;
-  obData.age=a;obData.sex=document.getElementById('obSex').value;obData.heightIn=h;obData.weight=w;
+  const a=+document.getElementById('obAge').value,ft=+document.getElementById('obFt').value,inp=+(document.getElementById('obIn').value||0),w=+document.getElementById('obWeight').value;
+  if(!a||!ft||!w)return;
+  obData.age=a;obData.sex=document.getElementById('obSex').value;obData.heightFt=ft;obData.heightInch=inp;obData.heightIn=ft*12+inp;obData.weight=w;
   obStep++;renderObStep();
 }
 function obSelectGoal(v){obData.goal=v;renderObStep();}
 function obNext2(){if(obData.goal){obStep++;renderObStep();}}
-function obSelectAct(v){obData.actMult=v;renderObStep();}
+function obSelectAct(v){
+  obData.actMult=+v;
+  renderObStep();
+}
 function obNext3(){if(obData.actMult){obStep++;renderObStep();}}
 function obSelectPlan(v){obData.selectedPlan=v;renderObStep();}
 function obNext4(){
@@ -1269,18 +1273,22 @@ function showCalDay(dk){
 // ═══ COACH CHOOSER ═══
 function renderCoachChooser(){
   pendingCoachChoice=chosenCoachId;
-  document.getElementById('coachGrid').innerHTML=COACHES.map(co=>`<div class="coach-card${co.id===pendingCoachChoice?' sel':''}" id="ccard_${co.id}" onclick="selectCoachCard('${co.id}')"><div class="coach-icon">${co.icon}</div><div class="coach-name">${co.name}</div><div class="coach-style">${co.style}</div></div>`).join('');
+  document.getElementById('coachGrid').innerHTML=COACHES.map(co=>`<div class="coach-card${co.id===chosenCoachId?' sel':''}" id="ccard_${co.id}" onclick="selectCoachCard('${co.id}')"><div class="coach-icon">${co.icon}</div><div class="coach-name">${co.name}</div><div class="coach-style">${co.style}</div></div>`).join('');
 }
 function selectCoachCard(id){
-  pendingCoachChoice=id;
+  chosenCoachId=id;pendingCoachChoice=id;
+  sv('chosenCoachId',chosenCoachId);
+  updateCoachFab();
   document.querySelectorAll('.coach-card').forEach(c=>c.classList.remove('sel'));
   const el=document.getElementById('ccard_'+id);if(el)el.classList.add('sel');
+  showToast(getCoach().icon+' '+getCoach().name+' is your coach!');
 }
 function saveCoachChoice(){
   chosenCoachId=pendingCoachChoice;sv('chosenCoachId',chosenCoachId);
   updateCoachFab();showToast('Coach set: '+getCoach().name);goBack();
 }
 function updateCoachFab(){const fab=document.getElementById('coachFab');if(fab)fab.textContent=getCoach().icon;}
+function switchCoach(){if(coachOpen)toggleCoach();showPage('coach-chooser');}
 </script>
 <script>
 // ═══ IMAGE UPLOAD ═══
