@@ -524,6 +524,8 @@ canvas{display:block;width:100%!important;max-width:100%;}
   </div>
   <div id="smartScaleSection" style="margin:10px 16px 0;"></div>
   <div id="scaleResult" style="margin:8px 16px 0;display:none;"></div>
+  <button onclick="openCheckinSheet()" style="margin:10px 16px 0;width:calc(100% - 32px);background:var(--surface);border:1px solid var(--accent3);border-radius:12px;color:var(--accent3);font-family:var(--fb);font-size:14px;font-weight:600;padding:12px;cursor:pointer;">📏 Log Body Measurements</button>
+  <div id="checkinTimeline" style="padding:0 16px;margin-top:6px;"></div>
   <div id="weightEntries" style="padding:0 16px;margin-top:6px;"></div>
 </div>
 
@@ -704,7 +706,10 @@ canvas{display:block;width:100%!important;max-width:100%;}
     <button class="back-btn" onclick="goBack()">← Back</button>
     <div style="display:flex;align-items:center;justify-content:space-between;">
       <div class="pt">FITNESS JOURNAL</div>
-      <button onclick="openJournalEntry()" style="background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--fb);font-size:13px;font-weight:600;padding:8px 14px;cursor:pointer;">✏️ New</button>
+      <div style="display:flex;gap:8px;">
+        <button onclick="getJournalAIPrompt()" style="background:var(--surface2);border:1px solid var(--accent3);border-radius:10px;color:var(--accent3);font-family:var(--fb);font-size:13px;font-weight:600;padding:8px 12px;cursor:pointer;">✨ Prompt</button>
+        <button onclick="openJournalEntry()" style="background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--fb);font-size:13px;font-weight:600;padding:8px 14px;cursor:pointer;">✏️ New</button>
+      </div>
     </div>
   </div>
   <div id="journalList" style="padding:0 16px 20px;margin-top:8px;"></div>
@@ -738,6 +743,59 @@ canvas{display:block;width:100%!important;max-width:100%;}
   </div>
 </div>
 <div id="journalOverlay" onclick="closeJournalSheet()" style="display:none;position:fixed;inset:0;background:#000a;z-index:299;"></div>
+
+<!-- JOURNAL VIEW SHEET -->
+<div id="journalViewSheet" style="position:fixed;bottom:0;left:0;right:0;max-height:85vh;background:var(--surface);border-radius:20px 20px 0 0;z-index:300;transform:translateY(100%);transition:transform .3s;overflow-y:auto;">
+  <div style="padding:20px 16px 8px;display:flex;align-items:center;justify-content:space-between;">
+    <div class="pt" id="journalViewDate" style="font-size:18px;">ENTRY</div>
+    <button onclick="closeJournalViewSheet()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;">✕</button>
+  </div>
+  <div style="padding:0 16px 40px;">
+    <div id="journalViewMeta" style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"></div>
+    <div id="journalViewText" style="font-size:14px;color:var(--text2);line-height:1.7;background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:16px;white-space:pre-wrap;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <button onclick="editJournalEntry(currentViewJournalDate)" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--fb);font-size:14px;font-weight:600;padding:12px;cursor:pointer;">✏️ Edit</button>
+      <button onclick="deleteJournalEntry(currentViewJournalDate)" style="background:var(--surface2);border:1px solid var(--red);border-radius:12px;color:var(--red);font-family:var(--fb);font-size:14px;font-weight:600;padding:12px;cursor:pointer;">🗑 Delete</button>
+    </div>
+  </div>
+</div>
+<div id="journalViewOverlay" onclick="closeJournalViewSheet()" style="display:none;position:fixed;inset:0;background:#000a;z-index:299;"></div>
+
+<!-- HABIT ADD SHEET -->
+<div id="habitAddSheet" style="position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-radius:20px 20px 0 0;z-index:300;transform:translateY(100%);transition:transform .3s;padding:20px 16px 40px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <div class="pt" style="font-size:18px;">NEW HABIT</div>
+    <button onclick="closeHabitAddSheet()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;">✕</button>
+  </div>
+  <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">EMOJI</div>
+  <input id="habitAddIcon" class="inf" placeholder="💪" maxlength="4" style="width:80px;font-size:20px;text-align:center;margin-bottom:12px;"/>
+  <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">HABIT NAME</div>
+  <input id="habitAddName" class="inf" placeholder="e.g. Stretch for 10 minutes" style="width:100%;margin-bottom:16px;"/>
+  <button onclick="saveNewHabit()" style="width:100%;background:var(--accent2);border:none;border-radius:12px;color:#fff;font-family:var(--fd);font-size:18px;letter-spacing:1px;padding:13px;cursor:pointer;">ADD HABIT</button>
+</div>
+<div id="habitAddOverlay" onclick="closeHabitAddSheet()" style="display:none;position:fixed;inset:0;background:#000a;z-index:299;"></div>
+
+<!-- PROGRESS CHECKIN SHEET -->
+<div id="checkinSheet" style="position:fixed;bottom:0;left:0;right:0;max-height:90vh;background:var(--surface);border-radius:20px 20px 0 0;z-index:300;transform:translateY(100%);transition:transform .3s;overflow-y:auto;">
+  <div style="padding:20px 16px 8px;display:flex;align-items:center;justify-content:space-between;">
+    <div class="pt" style="font-size:18px;">MEASUREMENTS</div>
+    <button onclick="closeCheckinSheet()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;">✕</button>
+  </div>
+  <div style="padding:0 16px 40px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div><div style="font-size:12px;color:var(--text2);margin-bottom:4px;">WAIST (in)</div><input id="ciWaist" class="inf" type="number" placeholder="32.0" step="0.5"/></div>
+      <div><div style="font-size:12px;color:var(--text2);margin-bottom:4px;">CHEST (in)</div><input id="ciChest" class="inf" type="number" placeholder="42.0" step="0.5"/></div>
+      <div><div style="font-size:12px;color:var(--text2);margin-bottom:4px;">HIPS (in)</div><input id="ciHips" class="inf" type="number" placeholder="38.0" step="0.5"/></div>
+      <div><div style="font-size:12px;color:var(--text2);margin-bottom:4px;">ARMS (in)</div><input id="ciArms" class="inf" type="number" placeholder="14.0" step="0.5"/></div>
+      <div><div style="font-size:12px;color:var(--text2);margin-bottom:4px;">NECK (in)</div><input id="ciNeck" class="inf" type="number" placeholder="15.0" step="0.5"/></div>
+      <div><div style="font-size:12px;color:var(--text2);margin-bottom:4px;">THIGHS (in)</div><input id="ciThighs" class="inf" type="number" placeholder="22.0" step="0.5"/></div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">NOTES</div>
+    <textarea id="ciNotes" rows="2" placeholder="How are you feeling? Any observations..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--fb);font-size:14px;padding:12px;resize:none;margin-bottom:12px;"></textarea>
+    <button onclick="saveCheckin()" style="width:100%;background:var(--accent);border:none;border-radius:12px;color:#fff;font-family:var(--fd);font-size:18px;letter-spacing:1px;padding:13px;cursor:pointer;">SAVE MEASUREMENTS</button>
+  </div>
+</div>
+<div id="checkinOverlay" onclick="closeCheckinSheet()" style="display:none;position:fixed;inset:0;background:#000a;z-index:299;"></div>
 
 <!-- WARM-UP SHEET -->
 <div id="warmupSheet" style="position:fixed;bottom:0;left:0;right:0;max-height:75vh;background:var(--surface);border-radius:20px 20px 0 0;z-index:300;transform:translateY(100%);transition:transform .3s;padding:20px 16px 40px;overflow-y:auto;">
@@ -975,6 +1033,7 @@ let customHabits=ld('customHabits',[]);
 const DEFAULT_HABITS=[{id:'supps',icon:'💊',label:'Took supplements'},{id:'water',icon:'💧',label:'Hit water goal (64oz+)'},{id:'sleep',icon:'😴',label:'7+ hours sleep'},{id:'protein',icon:'🥩',label:'Hit protein goal'},{id:'workout',icon:'🏋🏾',label:'Completed workout'},{id:'recovery',icon:'🧘',label:'Recovery / mobility'}];
 let waterLog=ld('waterLog',{});
 let waterGoal=ld('waterGoal',64);
+let progressCheckins=ld('mf_progressCheckins',[]);
 let restTimerInterval=null;
 let restTimerRemaining=90;
 let restTimerDuration=90;
@@ -1003,7 +1062,7 @@ const ONBOARDING_STEPS=[
 let badges=ld('badges',{});
 const BADGE_DEFS=[
   {id:'first_workout',icon:'🥇',name:'First Workout',desc:'Logged your first workout session'},
-  {id:'streak_7',icon:'🔥',name:'7-Day Streak',desc:'7 consecutive workout days'},
+  {id:'streak_7',icon:'🔥',name:'7-Week Streak',desc:'Completed planned workouts 7 weeks in a row'},
   {id:'lost_5lbs',icon:'⚖️',name:'5 Lbs Down',desc:'Lost your first 5 lbs'},
   {id:'macro_7',icon:'🎯',name:'Macro Master',desc:'7-day macro target streak'},
   {id:'water_7',icon:'💧',name:'Hydration Habit',desc:'7-day water goal streak'},
@@ -1527,6 +1586,7 @@ function renderWeighIn(){
     renderBodyCompTrend();
     renderWeightEntries();
     renderSmartScaleSection();
+    renderCheckinTimeline&&renderCheckinTimeline();
     setTimeout(()=>drawChart(),80);
   }catch(e){console.error('WeighIn error:',e);}
 }
@@ -2957,15 +3017,82 @@ function selectJournalMood(n){
 function saveJournalEntry(){
   const text=document.getElementById('journalText')?.value.trim();
   if(!text){showToast('Write something first');return;}
-  const key=getTodayKey();
-  fitnessJournal[key]={text,quickTag:journalTag,mood:journalMoodVal,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const key=window._journalEditDate||getTodayKey();
+  const existing=fitnessJournal[key]||{};
+  fitnessJournal[key]={...existing,text,quickTag:journalTag,mood:journalMoodVal,updatedAt:new Date().toISOString()};
+  if(!existing.createdAt)fitnessJournal[key].createdAt=new Date().toISOString();
+  window._journalEditDate=null;
   sv('fitnessJournal',fitnessJournal);
   closeJournalSheet();renderJournal();showToast('Entry saved');
   checkBadges&&checkBadges();
 }
+let currentViewJournalDate='';
 function expandJournalEntry(date){
   const entry=fitnessJournal[date];if(!entry)return;
-  showConfirm(date,entry.text||'',[{label:'Close',cls:'no',fn:null}]);
+  currentViewJournalDate=date;
+  document.getElementById('journalViewDate').textContent=date;
+  document.getElementById('journalViewText').textContent=entry.text||'';
+  const metaEl=document.getElementById('journalViewMeta');
+  let metaHtml='';
+  if(entry.quickTag)metaHtml+=`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;font-size:11px;padding:3px 9px;">${entry.quickTag}</div>`;
+  if(entry.mood)metaHtml+=`<div style="display:flex;gap:3px;">${[1,2,3,4,5].map(n=>`<div style="width:9px;height:9px;border-radius:50%;background:${n<=entry.mood?'var(--accent2)':'var(--border)'}"></div>`).join('')}</div>`;
+  metaEl.innerHTML=metaHtml;
+  document.getElementById('journalViewSheet').style.transform='translateY(0)';
+  document.getElementById('journalViewOverlay').style.display='block';
+}
+function closeJournalViewSheet(){
+  document.getElementById('journalViewSheet').style.transform='translateY(100%)';
+  document.getElementById('journalViewOverlay').style.display='none';
+}
+function editJournalEntry(date){
+  const entry=fitnessJournal[date];if(!entry)return;
+  closeJournalViewSheet();
+  journalTag=entry.quickTag||'';journalMoodVal=entry.mood||0;
+  document.getElementById('journalText').value=entry.text||'';
+  document.querySelectorAll('#journalTags div').forEach(el=>{
+    const matches=el.getAttribute('onclick')&&el.getAttribute('onclick').includes(journalTag.replace(/'/g,"\\'"));
+    el.style.background=matches?'#0d1e33':'var(--surface2)';
+    el.style.borderColor=matches?'var(--accent)':'var(--border)';
+    el.style.color=matches?'var(--accent)':'var(--text)';
+  });
+  if(journalMoodVal>0){
+    document.querySelectorAll('#journalMood [data-mood]').forEach(el=>{
+      const v=parseInt(el.dataset.mood);
+      el.style.background=v<=journalMoodVal?'var(--accent2)':'transparent';
+      el.style.color=v<=journalMoodVal?'#fff':'var(--text3)';
+      el.style.borderColor=v<=journalMoodVal?'var(--accent2)':'var(--border)';
+    });
+  }
+  // Override save to update existing entry
+  window._journalEditDate=date;
+  document.getElementById('journalSheet').style.transform='translateY(0)';
+  document.getElementById('journalOverlay').style.display='block';
+}
+function deleteJournalEntry(date){
+  closeJournalViewSheet();
+  showConfirm('Delete Entry','Remove this journal entry?',[
+    {label:'Delete',cls:'yes',fn:()=>{delete fitnessJournal[date];sv('fitnessJournal',fitnessJournal);renderJournal();showToast('Entry deleted');}},
+    {label:'Cancel',cls:'no',fn:null}
+  ]);
+}
+async function getJournalAIPrompt(){
+  const btn=document.querySelector('[onclick="getJournalAIPrompt()"]');
+  if(btn){btn.textContent='...';btn.disabled=true;}
+  try{
+    const coach=getCoach();
+    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',max_tokens:120,
+      system:`You are ${coach.name}. ${coach.personality}`,
+      messages:[{role:'user',content:`Give ${USER.name||'the user'} one specific, personal fitness journal prompt for today. Reference their goal: ${USER.goal||'get fit'}. 1-2 sentences, no preamble.`}]
+    })});
+    const data=await resp.json();
+    const prompt=data.content?.[0]?.text||'What went well today, and what\'s one thing you\'d do differently?';
+    openJournalEntry();
+    document.getElementById('journalText').value='Prompt: '+prompt+'\n\n';
+    document.getElementById('journalText').focus();
+    document.getElementById('journalText').setSelectionRange(9999,9999);
+  }catch(e){openJournalEntry();}
+  if(btn){btn.textContent='✨ Prompt';btn.disabled=false;}
 }
 
 // ═══ FEATURE 12: HABIT TRACKER ═══
@@ -2988,8 +3115,20 @@ function renderHabits(){
       </div>
     </div>`;
   });
-  html+='<div onclick="promptAddHabit()" style="padding:12px 14px;cursor:pointer;text-align:center;font-size:13px;color:var(--text3);">+ Add custom habit</div>';
+  html+='<div onclick="openHabitAddSheet()" style="padding:12px 14px;cursor:pointer;text-align:center;font-size:13px;color:var(--text3);">+ Add custom habit</div>';
   html+='</div>';
+  // Weekly completion rate
+  const last7=[];for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);last7.push(d.toISOString().split('T')[0]);}
+  const weeklyRates=allH.map(h=>{const days=last7.filter(d=>((habitData[d]||{}).habits||{})[h.id]).length;return days;});
+  const avgRate=allH.length?Math.round(last7.filter(d=>{const dh=(habitData[d]||{}).habits||{};return allH.filter(h=>dh[h.id]).length>=allH.length*0.5;}).length/7*100):0;
+  html+=`<div style="margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="font-size:12px;color:var(--text2);">7-DAY CONSISTENCY</div>
+      <div style="font-size:12px;font-weight:600;color:${avgRate>=70?'var(--accent2)':avgRate>=40?'var(--accent3)':'var(--red)'};">${avgRate}%</div>
+    </div>
+    <div style="display:flex;gap:4px;">${last7.map(d=>{const dh=(habitData[d]||{}).habits||{};const cnt=allH.filter(h=>dh[h.id]).length;const pct=allH.length?cnt/allH.length:0;return`<div style="flex:1;height:28px;background:${pct>=0.8?'var(--accent2)':pct>=0.5?'var(--accent3)':pct>0?'var(--accent)':'var(--surface2)'};border-radius:4px;opacity:0.85;" title="${d}"></div>`;}).join('')}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px;"><div style="font-size:9px;color:var(--text3);">7 days ago</div><div style="font-size:9px;color:var(--text3);">Today</div></div>
+  </div>`;
   el.innerHTML=html;
 }
 function toggleHabit(habitId){
@@ -3007,11 +3146,24 @@ function toggleHabit(habitId){
   sv('habitStreaks',habitStreaks);
   renderHabits();checkBadges&&checkBadges();
 }
-function promptAddHabit(){
-  const name=prompt('New habit name (include an emoji):');
-  if(!name)return;
-  customHabits.push({id:'custom_'+Date.now(),icon:'⭐',label:name});
-  sv('customHabits',customHabits);renderHabits();
+function promptAddHabit(){openHabitAddSheet();}
+function openHabitAddSheet(){
+  document.getElementById('habitAddIcon').value='';
+  document.getElementById('habitAddName').value='';
+  document.getElementById('habitAddSheet').style.transform='translateY(0)';
+  document.getElementById('habitAddOverlay').style.display='block';
+  setTimeout(()=>document.getElementById('habitAddName').focus(),300);
+}
+function closeHabitAddSheet(){
+  document.getElementById('habitAddSheet').style.transform='translateY(100%)';
+  document.getElementById('habitAddOverlay').style.display='none';
+}
+function saveNewHabit(){
+  const icon=document.getElementById('habitAddIcon').value.trim()||'⭐';
+  const label=document.getElementById('habitAddName').value.trim();
+  if(!label){showToast('Enter a habit name');return;}
+  customHabits.push({id:'custom_'+Date.now(),icon,label});
+  sv('customHabits',customHabits);closeHabitAddSheet();renderHabits();showToast('Habit added');
 }
 
 // ═══ FEATURE 13: WATER TRACKER ═══
@@ -3041,12 +3193,33 @@ function renderWaterTracker(){
       <div style="font-size:13px;font-weight:600;color:${done?'var(--accent2)':'var(--text2)'};">${current}oz / ${waterGoal}oz${done?' ✅':''}</div>
     </div>
     <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-bottom:12px;"><div style="height:100%;width:${pct}%;background:${done?'var(--accent2)':'var(--accent)'};border-radius:4px;transition:width .3s;"></div></div>
-    <div style="display:flex;gap:8px;">
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
       <button onclick="logWater(8)" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:13px;font-weight:600;padding:9px;cursor:pointer;">+8oz</button>
       <button onclick="logWater(16)" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:13px;font-weight:600;padding:9px;cursor:pointer;">+16oz</button>
       <button onclick="logWater(32)" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:13px;font-weight:600;padding:9px;cursor:pointer;">+32oz</button>
     </div>
+    <div style="display:flex;gap:8px;">
+      <input id="waterCustomOz" type="number" placeholder="Custom oz" min="1" max="200" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:13px;padding:9px;text-align:center;"/>
+      <button onclick="logWaterCustom()" style="flex:1;background:var(--surface2);border:1px solid var(--accent);border-radius:10px;color:var(--accent);font-family:var(--fb);font-size:13px;font-weight:600;padding:9px;cursor:pointer;">+ Log</button>
+      <button onclick="setWaterGoalPrompt()" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:var(--fb);font-size:11px;font-weight:600;padding:9px;cursor:pointer;">⚙ Goal</button>
+    </div>
   </div>`;
+}
+
+function logWaterCustom(){
+  const inp=document.getElementById('waterCustomOz');
+  const oz=parseInt(inp?.value);
+  if(!oz||oz<1){showToast('Enter a valid amount');return;}
+  inp.value='';
+  logWater(oz);
+}
+function setWaterGoalPrompt(){
+  showConfirm('Set Water Goal','Current goal: '+waterGoal+'oz',[
+    {label:'64oz',cls:'yes',fn:()=>{waterGoal=64;sv('waterGoal',64);renderWaterTracker();showToast('Goal: 64oz');}},
+    {label:'80oz',cls:'yes',fn:()=>{waterGoal=80;sv('waterGoal',80);renderWaterTracker();showToast('Goal: 80oz');}},
+    {label:'100oz',cls:'yes',fn:()=>{waterGoal=100;sv('waterGoal',100);renderWaterTracker();showToast('Goal: 100oz');}},
+    {label:'Cancel',cls:'no',fn:null}
+  ]);
 }
 
 // ═══ FEATURE 14: REST TIMER ═══
@@ -3453,6 +3626,7 @@ function checkBadges(){
     else if(b.id==='first_journal')earned=Object.keys(fitnessJournal).length>=1;
     else if(b.id==='workouts_30')earned=sessionLogs.length>=30;
     else if(b.id==='first_meal_plan')earned=weeklyMealPlan!==null;
+    else if(b.id==='first_pr')earned=Object.keys(oneRepMaxes).length>=1;
     if(earned)unlockBadge(b.id);
   });
 }
@@ -3482,13 +3656,13 @@ function renderBadges(){
       <div style="font-size:36px;margin-bottom:6px;">${b.icon}</div>
       <div style="font-size:11px;font-weight:600;color:var(--text);">${b.name}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px;line-height:1.4;">${b.desc}</div>
-      ${has?'<div style="font-size:9px;color:var(--accent2);margin-top:4px;">Earned</div>':''}
+      ${has?`<div style="font-size:9px;color:var(--accent2);margin-top:4px;">${badges[b.id]?.earnedAt?new Date(badges[b.id].earnedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'Earned'}</div>`:''}
     </div>`;
   }).join('');
 }
 
 // ═══ FEATURE 24: BACKUP & RESTORE ═══
-const APP_KEYS=['foodLog','weightLog','workoutSels','workoutLogs','mf_grocChecked','customFoods','equipmentChoices','mf_weeklyMealPlan','mf_pantryItems','mf_pantryCustom','mf_recipeLibrary','sessionLogs','workoutPlan','progressionNotes','supplementStack','fitnessJournal','habitData','habitStreaks','waterLog','streaks','badges','oneRepMaxes','workoutNotes','customHabits','lockedMeals','generatedGroceryList','dialRot','sundayAtTop','chosenCoachId','hasSmartScale','mf_onboardingComplete','mf_userProfile','mf_targets','mf_mealPlanApproved','mf_groceryList'];
+const APP_KEYS=['foodLog','weightLog','workoutSels','workoutLogs','mf_grocChecked','customFoods','equipmentChoices','mf_weeklyMealPlan','mf_pantryItems','mf_pantryCustom','mf_recipeLibrary','sessionLogs','workoutPlan','progressionNotes','supplementStack','fitnessJournal','habitData','habitStreaks','waterLog','streaks','badges','oneRepMaxes','workoutNotes','customHabits','lockedMeals','generatedGroceryList','dialRot','sundayAtTop','chosenCoachId','hasSmartScale','mf_onboardingComplete','mf_userProfile','mf_targets','mf_mealPlanApproved','mf_groceryList','mf_progressCheckins','waterGoal'];
 function exportAppData(){
   const data={};
   APP_KEYS.forEach(k=>{const v=ld(k,null);if(v!==null)data[k]=v;});
@@ -3512,6 +3686,63 @@ function handleRestoreFile(input){
   };
   reader.readAsText(file);
   input.value='';
+}
+
+// ═══ FEATURE 25: PROGRESS MEASUREMENTS ═══
+function openCheckinSheet(){
+  ['ciWaist','ciChest','ciHips','ciArms','ciNeck','ciThighs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const notesEl=document.getElementById('ciNotes');if(notesEl)notesEl.value='';
+  document.getElementById('checkinSheet').style.transform='translateY(0)';
+  document.getElementById('checkinOverlay').style.display='block';
+}
+function closeCheckinSheet(){
+  document.getElementById('checkinSheet').style.transform='translateY(100%)';
+  document.getElementById('checkinOverlay').style.display='none';
+}
+function saveCheckin(){
+  const get=id=>{const el=document.getElementById(id);return el&&el.value?parseFloat(el.value):null;};
+  const waist=get('ciWaist'),chest=get('ciChest'),hips=get('ciHips'),arms=get('ciArms'),neck=get('ciNeck'),thighs=get('ciThighs');
+  const notes=document.getElementById('ciNotes')?.value.trim()||'';
+  if(!waist&&!chest&&!hips&&!arms){showToast('Enter at least one measurement');return;}
+  const entry={date:getTodayKey(),waist,chest,hips,arms,neck,thighs,notes,createdAt:new Date().toISOString()};
+  progressCheckins=progressCheckins.filter(c=>c.date!==entry.date);
+  progressCheckins.unshift(entry);
+  sv('mf_progressCheckins',progressCheckins);
+  closeCheckinSheet();
+  renderCheckinTimeline();
+  showToast('Measurements saved!');
+}
+function renderCheckinTimeline(){
+  const el=document.getElementById('checkinTimeline');if(!el)return;
+  if(!progressCheckins.length){el.innerHTML='';return;}
+  const fields=[{key:'waist',label:'Waist'},{key:'chest',label:'Chest'},{key:'hips',label:'Hips'},{key:'arms',label:'Arms'}];
+  let html=`<div style="margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+    <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;">📏 MEASUREMENTS</div>
+      <div style="font-size:11px;color:var(--text3);">${progressCheckins.length} check-in${progressCheckins.length!==1?'s':''}</div>
+    </div>`;
+  progressCheckins.slice(0,5).forEach((c,i)=>{
+    const prev=progressCheckins[i+1];
+    html+=`<div style="padding:12px 14px;border-bottom:1px solid var(--border);">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">${c.date}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">`;
+    fields.forEach(f=>{
+      if(c[f.key]==null)return;
+      const diff=prev&&prev[f.key]!=null?c[f.key]-prev[f.key]:null;
+      const diffStr=diff!=null?(diff>0?`<span style="color:var(--red);">+${diff.toFixed(1)}"</span>`:`<span style="color:var(--accent2);">${diff.toFixed(1)}"</span>`):'';
+      html+=`<div style="background:var(--surface2);border-radius:10px;padding:6px 10px;text-align:center;min-width:60px;">
+        <div style="font-size:11px;color:var(--text3);">${f.label}</div>
+        <div style="font-size:14px;font-weight:600;">${c[f.key]}"</div>
+        ${diffStr?`<div style="font-size:10px;margin-top:1px;">${diffStr}</div>`:''}
+      </div>`;
+    });
+    html+='</div>';
+    if(c.notes)html+=`<div style="font-size:12px;color:var(--text2);margin-top:6px;font-style:italic;">${c.notes}</div>`;
+    html+='</div>';
+  });
+  if(progressCheckins.length>5)html+=`<div style="padding:10px 14px;text-align:center;font-size:12px;color:var(--text3);">+${progressCheckins.length-5} more check-ins</div>`;
+  html+='</div>';
+  el.innerHTML=html;
 }
 
 async function getPlateauAdvice(){

@@ -57,3 +57,53 @@ The following features were built across multiple unstructured sessions:
 3. Workout progression system
 4. Session notes + rest timer improvements
 5. Workout streak (planned days, not calendar days)
+
+---
+
+## Batch 2 Run — 2026-03-21
+**Status:** Complete
+**Features completed:**
+1. [x] Workout page simplification — days collapsed by default, today auto-expanded, START ▶ button in header
+2. [x] AI workout split generator — generateWorkoutSplit() assigns Push/Pull/Legs/Rest to all 7 days based on profile; locked after first gen
+3. [x] Workout progression — renderWeeklyWorkoutProgress() shows X/planned days bar + week streak count
+4. [x] Session save — saveWorkout() persists sets/reps/weight with session log entry; post-workout summary sheet
+5. [x] Workout streak by planned weeks — updateWorkoutStreak() tracks weekly completion vs planned days, not calendar days
+
+**Key decisions:**
+- Workout days collapsed by default (ld('wdExpanded_'+dayIdx, isToday)); today auto-expands
+- generateWorkoutSplit() uses Claude to assign workout types respecting USER.trainingDays/gym/goal
+- Weekly streak: streak increments only when logged sessions >= planned days in a given week (getWeekKey())
+- Gym name in day header uses USER.gym for push/pull/legs types
+
+---
+
+## Batch 3 Run — 2026-03-21
+**Status:** Complete
+**Features completed:**
+1. [x] Coach image upload — added capture="environment" for mobile camera access
+2. [x] Voice auto-send — coachRecognition.onend now auto-sends if input has text (200ms delay)
+3. [x] Coach chips enriched — renderCoachChips() injects calLeft, proLeft, todayWt into chip context
+4. [x] Supplements today schedule — renderSupplements() shows TODAY'S SCHEDULE section grouped by time of day
+5. [x] Supplement AI tip caching — getSuppCoachTip() caches by mf_suppTip_DATE_STACKCOUNT key
+
+**Key decisions:**
+- Voice input send: only fires if inp.value.trim() truthy after recognition ends (prevents empty sends)
+- Supp tip cache key includes stack count so tips refresh when user adds/removes supplements
+
+---
+
+## Batch 4 Run — 2026-03-21
+**Status:** Complete
+**Features completed:**
+1. [x] Fitness journal — expandJournalEntry() now opens journalViewSheet with full text, edit/delete buttons; "✨ Prompt" button fetches AI journaling prompt and pre-fills textarea; saveJournalEntry() supports edit mode via window._journalEditDate
+2. [x] Habit tracker — promptAddHabit() replaced with proper habitAddSheet bottom sheet (emoji + name inputs); renderHabits() now appends 7-day consistency bar chart below habits
+3. [x] Water tracker — renderWaterTracker() adds custom oz input + "⚙ Goal" button (setWaterGoalPrompt: 64/80/100oz options); logWaterCustom() reads input value; waterGoal added to APP_KEYS
+4. [x] Streak/badges — streak_7 badge renamed to "7-Week Streak" with accurate desc; renderBadges() now shows earned date (earnedAt formatted); first_pr badge now triggers on Object.keys(oneRepMaxes).length>=1
+5. [x] Progress measurements — new mf_progressCheckins in localStorage; openCheckinSheet() collects waist/chest/hips/arms/neck/thighs + notes; renderCheckinTimeline() shows last 5 with diffs vs previous; accessible via "📏 Log Body Measurements" button on Scale page
+6. [x] Backup/restore — mf_progressCheckins + waterGoal added to APP_KEYS
+
+**Key decisions:**
+- Journal edit mode: _journalEditDate global flag; save preserves createdAt, updates updatedAt
+- Water goal stored in localStorage key 'waterGoal' (without mf_ prefix, already existed); added to APP_KEYS
+- Measurement diffs: waist/chest/hips/arms shown in red for increase, green for decrease (smaller = better for waist/hips)
+- Progress photos skipped: base64 in localStorage causes quota issues; user directed to camera roll

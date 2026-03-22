@@ -7,27 +7,28 @@
 - [x] 4. AI meal plan generator — draft/approval banner, 👎 dislike button per meal, Coach substitution flow, mf_mealPlanApproved flag
 - [x] 5. Auto-generated grocery checklist + full recipe cards — upgraded to mf_ key prefix
 
-## BATCH 2 — Workout System
-- [ ] 1. Workout page simplification — collapsed by default, Start Workout expands
-- [ ] 2. AI workout plan generator — based on onboarding data, never assume gym/program
-- [ ] 3. Workout progression system — AI-driven, locked split, weights/reps adjust
-- [ ] 4. Session notes + rest timer + show exercise button
-- [ ] 5. Workout streak — planned days not calendar days
+## BATCH 2 — Workout System ✅ COMPLETE (2026-03-21)
+- [x] 1. Workout page simplification — collapsed by default, Start Workout expands
+- [x] 2. AI workout plan generator — based on onboarding data, never assume gym/program
+- [x] 3. Workout progression system — AI-driven, locked split, weights/reps adjust
+- [x] 4. Session notes + rest timer + show exercise button
+- [x] 5. Workout streak — planned days not calendar days (weekly streak)
 
-## BATCH 3 — Bug Fixes & Coach Upgrades
-- [~] Coach image upload (EXISTS — needs testing)
-- [ ] Voice input in coach
-- [ ] Coach quick-tap chips
-- [~] Supplements page + side drawer (EXISTS — needs review)
+## BATCH 3 — Bug Fixes & Coach Upgrades ✅ COMPLETE (2026-03-21)
+- [x] Coach image upload — camera capture enabled (capture="environment")
+- [x] Voice input in coach — auto-sends after recognition ends
+- [x] Coach quick-tap chips — enriched with dynamic calLeft, proLeft, todayWt context
+- [x] Supplements page — TODAY'S SCHEDULE view grouped by time of day; AI tip cached by date+stack
 
-## BATCH 4 — Tracking & Engagement
-- [~] Fitness journal (EXISTS — needs review)
-- [~] Habit tracker + water tracker (EXISTS — needs review)
-- [~] Streak tracker + milestone badges (EXISTS — needs review)
-- [ ] Google Fit / Apple Health sync
-- [ ] Progress photos + body measurements
-- [~] Backup and restore (EXISTS — needs review)
-- [~] Offline mode indicator (EXISTS — needs review)
+## BATCH 4 — Tracking & Engagement ✅ COMPLETE (2026-03-21)
+- [x] Fitness journal — expand view with full entry sheet (edit/delete), "✨ Prompt" AI button, edit mode preserves existing entry
+- [x] Habit tracker — replaced native prompt() with proper add-habit sheet; 7-day consistency bar chart
+- [x] Water tracker — custom oz input + configurable water goal (64/80/100oz)
+- [x] Streak tracker + milestone badges — streak_7 label fixed to "7-Week Streak"; earned date shown; first_pr badge now triggers on first 1RM save
+- [x] Progress photos + body measurements — mf_progressCheckins in localStorage; measurements sheet (waist/chest/hips/arms/neck/thighs); timeline with diffs on Scale page
+- [x] Backup and restore — mf_progressCheckins + waterGoal added to APP_KEYS
+- [x] Offline mode indicator — already working (online/offline event listeners)
+- [~] Google Fit / Apple Health sync — not feasible in PWA, skipped
 
 ## Critical Fixes (Any Batch)
 - [x] Remove all hardcoded USER data (age:37, startWeight:233, height, programStart)
