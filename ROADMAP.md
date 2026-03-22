@@ -30,6 +30,14 @@
 - [x] Offline mode indicator — already working (online/offline event listeners)
 - [~] Google Fit / Apple Health sync — not feasible in PWA, skipped
 
+## BATCH 5 — Intelligence & Polish ✅ COMPLETE (2026-03-21)
+- [x] Coach context enrichment — system prompt now includes goal weight, today's workout type, week sessions vs planned, weight trend (last 3), water progress, supplement list, user coach notes
+- [x] Settings: Coach Notes field — user-editable freetext stored as mf_coachRules; fed to every coach call
+- [x] Calendar day detail enrichment — tapping a day now shows: weight logged, water oz, habits done count, journal preview, in addition to food + workout
+- [x] Home screen goal progress — "Total Lost" replaced with "TO GOAL" lbs remaining; goal progress bar with % complete and ETA projection
+- [x] Progression: Personal Records — 1RM saves rendered as a "PERSONAL RECORDS" table
+- [x] Today page: Start Workout button — "▶ Start" button on workout card goes directly to workout page
+
 ## Critical Fixes (Any Batch)
 - [x] Remove all hardcoded USER data (age:37, startWeight:233, height, programStart)
 - [x] Remove hardcoded TARGETS (cal:1850, pro:180, fat:60 etc.) — now loaded from mf_targets

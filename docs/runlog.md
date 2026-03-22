@@ -107,3 +107,21 @@ The following features were built across multiple unstructured sessions:
 - Water goal stored in localStorage key 'waterGoal' (without mf_ prefix, already existed); added to APP_KEYS
 - Measurement diffs: waist/chest/hips/arms shown in red for increase, green for decrease (smaller = better for waist/hips)
 - Progress photos skipped: base64 in localStorage causes quota issues; user directed to camera roll
+
+---
+
+## Batch 5 Run — 2026-03-21
+**Status:** Complete
+**Features completed:**
+1. [x] Coach system prompt enriched — goal weight, today's workout type, week sessions/planned, last 3 weights + trend direction, water progress, supplement summary, mf_coachRules notes; removed hardcoded Derak-specific rules
+2. [x] Settings: Coach Notes — new textarea in Settings page saves free-form coach context (mf_coachRules) added to APP_KEYS; injected into every coach call
+3. [x] Calendar day detail — showCalDayDetail now shows weight entry (with BF% if logged), water oz, habits done/total count, journal tag + text preview in pill chips above food log
+4. [x] Home screen — replaced "Total Lost" stat with "TO GOAL" (lbs remaining to goal weight); added goal progress bar spanning full width with % complete and projected weeks ETA
+5. [x] Progression: Personal Records — renderProgressionPage() adds PERSONAL RECORDS section from oneRepMaxes showing exercise name + estimated 1RM
+6. [x] Today page: workout card — header now has "▶ Start" button styled in workout type color, jumps to workout page
+
+**Key decisions:**
+- Coach rules field: uses template literal in renderSettings so current value pre-populates textarea; saveCoachRules() writes to mf_coachRules
+- Goal ETA calculation: uses last 8 weight entries, rate = (oldest - newest) / (count-1) per entry, projects weeks at current rate
+- Calendar extras hidden if no data to avoid empty pill row
+- 1RM data: oneRepMaxes stores either a number or object with .est/.weight field; renderProgressionPage handles both shapes

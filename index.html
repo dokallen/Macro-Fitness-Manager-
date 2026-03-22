@@ -1133,14 +1133,34 @@ function renderHome(){
   updateCoachFab();
   document.getElementById('weekBadge').textContent='⚡ WEEK '+getProgramWeek();
   const last=weightLog.length?weightLog[weightLog.length-1]:{weight:USER.startWeight,date:'Not logged'};
-  const lost=weightLog.length?(USER.startWeight-last.weight).toFixed(1):0;
+  const cw=last.weight||USER.startWeight||0;
+  const goalW=parseFloat(USER.goalWeight)||0;
+  const startW=parseFloat(USER.startWeight)||cw;
+  const totalNeeded=startW-goalW;
+  const totalLost=startW-cw;
+  const toGoal=goalW>0?(cw-goalW).toFixed(1):null;
+  const goalPct=goalW>0&&totalNeeded>0?Math.min(Math.max((totalLost/totalNeeded)*100,0),100):null;
   const wStreak=streaks.workout?.count||0;
   const mStreak=streaks.macro?.count||0;
+  // Goal ETA: if losing weight, project based on last 4 weeks rate
+  let etaStr='';
+  if(goalW>0&&cw>goalW&&weightLog.length>=2){
+    const recent=weightLog.slice(-8);
+    if(recent.length>=2){const rate=(recent[0].weight-recent[recent.length-1].weight)/(recent.length-1);if(rate>0){const weeks=Math.ceil((cw-goalW)/rate);etaStr=`~${weeks}w to goal`;}}
+  }
   document.getElementById('homeStats').innerHTML=`
-    <div class="stat-card"><div class="sv" style="color:var(--accent)">${last.weight}</div><div class="sd">lbs</div><div class="sl">Current</div></div>
-    <div class="stat-card"><div class="sv" style="color:${+lost>0?'var(--green)':'var(--text2)'}">${+lost>0?'-'+lost:'0'}</div><div class="sd">lbs</div><div class="sl">Total Lost</div></div>
+    <div class="stat-card"><div class="sv" style="color:var(--accent)">${cw}</div><div class="sd">lbs</div><div class="sl">Current</div></div>
+    <div class="stat-card"><div class="sv" style="color:${toGoal!==null&&+toGoal<=0?'var(--green)':'var(--accent3)'}">${toGoal!==null?(+toGoal<=0?'Goal!':toGoal):'—'}</div><div class="sd">${toGoal!==null&&+toGoal>0?'lbs to go':''}</div><div class="sl">TO GOAL</div></div>
     <div class="stat-card"><div class="sv">${wStreak>0?'🔥':''} ${wStreak}</div><div class="sd">WK STREAK</div><div class="sl">WORKOUT</div></div>
     <div class="stat-card"><div class="sv">${mStreak>0?'🎯':''} ${mStreak}</div><div class="sd">DAY STREAK</div><div class="sl">MACROS</div></div>`;
+  // Goal progress bar
+  const statsEl=document.getElementById('homeStats');
+  if(goalPct!==null){
+    const bar=document.createElement('div');
+    bar.style.cssText='grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;';
+    bar.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:11px;color:var(--text3);letter-spacing:1px;">GOAL PROGRESS${etaStr?' · <span style="color:var(--accent3);">'+etaStr+'</span>':''}</div><div style="font-size:12px;font-weight:600;color:var(--accent2);">${Math.round(goalPct)}%</div></div><div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${goalPct}%;background:${goalPct>=100?'var(--accent2)':'var(--accent)'};border-radius:3px;transition:width .4s;"></div></div><div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--text3);"><span>${startW} lbs</span><span>${goalW} lbs</span></div>`;
+    statsEl.appendChild(bar);
+  }
   // Update badge count notification
   const earned=BADGE_DEFS.filter(b=>badges[b.id]).length;
   const badgeBadge=document.getElementById('badgeCountBadge');
@@ -1670,7 +1690,7 @@ function renderToday(){
   const fatC=t.fat>TARGETS.fat?'var(--red)':'#d4a57a';
   const macroHtml=`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-family:var(--fd);font-size:18px;letter-spacing:2px;">TODAY'S MACROS</div><button onclick="showPage('tracking')" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:var(--fb);font-size:12px;font-weight:600;padding:7px 13px;cursor:pointer;">+ LOG</button></div><div class="mbr"><div class="mbl">Calories</div><div class="mbt"><div class="mbf" style="width:${calPct}%;background:${calC};"></div></div><div class="mbv" style="color:${calC};">${t.cal}/${TARGETS.cal}</div></div><div class="mbr"><div class="mbl">Protein</div><div class="mbt"><div class="mbf" style="width:${proPct}%;background:${proC};"></div></div><div class="mbv" style="color:${proC};">${t.pro}g/${TARGETS.pro}g</div></div><div class="mbr"><div class="mbl">Fat</div><div class="mbt"><div class="mbf" style="width:${fatPct}%;background:${fatC};"></div></div><div class="mbv" style="color:${fatC};">${t.fat}g/${TARGETS.fat}g</div></div></div>`;
   const wtLocDisp=(['push','pull','legs'].includes(wt?.id)&&USER.gym)?USER.gym:(wt?.loc||'');
-  const wtHtml=wt?`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid ${wt.color}44;border-radius:16px;overflow:hidden;"><div style="background:${wt.color}22;padding:12px 16px;"><div style="font-family:var(--fd);font-size:20px;letter-spacing:2px;color:${wt.color};">${wt.name.toUpperCase()}</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">${wtLocDisp} · ${wt.note}</div></div><div style="padding:10px 16px;">${wt.exercises.map(ex=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);"><div style="font-size:13px;">${ex.n}</div><div style="font-size:12px;color:var(--text2);background:var(--surface2);padding:3px 8px;border-radius:6px;">${ex.s}</div></div>`).join('')}</div></div>`:`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">🏋🏾</div><div style="font-size:14px;color:var(--text2);">No workout selected yet</div><button onclick="showPage('workout')" style="margin-top:10px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--fb);font-size:13px;font-weight:600;padding:9px 18px;cursor:pointer;">Select Workout</button></div>`;
+  const wtHtml=wt?`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid ${wt.color}44;border-radius:16px;overflow:hidden;"><div style="background:${wt.color}22;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;"><div><div style="font-family:var(--fd);font-size:20px;letter-spacing:2px;color:${wt.color};">${wt.name.toUpperCase()}</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">${wtLocDisp} · ${wt.note}</div></div><button onclick="showPage('workout')" style="background:${wt.color};border:none;border-radius:10px;color:#fff;font-family:var(--fb);font-size:13px;font-weight:700;padding:9px 16px;cursor:pointer;white-space:nowrap;">▶ Start</button></div><div style="padding:0 16px 4px;">${wt.exercises.map(ex=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);"><div style="font-size:13px;">${ex.n}</div><div style="font-size:12px;color:var(--text2);background:var(--surface2);padding:3px 8px;border-radius:6px;">${ex.s}</div></div>`).join('')}</div></div>`:`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">🏋🏾</div><div style="font-size:14px;color:var(--text2);">No workout selected yet</div><button onclick="showPage('workout')" style="margin-top:10px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--fb);font-size:13px;font-weight:600;padding:9px 18px;cursor:pointer;">Select Workout</button></div>`;
   // Today's plan meals
   let planHtml='';
   const todayName=DAYS[di];
@@ -1730,7 +1750,21 @@ function showCalDayDetail(dk){
   const wtId=(workoutSels[wk]||{})[d.getDay()];
   const wt=wtId?WORKOUT_TYPES.find(w=>w.id===wtId):null;
   const logHtml=log.length?log.map(item=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;"><span>${item.name}</span><span style="color:var(--text2);">${item.cal} cal</span></div>`).join(''):`<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">No food logged</div>`;
-  el.innerHTML=`<div class="cal-detail"><div style="background:var(--surface2);padding:12px 16px;border-bottom:1px solid var(--border);"><div style="font-weight:600;margin-bottom:2px;">${label}</div><div style="font-size:12px;color:var(--accent2);">${t.cal} cal · ${t.pro}g pro · ${t.fat}g fat</div>${wt?`<div style="font-size:12px;color:${wt.color};margin-top:4px;">🏋 ${wt.name}</div>`:''}</div><div style="padding:4px 16px 12px;">${logHtml}</div></div>`;
+  // Extras: weight, journal, habits, water
+  const weightEntry=weightLog.find(e=>e.date===dk||(e.date&&e.date.startsWith&&e.date.startsWith(dk)));
+  const journalEntry=fitnessJournal[dk];
+  const habitsDayData=(habitData[dk]||{}).habits||{};
+  const allH=getAllHabits();
+  const habitsDone=allH.filter(h=>habitsDayData[h.id]).length;
+  const waterOz=waterLog[dk]||0;
+  let extrasHtml='<div style="padding:8px 16px;display:flex;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border);">';
+  if(weightEntry)extrasHtml+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px 10px;font-size:12px;">⚖️ ${weightEntry.weight} lbs${weightEntry.bodyFat?` · ${weightEntry.bodyFat}% BF`:''}</div>`;
+  if(waterOz)extrasHtml+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px 10px;font-size:12px;">💧 ${waterOz}oz</div>`;
+  if(allH.length)extrasHtml+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px 10px;font-size:12px;">✅ ${habitsDone}/${allH.length} habits</div>`;
+  if(journalEntry)extrasHtml+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px 10px;font-size:12px;">${journalEntry.quickTag||'📓'} ${(journalEntry.text||'').slice(0,30)}${(journalEntry.text||'').length>30?'…':''}</div>`;
+  extrasHtml+='</div>';
+  const hasExtras=weightEntry||waterOz||allH.length||journalEntry;
+  el.innerHTML=`<div class="cal-detail"><div style="background:var(--surface2);padding:12px 16px;border-bottom:1px solid var(--border);"><div style="font-weight:600;margin-bottom:2px;">${label}</div><div style="font-size:12px;color:var(--accent2);">${t.cal} cal · ${t.pro}g pro · ${t.fat}g fat</div>${wt?`<div style="font-size:12px;color:${wt.color};margin-top:4px;">🏋 ${wt.name}</div>`:''}</div>${hasExtras?extrasHtml:''}<div style="padding:4px 16px 12px;">${logHtml}</div></div>`;
 }
 </script>
 <script>
@@ -1814,12 +1848,23 @@ async function sendCoach(){
     const cw=weightLog.length?weightLog[weightLog.length-1].weight:USER.startWeight;
     const t=getTotals();
     const coach=getCoach();
+    const di=new Date().getDay();const wk=getWeekKey();
+    const todayWtId=(workoutSels[wk]||{})[di];const todayWtObj=todayWtId?WORKOUT_TYPES.find(w=>w.id===todayWtId):null;
+    const recentWts=weightLog.slice(-3).map(e=>e.weight);
+    const wtTrendStr=recentWts.length>=2?(recentWts[recentWts.length-1]<recentWts[0]?'trending down':'trending up'):'no recent data';
+    const waterToday=getWaterToday();
+    const suppSummary=supplementStack.length?supplementStack.slice(0,4).map(s=>s.name).join(', '):'none logged';
+    const coachRules=ld('mf_coachRules','').trim();
+    const weekSessions=sessionLogs.filter(s=>s.weekKey===wk).length;
+    const plannedDays=parseInt((USER.trainingDays||'4 days').replace(/\D/g,''))||4;
     const sys=`You are ${coach.name}, a ${coach.style} fitness coach inside Macro Fit. Personality: ${coach.personality}
-User: ${USER.name||'the user'} | Goal: ${USER.primaryGoal||'fat loss'} | Current: ${cw} lbs | Start: ${USER.startWeight||cw} lbs | Week ${getProgramWeek()}
-Daily targets: ${TARGETS.cal} cal | ${TARGETS.pro}g protein | ${TARGETS.fat}g fat max
-Today logged: ${t.cal} cal | ${t.pro}g protein | ${t.fat}g fat
-Current screen: ${currentPage}
-RULES: Isopure = 100 cal/scoop. Never train fasted on Leg Day. Never <1900 cal night before Leg Day.
+User: ${USER.name||'the user'} | Goal: ${USER.primaryGoal||'fat loss'} | Current: ${cw} lbs | Goal: ${USER.goalWeight||'not set'} lbs | Start: ${USER.startWeight||cw} lbs | Week ${getProgramWeek()}
+Targets: ${TARGETS.cal} cal | ${TARGETS.pro}g pro | ${TARGETS.fat}g fat max | ${TARGETS.carbs}g carbs
+Today logged: ${t.cal} cal | ${t.pro}g pro | ${t.fat}g fat | Water: ${waterToday}/${waterGoal}oz
+Today's workout: ${todayWtObj?todayWtObj.name:'Rest day'} | This week: ${weekSessions}/${plannedDays} sessions done
+Weight trend: ${wtTrendStr}${recentWts.length?' ('+recentWts.join(' → ')+')'  :''}
+Supplements: ${suppSummary}
+Current screen: ${currentPage}${coachRules?'\nUser notes for you: '+coachRules:''}
 Stay in character. Be concise and actionable.`;
     const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,system:sys,messages:coachHistory})});
     const data=await resp.json(),reply=data.content?.[0]?.text||'';
@@ -2727,6 +2772,22 @@ function renderProgressionPage(){
     });
   }
 
+  // Personal Records
+  const prKeys=Object.keys(oneRepMaxes);
+  if(prKeys.length){
+    html+=`<div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--text2);margin:16px 0 8px;">🏆 PERSONAL RECORDS</div>`;
+    html+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;">`;
+    prKeys.forEach((ex,i)=>{
+      const pr=oneRepMaxes[ex];
+      const val=typeof pr==='object'?pr.est||pr.weight:pr;
+      html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;${i<prKeys.length-1?'border-bottom:1px solid var(--border);':''}">`;
+      html+=`<div style="font-size:13px;font-weight:600;">${ex}</div>`;
+      html+=`<div style="font-family:var(--fd);font-size:20px;color:var(--accent3);">${val} <span style="font-size:11px;color:var(--text3);font-family:var(--fb);">lbs est.</span></div>`;
+      html+=`</div>`;
+    });
+    html+=`</div>`;
+  }
+
   // Weekly summary button
   html+=`<button onclick="getWeeklySummary()" style="width:100%;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:14px;color:var(--text);font-family:var(--fd);font-size:18px;letter-spacing:2px;padding:16px;cursor:pointer;">🧠 WEEKLY AI SUMMARY</button>`;
   html+=`<div id="weeklySummaryResult" style="margin-top:8px;"></div>`;
@@ -3517,8 +3578,19 @@ function renderSettings(){
       </div>
       ${[['Calories',t.cal,'kcal','var(--accent)'],['Protein',t.pro,'g','var(--accent2)'],['Carbs',t.carbs,'g','var(--accent3)'],['Fat',t.fat,'g','#8b5cf6'],['Fiber',t.fiber,'g','#06b6d4'],['Sodium',t.sodium,'mg','#ec4899'],['Sugar',t.sugar,'g','#f97316']].map(([l,v,u,col])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);"><span style="font-size:13px;color:var(--text2);">${l}</span><span style="font-family:var(--fd);font-size:18px;color:${col};">${v||0}<span style="font-size:10px;color:var(--text3);font-family:var(--fb);"> ${u}</span></span></div>`).join('')}
     </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;">
+      <div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--text2);margin-bottom:8px;">COACH NOTES</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">Personal rules and context your coach always knows about you (allergies, preferences, schedule constraints, etc.)</div>
+      <textarea id="coachRulesInput" rows="4" placeholder="e.g. I'm lactose intolerant. I train in the mornings. My protein shake has 130 cal / 25g pro..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--fb);font-size:13px;padding:12px;resize:none;margin-bottom:10px;">${ld('mf_coachRules','')}</textarea>
+      <button onclick="saveCoachRules()" style="width:100%;background:var(--accent2);border:none;border-radius:10px;color:#fff;font-family:var(--fd);font-size:16px;letter-spacing:1px;padding:12px;cursor:pointer;">SAVE NOTES</button>
+    </div>
     <button onclick="showConfirm('Reset App','This will wipe all your data and restart onboarding. Are you sure?',[{label:'Yes, reset',cls:'danger',fn:resetApp},{label:'Cancel',cls:'no'}])" style="width:100%;background:var(--surface);border:1.5px solid var(--red)44;border-radius:14px;color:var(--red);font-family:var(--fd);font-size:16px;letter-spacing:1px;padding:14px;cursor:pointer;">🗑 RESET APP</button>
   `;
+}
+function saveCoachRules(){
+  const val=document.getElementById('coachRulesInput')?.value.trim()||'';
+  sv('mf_coachRules',val);
+  showToast('✅ Coach notes saved');
 }
 async function recalculateTargets(){
   showToast('Recalculating macros...');
@@ -3662,7 +3734,7 @@ function renderBadges(){
 }
 
 // ═══ FEATURE 24: BACKUP & RESTORE ═══
-const APP_KEYS=['foodLog','weightLog','workoutSels','workoutLogs','mf_grocChecked','customFoods','equipmentChoices','mf_weeklyMealPlan','mf_pantryItems','mf_pantryCustom','mf_recipeLibrary','sessionLogs','workoutPlan','progressionNotes','supplementStack','fitnessJournal','habitData','habitStreaks','waterLog','streaks','badges','oneRepMaxes','workoutNotes','customHabits','lockedMeals','generatedGroceryList','dialRot','sundayAtTop','chosenCoachId','hasSmartScale','mf_onboardingComplete','mf_userProfile','mf_targets','mf_mealPlanApproved','mf_groceryList','mf_progressCheckins','waterGoal'];
+const APP_KEYS=['foodLog','weightLog','workoutSels','workoutLogs','mf_grocChecked','customFoods','equipmentChoices','mf_weeklyMealPlan','mf_pantryItems','mf_pantryCustom','mf_recipeLibrary','sessionLogs','workoutPlan','progressionNotes','supplementStack','fitnessJournal','habitData','habitStreaks','waterLog','streaks','badges','oneRepMaxes','workoutNotes','customHabits','lockedMeals','generatedGroceryList','dialRot','sundayAtTop','chosenCoachId','hasSmartScale','mf_onboardingComplete','mf_userProfile','mf_targets','mf_mealPlanApproved','mf_groceryList','mf_progressCheckins','waterGoal','mf_coachRules'];
 function exportAppData(){
   const data={};
   APP_KEYS.forEach(k=>{const v=ld(k,null);if(v!==null)data[k]=v;});
