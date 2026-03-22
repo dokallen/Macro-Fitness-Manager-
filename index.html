@@ -850,7 +850,7 @@ canvas{display:block;width:100%!important;max-width:100%;}
   <div class="chat-inp-row">
     <button class="coach-icon-btn" onclick="document.getElementById('coachImgInput').click()" title="Send image">📷</button>
     <button class="coach-icon-btn" id="coachMicBtn" onclick="toggleCoachVoice()" title="Voice input">🎤</button>
-    <input type="file" id="coachImgInput" accept="image/*" style="display:none" onchange="handleCoachImage(this)"/>
+    <input type="file" id="coachImgInput" accept="image/*" capture="environment" style="display:none" onchange="handleCoachImage(this)"/>
     <input class="chat-inp" id="coachInp" placeholder="Ask your coach..." onkeydown="if(event.key==='Enter')sendCoach()"/>
     <button class="chat-send" onclick="sendCoach()">Send</button>
   </div>
@@ -1220,7 +1220,8 @@ function renderWorkout(){
       let doneDay=-1;for(let p=0;p<myPos;p++){if(sel[order2[p]]===wt.id){doneDay=order2[p];break;}}
       const isDone=doneDay>=0;
       const btn=document.createElement('div');btn.className='wt-btn'+(isSel?' sel':'')+(isDone?' done':'');
-      btn.innerHTML=`<div class="wt-icon">${wt.icon}</div><div class="wt-info"><div class="wt-name">${wt.name}${isDone?` <span style="font-size:10px;font-weight:400;color:var(--text3);">done ${DAYS[doneDay]}</span>`:''}</div><div class="wt-loc">${wt.loc}</div></div><div class="wt-ck">${isSel?'✓':''}</div>`;
+      const dispLoc=(['push','pull','legs'].includes(wt.id)&&USER.gym)?USER.gym:wt.loc;
+      btn.innerHTML=`<div class="wt-icon">${wt.icon}</div><div class="wt-info"><div class="wt-name">${wt.name}${isDone?` <span style="font-size:10px;font-weight:400;color:var(--text3);">done ${DAYS[doneDay]}</span>`:''}</div><div class="wt-loc">${dispLoc}</div></div><div class="wt-ck">${isSel?'✓':''}</div>`;
       btn.onclick=()=>{selectWorkout(dayIdx,wt.id,isDone,wt.name,doneDay);};
       body.appendChild(btn);
     });
@@ -1281,7 +1282,8 @@ function openWorkoutDetail(dayIdx,wtId){
   currentDetailDay=dayIdx;currentDetailWorkout=wtId;
   const wt=WORKOUT_TYPES.find(w=>w.id===wtId);
   document.getElementById('wdTitle').textContent=wt.name.toUpperCase();
-  document.getElementById('wdSub').textContent=DAYS[dayIdx]+' · '+wt.loc;
+  const gymName=(['push','pull','legs'].includes(wt.id)&&USER.gym)?USER.gym:wt.loc;
+  document.getElementById('wdSub').textContent=DAYS[dayIdx]+' · '+gymName;
   const wk=getWeekKey(),saved=(workoutLogs[wk]||{})[dayIdx]||{};
   const c=document.getElementById('wdContent');c.innerHTML='';
   if(wt.note){const nb=document.createElement('div');nb.style.cssText='background:var(--surface2);border-radius:10px;padding:10px 13px;font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px;margin-top:10px;';nb.textContent=wt.note;c.appendChild(nb);}
@@ -1607,7 +1609,8 @@ function renderToday(){
   const proC=t.pro>=TARGETS.pro?'var(--green)':proPct>85?'var(--yellow)':'#7ab3d4';
   const fatC=t.fat>TARGETS.fat?'var(--red)':'#d4a57a';
   const macroHtml=`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-family:var(--fd);font-size:18px;letter-spacing:2px;">TODAY'S MACROS</div><button onclick="showPage('tracking')" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:var(--fb);font-size:12px;font-weight:600;padding:7px 13px;cursor:pointer;">+ LOG</button></div><div class="mbr"><div class="mbl">Calories</div><div class="mbt"><div class="mbf" style="width:${calPct}%;background:${calC};"></div></div><div class="mbv" style="color:${calC};">${t.cal}/${TARGETS.cal}</div></div><div class="mbr"><div class="mbl">Protein</div><div class="mbt"><div class="mbf" style="width:${proPct}%;background:${proC};"></div></div><div class="mbv" style="color:${proC};">${t.pro}g/${TARGETS.pro}g</div></div><div class="mbr"><div class="mbl">Fat</div><div class="mbt"><div class="mbf" style="width:${fatPct}%;background:${fatC};"></div></div><div class="mbv" style="color:${fatC};">${t.fat}g/${TARGETS.fat}g</div></div></div>`;
-  const wtHtml=wt?`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid ${wt.color}44;border-radius:16px;overflow:hidden;"><div style="background:${wt.color}22;padding:12px 16px;"><div style="font-family:var(--fd);font-size:20px;letter-spacing:2px;color:${wt.color};">${wt.name.toUpperCase()}</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">${wt.loc} · ${wt.note}</div></div><div style="padding:10px 16px;">${wt.exercises.map(ex=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);"><div style="font-size:13px;">${ex.n}</div><div style="font-size:12px;color:var(--text2);background:var(--surface2);padding:3px 8px;border-radius:6px;">${ex.s}</div></div>`).join('')}</div></div>`:`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">🏋🏾</div><div style="font-size:14px;color:var(--text2);">No workout selected yet</div><button onclick="showPage('workout')" style="margin-top:10px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--fb);font-size:13px;font-weight:600;padding:9px 18px;cursor:pointer;">Select Workout</button></div>`;
+  const wtLocDisp=(['push','pull','legs'].includes(wt?.id)&&USER.gym)?USER.gym:(wt?.loc||'');
+  const wtHtml=wt?`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid ${wt.color}44;border-radius:16px;overflow:hidden;"><div style="background:${wt.color}22;padding:12px 16px;"><div style="font-family:var(--fd);font-size:20px;letter-spacing:2px;color:${wt.color};">${wt.name.toUpperCase()}</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">${wtLocDisp} · ${wt.note}</div></div><div style="padding:10px 16px;">${wt.exercises.map(ex=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);"><div style="font-size:13px;">${ex.n}</div><div style="font-size:12px;color:var(--text2);background:var(--surface2);padding:3px 8px;border-radius:6px;">${ex.s}</div></div>`).join('')}</div></div>`:`<div style="margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">🏋🏾</div><div style="font-size:14px;color:var(--text2);">No workout selected yet</div><button onclick="showPage('workout')" style="margin-top:10px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--fb);font-size:13px;font-weight:600;padding:9px 18px;cursor:pointer;">Select Workout</button></div>`;
   // Today's plan meals
   let planHtml='';
   const todayName=DAYS[di];
@@ -2791,9 +2794,30 @@ function closeDrawer(){document.getElementById('sideDrawer').style.left='-280px'
 
 function renderSupplements(){
   const list=document.getElementById('suppList');if(!list)return;
-  if(!supplementStack.length){list.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">No supplements added yet.</div>';return;}
-  list.innerHTML=supplementStack.map(s=>{
+  if(!supplementStack.length){list.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">No supplements added yet.</div>';getSuppCoachTip();return;}
+
+  // Daily schedule view — grouped by time of day
+  const timeOrder=['Morning','Pre-workout','Post-workout','With meals','Evening'];
+  const groups={};
+  supplementStack.forEach(s=>{const t=s.timeOfDay||'Anytime';if(!groups[t])groups[t]=[];groups[t].push(s);});
+  let scheduleHtml='<div style="margin-bottom:14px;"><div style="font-family:var(--fd);font-size:13px;letter-spacing:2px;color:var(--text2);margin-bottom:8px;">TODAY\'S SCHEDULE</div>';
+  [...timeOrder,...Object.keys(groups).filter(k=>!timeOrder.includes(k))].forEach(time=>{
+    if(!groups[time])return;
+    const tc=SUPP_TIME_COLORS[time]||'#475569';
+    scheduleHtml+=`<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+      <div style="min-width:80px;"><span style="background:${tc}22;color:${tc};font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;">${time}</span></div>
+      <div style="flex:1;">${groups[time].map(s=>`<span style="display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;padding:3px 9px;margin:2px 4px 2px 0;">${s.name}${s.dosage?' · '+s.dosage:''}</span>`).join('')}</div>
+    </div>`;
+  });
+  scheduleHtml+='</div><div style="height:1px;background:var(--border);margin-bottom:14px;"></div>';
+  scheduleHtml+='<div style="font-family:var(--fd);font-size:13px;letter-spacing:2px;color:var(--text2);margin-bottom:8px;">MY STACK</div>';
+
+  list.innerHTML=scheduleHtml+supplementStack.map(s=>{
     const tc=SUPP_TIME_COLORS[s.timeOfDay]||'#475569';
+    const sid=s.id.replace(/'/g,"\\'");
+    const sname=s.name.replace(/'/g,"\\'");
+    const sdosage=(s.dosage||'').replace(/'/g,"\\'");
+    const stime=(s.timeOfDay||'').replace(/'/g,"\\'");
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px;">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;">
         <div style="flex:1;">
@@ -2801,9 +2825,9 @@ function renderSupplements(){
           <div style="margin-top:5px;"><span style="background:${tc}22;color:${tc};font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;">${s.timeOfDay||'Anytime'}</span></div>
           ${s.purpose?`<div style="font-size:12px;color:var(--text2);margin-top:5px;">${s.purpose}</div>`:''}
         </div>
-        <button onclick="deleteSupp('${s.id}')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:4px;">🗑</button>
+        <button onclick="deleteSupp('${sid}')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:4px;">🗑</button>
       </div>
-      <button onclick="askCoachAboutSupp('${s.name.replace(/'/g,"\\'")}','${(s.dosage||'').replace(/'/g,"\\'")}','${(s.timeOfDay||'').replace(/'/g,"\\'")}');" style="margin-top:10px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--accent2);font-family:var(--fb);font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer;">💬 Ask Coach</button>
+      <button onclick="askCoachAboutSupp('${sname}','${sdosage}','${stime}');" style="margin-top:10px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--accent2);font-family:var(--fb);font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer;">💬 Ask Coach</button>
     </div>`;
   }).join('');
   getSuppCoachTip();
@@ -2874,12 +2898,18 @@ function askCoachAboutSupp(name,dosage,timeOfDay){
 async function getSuppCoachTip(){
   const el=document.getElementById('suppTipText');if(!el)return;
   if(!supplementStack.length){el.textContent='Add your supplements below to get personalized coaching tips.';return;}
+  // Cache tip by today's date + stack count to avoid refetching every render
+  const cacheKey='mf_suppTip_'+getTodayKey()+'_'+supplementStack.length;
+  const cached=ld(cacheKey,null);
+  if(cached){el.textContent=cached;return;}
   const list=supplementStack.map(s=>`${s.name} ${s.dosage||''} (${s.timeOfDay||''})`).join(', ');
   el.textContent='Loading tip...';
   try{
     const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,messages:[{role:'user',content:`${USER.name||'The user'} takes: ${list}. Give one specific coaching tip about their stack: timing optimization, synergies, or a gap. 2-3 sentences. Direct and specific.`}]})});
     const data=await resp.json();
-    el.textContent=data.content?.[0]?.text||'Stack looks solid. Consistency is key.';
+    const tip=data.content?.[0]?.text||'Stack looks solid. Consistency is key.';
+    el.textContent=tip;
+    sv(cacheKey,tip);
   }catch(e){el.textContent='Add your supplements below to get personalized coaching tips.';}
 }
 
@@ -3101,7 +3131,12 @@ function setupVoiceInput(){
     const transcript=Array.from(e.results).map(r=>r[0].transcript).join('');
     const input=document.getElementById('coachInp');if(input)input.value=transcript;
   };
-  coachRecognition.onend=()=>{coachRecording=false;const mic=document.getElementById('coachMicBtn');if(mic){mic.classList.remove('recording');mic.textContent='🎤';}};
+  coachRecognition.onend=()=>{
+    coachRecording=false;
+    const mic=document.getElementById('coachMicBtn');if(mic){mic.classList.remove('recording');mic.textContent='🎤';}
+    const inp=document.getElementById('coachInp');
+    if(inp&&inp.value.trim())setTimeout(()=>sendCoach&&sendCoach(),200);
+  };
 }
 function toggleCoachVoice(){
   if(!coachRecognition){showToast('Voice not supported on this browser');return;}
@@ -3112,16 +3147,30 @@ function toggleCoachVoice(){
 // ═══ FEATURE 17: COACH QUICK-TAP CHIPS ═══
 function renderCoachChips(){
   const el=document.getElementById('coachChipsRow');if(!el)return;
-  const always=['How are my macros today?','Am I on track this week?','Give me a tip'];
+  const t=getTotals();
+  const wk=getWeekKey();const selWt=workoutSels[wk]?.[new Date().getDay()];
+  const todayWt=selWt?WORKOUT_TYPES.find(w=>w.id===selWt):null;
+  const calLeft=TARGETS.cal-t.cal;
+  const proLeft=TARGETS.pro-t.pro;
+  const always=[
+    calLeft>200?`I have ${calLeft} cal left today`:'I\'m close to my calorie goal',
+    proLeft>20?`I still need ${proLeft}g protein`:'Am I hitting my protein?',
+    'Give me a quick tip'
+  ];
   const contextChips={
-    workout:['What should I focus on today?','How is my progress?','Suggest a warm-up'],
-    meals:['What should I eat next?','Does my plan look good?','I\'m craving something'],
-    supplements:['Is my stack good?','What am I missing?','Best time for everything?'],
-    today:['How\'s my day shaping up?','What should I prioritize?'],
-    tracking:['Did I hit my targets?','How are my macros?']
+    workout:todayWt
+      ?[`I\'m doing ${todayWt.name} today`,'Suggest a warm-up for me',`How much should I lift today?`,'Should I increase my weights?']
+      :['What workout should I do today?','How is my training progress?','I\'m feeling tired today'],
+    meals:[`What should I eat for my next meal?`,'Does my meal plan look good?','I\'m craving something sweet','What\'s a high-protein snack?'],
+    supplements:['Is my supplement stack optimal?','What\'s the best timing for my stack?','What am I missing from my stack?','Any supplement interactions I should know?'],
+    today:['How\'s my day looking?','What should I prioritize today?','Am I on track?'],
+    tracking:['Did I hit my protein today?','How are my macros this week?','What should I log?'],
+    journal:['Help me write today\'s journal entry','What should I reflect on today?'],
+    progression:['How is my strength progressing?','Should I increase my weights?','Am I in a plateau?'],
+    home:['What should I focus on today?','How\'s my week going?','Motivate me']
   };
   const chips=[...always,...(contextChips[currentPage]||[])];
-  el.innerHTML=chips.map(c=>`<button onclick="sendChip(${JSON.stringify(c)})" style="padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);font-size:12px;white-space:nowrap;cursor:pointer;font-family:var(--fb);color:var(--text2);flex-shrink:0;">${c}</button>`).join('');
+  el.innerHTML=chips.slice(0,6).map(c=>`<button onclick="sendChip(${JSON.stringify(c)})" style="padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);font-size:12px;white-space:nowrap;cursor:pointer;font-family:var(--fb);color:var(--text2);flex-shrink:0;">${c}</button>`).join('');
 }
 function sendChip(msg){
   const input=document.getElementById('coachInp');if(input)input.value=msg;
