@@ -653,6 +653,7 @@ canvas{display:block;width:100%!important;max-width:100%;}
     <div onclick="closeDrawer();showPage('journal')" style="display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;font-size:15px;font-weight:500;">📓 <span>Fitness Journal</span></div>
     <div onclick="closeDrawer();toggleCoach()" style="display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;font-size:15px;font-weight:500;">💬 <span>Coach</span></div>
     <div onclick="closeDrawer();showPage('badges')" style="display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;font-size:15px;font-weight:500;">🏆 <span>Achievements</span></div>
+    <div onclick="closeDrawer();showPage('settings')" style="display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;font-size:15px;font-weight:500;">⚙️ <span>Settings &amp; Targets</span></div>
     <div style="height:1px;background:var(--border);margin:8px 16px;"></div>
     <div onclick="closeDrawer();showPage('backup')" style="display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;font-size:15px;font-weight:500;color:var(--text2);">💾 <span>Backup &amp; Restore</span></div>
   </div>
@@ -785,6 +786,12 @@ canvas{display:block;width:100%!important;max-width:100%;}
   <div style="font-family:var(--fd);font-size:14px;letter-spacing:3px;color:var(--accent3);margin-top:20px;">ACHIEVEMENT UNLOCKED!</div>
 </div>
 
+<!-- SETTINGS PAGE -->
+<div id="settings-screen" class="page">
+  <div class="ph"><button class="back-btn" onclick="goBack()">← Back</button><div class="pt">SETTINGS & TARGETS</div><div class="ps">Profile and macro targets</div></div>
+  <div id="settingsContent" style="padding:16px;"></div>
+</div>
+
 <!-- BACKUP PAGE -->
 <div id="backup-screen" class="page">
   <div class="ph"><button class="back-btn" onclick="goBack()">← Back</button><div class="pt">BACKUP &amp; RESTORE</div><div class="ps">Export or restore your data</div></div>
@@ -910,24 +917,21 @@ function ld(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;
 function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 
 // ═══ STATE ═══
-const USER={age:37,startWeight:233,height:"5'7\"",programStart:'2026-02-23'};
-const TARGETS={cal:1850,pro:180,fat:60,carbs:163,sodium:2300,fiber:28,sugar:40};
+let userProfile=ld('mf_userProfile',null);
+const USER=userProfile||{name:'',programStart:new Date().toISOString().split('T')[0]};
+let storedTargets=ld('mf_targets',null);
+const TARGETS=storedTargets||{cal:2000,pro:150,carbs:200,fat:65,fiber:25,sodium:2300,sugar:45};
 const MET={push:5,pull:5,legs:6,cardio:6.5,recovery:3,fullbody:6,rest:1};
 
-let weightLog=ld('weightLog',[
-  {date:'Feb 23',weight:233,week:1},
-  {date:'Mar 2',weight:227,week:2},
-  {date:'Mar 10',weight:232.4,week:3,bodyFat:22.9,visceralFat:18,muscleMass:170.2,skeletalMuscle:49.8,bodyWater:55.6,bmr:2124},
-  {date:'Mar 16',weight:228.6,week:4,bodyFat:22.5,visceralFat:17,muscleMass:168.4,skeletalMuscle:50.1,bodyWater:56.0,bmr:2106},
-]);
+let weightLog=ld('weightLog',[]);
 let workoutSels=ld('workoutSels',{});
 let workoutLogs=ld('workoutLogs',{});
 let foodLog=ld('foodLog',{});
-let grocChecked=ld('grocChecked',{});
+let grocChecked=ld('mf_grocChecked',{});
 let customFoods=ld('customFoods',[]);
 let equipmentChoices=ld('equipmentChoices',{});
 let generatedMealPlan=ld('generatedMealPlan',null);
-let generatedGrocery=ld('generatedGrocery',[]);
+let generatedGrocery=ld('mf_groceryList',[]);
 let chosenCoachId=ld('chosenCoachId','sarge');
 let hasSmartScale=ld('hasSmartScale',null);
 let sundayAtTop=ld('sundayAtTop',false);
@@ -935,7 +939,7 @@ let calViewDate=new Date();
 let selectedCalDay=null;
 let activeMealTabSel='plan';
 let activeMealShortcutTab=MEAL_TABS[0];
-let weeklyMealPlan=ld('weeklyMealPlan',null);
+let weeklyMealPlan=ld('mf_weeklyMealPlan',null);
 let lockedMeals=ld('lockedMeals',{});
 let navStack=[];
 let currentDetailDay=null;
@@ -975,13 +979,19 @@ let onboardingData={};
 const ONBOARDING_STEPS=[
   {title:'Welcome to\nMacro Fit',sub:'Your personal AI-powered fitness companion. Built around your goals, your meals, and your schedule.',type:'welcome'},
   {title:"What's your name?",field:'name',placeholder:'Enter your name',type:'text'},
+  {title:'How old are you?',field:'age',placeholder:'e.g. 28',type:'number'},
+  {title:'What\'s your height?',field:'heightFt',field2:'heightIn',type:'height'},
   {title:'Current weight?',field:'startWeight',placeholder:'lbs',type:'number'},
   {title:'Goal weight?',field:'goalWeight',placeholder:'lbs',type:'number'},
-  {title:'Daily calorie target?',field:'cal',placeholder:'1900',type:'number',default:'1900'},
-  {title:'Daily protein goal?',field:'pro',placeholder:'180',type:'number',default:'180'},
-  {title:'Fat ceiling?',field:'fat',placeholder:'60',type:'number',default:'60'},
+  {title:'Biological sex?',field:'sex',type:'select',opts:['Male','Female']},
+  {title:'Primary goal?',field:'primaryGoal',type:'select',opts:['Fat loss','Build muscle','Body recomposition','Maintain weight','Improve endurance']},
+  {title:'Activity level?',field:'activityLevel',type:'select',opts:['Sedentary (desk job, little exercise)','Lightly active (1-3 days/week)','Moderately active (3-5 days/week)','Very active (6-7 days/week)','Extremely active (physical job + training)']},
+  {title:'Training days per week?',field:'trainingDays',type:'select',opts:['2 days','3 days','4 days','5 days','6 days']},
   {title:'Where do you train?',field:'gym',placeholder:'e.g. Planet Fitness',type:'text',optional:true},
-  {title:"You're all set!",sub:'Time to build your best body.',type:'complete'}
+  {title:'Dietary restrictions?',field:'dietaryRestrictions',type:'multiselect',opts:['None','Gluten-free','Dairy-free','Vegetarian','Vegan','Nut allergy','Shellfish allergy','No pork'],optional:true},
+  {title:'Calculating your macros...',type:'api-call'},
+  {title:'Your AI-Generated Targets',type:'review'},
+  {title:'You\'re all set!',sub:'Your personalized plan is ready.',type:'complete'}
 ];
 let badges=ld('badges',{});
 const BADGE_DEFS=[
@@ -1036,6 +1046,7 @@ function showPage(name,push=true){
   else if(name==='supplements')renderSupplements();
   else if(name==='journal')renderJournal();
   else if(name==='badges')renderBadges();
+  else if(name==='settings')renderSettings();
   else if(name==='backup'){}
   renderCoachChips&&renderCoachChips();
 }
@@ -1314,15 +1325,20 @@ function renderMeals(){
       `;
     } else {
       const plan = weeklyMealPlan;
+      const isApproved = ld('mf_mealPlanApproved', false);
       content.innerHTML = `
         <div style="padding:10px 16px 0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--text2);">${plan.planWeek||'THIS WEEK'}</div>
-            <div style="display:flex;gap:6px;">
-              <button onclick="weeklyMealPlan=null;sv('weeklyMealPlan',null);renderMeals();" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text3);font-family:var(--fb);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;">New Plan</button>
-              <button onclick="generateMealPlan()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:var(--fb);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;">Regen ⚡</button>
+          ${!isApproved ? `<div style="background:linear-gradient(135deg,#1a1040,#0d1e33);border:1.5px solid var(--accent3);border-radius:14px;padding:14px 16px;margin-bottom:12px;">
+            <div style="font-family:var(--fd);font-size:13px;letter-spacing:2px;color:var(--accent3);margin-bottom:8px;">📋 DRAFT PLAN — REVIEW BEFORE APPROVING</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Review your 7-day plan below. Tap 👎 on any meal to swap it, then approve when you're satisfied.</div>
+            <div style="display:flex;gap:8px;">
+              <button onclick="approveMealPlan()" style="flex:1;background:var(--accent2);border:none;border-radius:10px;color:#fff;font-family:var(--fd);font-size:16px;letter-spacing:1px;padding:11px;cursor:pointer;">✅ APPROVE PLAN</button>
+              <button onclick="weeklyMealPlan=null;sv('mf_weeklyMealPlan',null);sv('mf_mealPlanApproved',false);renderMeals();" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:var(--fb);font-size:13px;font-weight:600;padding:11px 14px;cursor:pointer;">Rebuild</button>
             </div>
-          </div>
+          </div>` : `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--accent2);">✅ APPROVED PLAN</div>
+            <button onclick="weeklyMealPlan=null;sv('mf_weeklyMealPlan',null);sv('mf_mealPlanApproved',false);renderMeals();" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text3);font-family:var(--fb);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;">New Plan</button>
+          </div>`}
           ${(plan.days||[]).map((day,i)=>renderMealPlanCard(day,i)).join('')}
         </div>
       `;
@@ -1334,8 +1350,8 @@ function renderMeals(){
 function setMealTab(tab){activeMealTabSel=tab;renderMeals();}
 function togglePlanDay(hdr){const body=hdr.nextElementSibling;body.classList.toggle('open');}
 function toggleRecipe(hdr){const body=hdr.nextElementSibling,chev=hdr.querySelector('span');body.classList.toggle('open');chev.style.transform=body.classList.contains('open')?'rotate(90deg)':'';}
-function grocReset(){grocChecked={};sv('grocChecked',grocChecked);renderMeals();}
-function addGrocItem(){const name=document.getElementById('grocNewName').value.trim();if(!name)return;let ci=generatedGrocery.findIndex(s=>s.section==='CUSTOM');if(ci<0){generatedGrocery.push({section:'CUSTOM',items:[]});ci=generatedGrocery.length-1;}generatedGrocery[ci].items.push({name,amount:''});sv('generatedGrocery',generatedGrocery);document.getElementById('grocNewName').value='';renderMeals();}
+function grocReset(){grocChecked={};sv('mf_grocChecked',grocChecked);renderMeals();}
+function addGrocItem(){const name=document.getElementById('grocNewName').value.trim();if(!name)return;let ci=generatedGrocery.findIndex(s=>s.section==='CUSTOM');if(ci<0){generatedGrocery.push({section:'CUSTOM',items:[]});ci=generatedGrocery.length-1;}generatedGrocery[ci].items.push({name,amount:''});sv('mf_groceryList',generatedGrocery);document.getElementById('grocNewName').value='';renderMeals();}
 
 // ═══ MEAL PLAN BUILDER ═══
 const MPB_QUESTIONS=[
@@ -1394,8 +1410,8 @@ Reply ONLY with valid JSON, no markdown fences:
     generatedGrocery=parsed.groceryList||[];
     grocChecked={};
     sv('generatedMealPlan',generatedMealPlan);
-    sv('generatedGrocery',generatedGrocery);
-    sv('grocChecked',grocChecked);
+    sv('mf_groceryList',generatedGrocery);
+    sv('mf_grocChecked',grocChecked);
     showToast('✅ Plan built! Check your Meals tab.');
     showPage('meals');
   }catch(err){
@@ -1672,7 +1688,7 @@ async function sendCoach(){
     const t=getTotals();
     const coach=getCoach();
     const sys=`You are ${coach.name}, a ${coach.style} fitness coach inside Macro Fit. Personality: ${coach.personality}
-User: Derak | Goal: fat loss | Current: ${cw} lbs | Start: 233 lbs | Week ${getProgramWeek()}
+User: ${USER.name||'the user'} | Goal: ${USER.primaryGoal||'fat loss'} | Current: ${cw} lbs | Start: ${USER.startWeight||cw} lbs | Week ${getProgramWeek()}
 Daily targets: ${TARGETS.cal} cal | ${TARGETS.pro}g protein | ${TARGETS.fat}g fat max
 Today logged: ${t.cal} cal | ${t.pro}g protein | ${t.fat}g fat
 Current screen: ${currentPage}
@@ -1753,8 +1769,8 @@ const PANTRY_STAPLES = [
   {section:'SAUCES & EXTRAS', items:["Rao's Homemade Pizza Sauce",'Olive oil','Hot sauce','Mustard','Metamucil','Amazing Greens']},
 ];
 
-let pantryItems = ld('pantryItems', {});
-let pantryCustom = ld('pantryCustom', []);
+let pantryItems = ld('mf_pantryItems', {});
+let pantryCustom = ld('mf_pantryCustom', []);
 
 function renderPantry(){
   const allKeys = [...PANTRY_STAPLES.flatMap(s=>s.items), ...pantryCustom];
@@ -1776,7 +1792,7 @@ function renderPantry(){
       div.innerHTML = `<div class="pantry-chk">${have ? '✓' : ''}</div><div style="font-size:13px;color:var(--text);">${item}</div>`;
       div.onclick = () => {
         pantryItems[item] = !pantryItems[item];
-        sv('pantryItems', pantryItems);
+        sv('mf_pantryItems', pantryItems);
         renderPantry();
       };
       c.appendChild(div);
@@ -1794,7 +1810,7 @@ function renderPantry(){
       div.innerHTML = `<div class="pantry-chk">${have ? '✓' : ''}</div><div style="font-size:13px;color:var(--text);flex:1;">${item}</div><button onclick="event.stopPropagation();deletePantryCustom(${idx})" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:4px;">×</button>`;
       div.onclick = () => {
         pantryItems[item] = !pantryItems[item];
-        sv('pantryItems', pantryItems);
+        sv('mf_pantryItems', pantryItems);
         renderPantry();
       };
       c.appendChild(div);
@@ -1808,8 +1824,8 @@ function addPantryItem(){
   if(!name) return;
   if(!pantryCustom.includes(name)) pantryCustom.push(name);
   pantryItems[name] = true;
-  sv('pantryCustom', pantryCustom);
-  sv('pantryItems', pantryItems);
+  sv('mf_pantryCustom', pantryCustom);
+  sv('mf_pantryItems', pantryItems);
   inp.value = '';
   renderPantry();
   showToast('✅ ' + name + ' added to pantry');
@@ -1819,8 +1835,8 @@ function deletePantryCustom(idx){
   const item = pantryCustom[idx];
   pantryCustom.splice(idx, 1);
   delete pantryItems[item];
-  sv('pantryCustom', pantryCustom);
-  sv('pantryItems', pantryItems);
+  sv('mf_pantryCustom', pantryCustom);
+  sv('mf_pantryItems', pantryItems);
   renderPantry();
 }
 
@@ -1831,7 +1847,7 @@ function getPantryList(){
 </script>
 <script>
 // ═══ RECIPES ═══
-let recipeLibrary = ld('recipeLibrary', []);
+let recipeLibrary = ld('mf_recipeLibrary', []);
 let recipeFilter = 'All';
 let currentRecipeKey = null;
 let cookSteps = [];
@@ -1967,7 +1983,7 @@ function logRecipeAsFood(key){
 
 function deleteRecipe(key){
   showConfirm('Delete Recipe','Remove this recipe from your library?',[
-    {label:'Delete',cls:'danger',fn:()=>{recipeLibrary=recipeLibrary.filter(r=>r.key!==key);sv('recipeLibrary',recipeLibrary);goBack();showToast('Recipe deleted');}},
+    {label:'Delete',cls:'danger',fn:()=>{recipeLibrary=recipeLibrary.filter(r=>r.key!==key);sv('mf_recipeLibrary',recipeLibrary);goBack();showToast('Recipe deleted');}},
     {label:'Cancel',cls:'no',fn:null}
   ]);
 }
@@ -2177,16 +2193,63 @@ Respond ONLY with valid JSON. No markdown, no commentary.`,
     const raw = data.content?.[0]?.text||'{}';
     const plan = JSON.parse(raw.replace(/```json|```/g,'').trim());
     weeklyMealPlan = plan;
-    sv('weeklyMealPlan', weeklyMealPlan);
-    if(plan.groceryNeeded) sv('generatedGroceryList', plan.groceryNeeded);
+    sv('mf_weeklyMealPlan', weeklyMealPlan);
+    sv('mf_mealPlanApproved', false);
+    if(plan.groceryNeeded){generatedGrocery=plan.groceryNeeded;sv('mf_groceryList',generatedGrocery);}
     checkBadges&&checkBadges();
-    showToast('✅ 7-day plan ready!');
+    showToast('✅ Draft plan ready — review and approve!');
     renderMeals();
   }catch(e){
     if(planTab) planTab.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--red);">Failed to generate plan. Check your API connection and try again.</div>';
   }
 }
 
+function approveMealPlan(){
+  sv('mf_mealPlanApproved',true);
+  showToast('✅ Plan approved! Let\'s eat.');
+  renderMeals();
+}
+function dislikeMeal(dayIdx,mealSlot){
+  const day=weeklyMealPlan?.days?.[dayIdx];
+  if(!day)return;
+  showConfirm('Swap Meal','What do you want to do with this meal?',[
+    {label:'Get 3 alternatives',cls:'yes',fn:()=>getMealAlternatives(dayIdx,mealSlot)},
+    {label:'Ask Coach to pick',cls:'yes',fn:()=>getMealAlternatives(dayIdx,mealSlot,true)},
+    {label:'Cancel',cls:'no'}
+  ]);
+}
+async function getMealAlternatives(dayIdx,mealSlot,coachPick=false){
+  const day=weeklyMealPlan?.days?.[dayIdx];
+  if(!day)return;
+  const meal=day.meals?.find(m=>m.slot===mealSlot);
+  if(!meal)return;
+  showToast('Finding alternatives...');
+  try{
+    const prompt=coachPick
+      ?`The user doesn't like "${meal.name}" for ${mealSlot} on ${day.day}. Pick ONE better replacement that hits similar macros (~${meal.cal}cal, ~${meal.pro}g protein). Return JSON: {"name":"...","cal":0,"pro":0,"fat":0,"carbs":0,"slot":"${mealSlot}"}`
+      :`Give 3 alternative meals for ${mealSlot} replacing "${meal.name}" (~${meal.cal}cal, ~${meal.pro}g protein target). Return JSON array: [{"name":"...","cal":0,"pro":0,"fat":0,"carbs":0,"slot":"${mealSlot}"},...]`;
+    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:prompt}]})});
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'{}';
+    const jsonMatch=text.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+    if(!jsonMatch)throw new Error('no json');
+    let alts=JSON.parse(jsonMatch[0]);
+    if(!Array.isArray(alts))alts=[alts];
+    if(coachPick||alts.length===1){
+      const alt=alts[0];
+      day.meals=day.meals.map(m=>m.slot===mealSlot?{...alt,slot:mealSlot}:m);
+      recalcDayTotals(day);
+      sv('mf_weeklyMealPlan',weeklyMealPlan);
+      showToast('✅ Meal swapped!');
+      renderMeals();
+    }else{
+      showConfirm('Choose Alternative','Pick a replacement:',alts.map(alt=>({
+        label:alt.name+' ('+alt.cal+'cal, '+alt.pro+'g pro)',cls:'yes',
+        fn:()=>{day.meals=day.meals.map(m=>m.slot===mealSlot?{...alt,slot:mealSlot}:m);recalcDayTotals(day);sv('mf_weeklyMealPlan',weeklyMealPlan);renderMeals();showToast('✅ Meal swapped!');}
+      })).concat([{label:'Keep original',cls:'no'}]));
+    }
+  }catch(e){showToast('Could not get alternatives. Try again.');}
+}
 function renderMealPlanCard(day, idx){
   const dayKey = day.day+'_'+idx;
   const isExpanded = ld('mpExpanded_'+dayKey, false);
@@ -2222,6 +2285,7 @@ function renderMealPlanCard(day, idx){
             <div style="background:${sc}22;color:${sc};font-size:9px;font-weight:600;letter-spacing:1px;padding:2px 7px;border-radius:20px;">${m.slot}</div>
             <div style="display:flex;gap:6px;">
               <button onclick="toggleMealLock('${mKey}')" title="${isLocked?'Unlock':'Lock'}" style="background:none;border:1px solid var(--border);border-radius:6px;color:${isLocked?'var(--accent3)':'var(--text3)'};font-size:13px;padding:3px 7px;cursor:pointer;">${isLocked?'🔒':'🔓'}</button>
+              <button onclick="dislikeMeal(${idx},'${m.slot}')" title="Dislike — swap this meal" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--red);font-size:13px;padding:3px 7px;cursor:pointer;">👎</button>
               <button onclick="swapMeal('${dayKey}',${mi})" title="Swap meal" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:13px;padding:3px 7px;cursor:pointer;">🔄</button>
             </div>
           </div>
@@ -2710,7 +2774,7 @@ async function getSuppCoachTip(){
   const list=supplementStack.map(s=>`${s.name} ${s.dosage||''} (${s.timeOfDay||''})`).join(', ');
   el.textContent='Loading tip...';
   try{
-    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,messages:[{role:'user',content:`Derak takes: ${list}. Give one specific coaching tip about his stack: timing optimization, synergies, or a gap. 2-3 sentences. Direct and specific.`}]})});
+    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,messages:[{role:'user',content:`${USER.name||'The user'} takes: ${list}. Give one specific coaching tip about their stack: timing optimization, synergies, or a gap. 2-3 sentences. Direct and specific.`}]})});
     const data=await resp.json();
     el.textContent=data.content?.[0]?.text||'Stack looks solid. Consistency is key.';
   }catch(e){el.textContent='Add your supplements below to get personalized coaching tips.';}
@@ -2952,7 +3016,7 @@ function sendChip(msg){
 
 // ═══ FEATURE 18: ONBOARDING ═══
 function showOnboarding(){
-  if(ld('onboardingComplete',false))return;
+  if(ld('mf_onboardingComplete',false))return;
   onboardingStep=0;onboardingData={};
   const el=document.getElementById('onboarding-overlay');
   if(el){el.style.display='flex';}
@@ -2963,35 +3027,196 @@ function renderOnboardingStep(){
   const content=document.getElementById('onboardingContent');
   const dots=document.getElementById('onboardingDots');
   if(!content||!step)return;
+  const continueBtn=`<button onclick="nextOnboardingStep()" style="flex:1;background:var(--accent);border:none;border-radius:12px;color:#fff;font-family:var(--fd);font-size:20px;letter-spacing:1px;padding:15px;cursor:pointer;">CONTINUE</button>`;
+  const skipBtn=`<button onclick="nextOnboardingStep()" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-family:var(--fb);font-size:14px;font-weight:600;padding:15px 18px;cursor:pointer;">Skip</button>`;
+  const titleStyle=`font-family:var(--fd);font-size:28px;letter-spacing:2px;margin-bottom:20px;`;
   if(step.type==='welcome'){
     content.innerHTML=`<div style="text-align:center;"><div style="font-size:64px;margin-bottom:20px;">💪</div><div style="font-family:var(--fd);font-size:40px;letter-spacing:3px;line-height:1.1;margin-bottom:14px;">${step.title.replace('\n','<br/>')}</div><div style="font-size:15px;color:var(--text2);line-height:1.6;margin-bottom:32px;">${step.sub}</div><button onclick="nextOnboardingStep()" style="width:100%;background:linear-gradient(135deg,var(--accent),#7c3aed);border:none;border-radius:14px;color:#fff;font-family:var(--fd);font-size:22px;letter-spacing:2px;padding:18px;cursor:pointer;">GET STARTED</button></div>`;
+  }else if(step.type==='text'||step.type==='number'){
+    content.innerHTML=`<div><div style="${titleStyle}">${step.title.toUpperCase()}</div><input id="obInput" type="${step.type}" placeholder="${step.placeholder||''}" value="${onboardingData[step.field]||''}" style="width:100%;background:var(--surface);border:1.5px solid var(--border);border-radius:14px;color:var(--text);font-family:var(--fb);font-size:18px;padding:16px;margin-bottom:20px;" onkeydown="if(event.key==='Enter')nextOnboardingStep()"/><div style="display:flex;gap:10px;">${continueBtn}${step.optional?skipBtn:''}</div></div>`;
+    setTimeout(()=>document.getElementById('obInput')?.focus(),100);
+  }else if(step.type==='height'){
+    const ft=onboardingData.heightFt||'';const iN=onboardingData.heightIn||'';
+    content.innerHTML=`<div><div style="${titleStyle}">${step.title.toUpperCase()}</div><div style="display:flex;gap:12px;margin-bottom:20px;"><div style="flex:1;"><input id="obFt" type="number" placeholder="ft" value="${ft}" style="width:100%;background:var(--surface);border:1.5px solid var(--border);border-radius:14px;color:var(--text);font-family:var(--fb);font-size:18px;padding:16px;text-align:center;" min="4" max="7"/><div style="text-align:center;font-size:12px;color:var(--text3);margin-top:4px;">feet</div></div><div style="flex:1;"><input id="obIn" type="number" placeholder="in" value="${iN}" style="width:100%;background:var(--surface);border:1.5px solid var(--border);border-radius:14px;color:var(--text);font-family:var(--fb);font-size:18px;padding:16px;text-align:center;" min="0" max="11"/><div style="text-align:center;font-size:12px;color:var(--text3);margin-top:4px;">inches</div></div></div><div style="display:flex;gap:10px;">${continueBtn}</div></div>`;
+  }else if(step.type==='select'){
+    const cur=onboardingData[step.field]||'';
+    content.innerHTML=`<div><div style="${titleStyle}">${step.title.toUpperCase()}</div><div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">${step.opts.map(o=>`<div onclick="obSelect('${step.field}','${o}')" style="padding:14px 16px;background:${cur===o?'#0d1e33':'var(--surface)'};border:1.5px solid ${cur===o?'var(--accent)':'var(--border)'};border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;">${o}</div>`).join('')}</div><div style="display:flex;gap:10px;">${continueBtn}${step.optional?skipBtn:''}</div></div>`;
+  }else if(step.type==='multiselect'){
+    const cur=onboardingData[step.field]||[];
+    content.innerHTML=`<div><div style="${titleStyle}">${step.title.toUpperCase()}</div><div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">${step.opts.map(o=>`<div onclick="obToggle('${step.field}','${o}')" style="padding:13px 16px;background:${cur.includes(o)?'#0d1e33':'var(--surface)'};border:1.5px solid ${cur.includes(o)?'var(--accent)':'var(--border)'};border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:10px;"><span style="font-size:16px;">${cur.includes(o)?'✓':''}</span>${o}</div>`).join('')}</div><div style="display:flex;gap:10px;">${continueBtn}${step.optional?skipBtn:''}</div></div>`;
+  }else if(step.type==='api-call'){
+    content.innerHTML=`<div style="text-align:center;padding:40px 0;"><div style="font-size:52px;margin-bottom:20px;">🧠</div><div style="font-family:var(--fd);font-size:28px;letter-spacing:2px;margin-bottom:12px;">CALCULATING YOUR MACROS</div><div style="font-size:14px;color:var(--text2);line-height:1.6;">Using Mifflin-St Jeor BMR formula + your goals...</div><div style="margin-top:24px;display:flex;justify-content:center;gap:6px;" id="obDots"><div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite 0s"></div><div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite .3s"></div><div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite .6s"></div></div></div>`;
+    callOnboardingMacroAPI();
+  }else if(step.type==='review'){
+    const t=onboardingData.aiTargets||TARGETS;
+    content.innerHTML=`<div><div style="${titleStyle}">YOUR AI TARGETS</div><div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;">${[['Calories',t.cal,'kcal','var(--accent)'],['Protein',t.pro,'g','var(--accent2)'],['Carbs',t.carbs,'g','var(--accent3)'],['Fat',t.fat,'g','#8b5cf6'],['Fiber',t.fiber,'g','#06b6d4'],['Sodium',t.sodium,'mg','#ec4899'],['Sugar',t.sugar,'g','#f97316']].map(([l,v,u,c])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);"><span style="font-size:14px;color:var(--text2);">${l}</span><span style="font-family:var(--fd);font-size:18px;color:${c};">${v}<span style="font-size:11px;color:var(--text3);font-family:var(--fb);"> ${u}</span></span></div>`).join('')}</div><div style="font-size:12px;color:var(--text3);margin-bottom:16px;">These targets are personalized to your profile. You can adjust anytime in Settings.</div><div style="display:flex;gap:10px;">${continueBtn}</div></div>`;
   }else if(step.type==='complete'){
-    content.innerHTML=`<div style="text-align:center;"><div style="font-size:64px;margin-bottom:16px;">🎯</div><div style="font-family:var(--fd);font-size:36px;letter-spacing:2px;margin-bottom:10px;">ALL SET!</div><div style="font-size:14px;color:var(--text2);margin-bottom:32px;">${step.sub}</div></div>`;
-    setTimeout(finishOnboarding,1500);
-  }else{
-    content.innerHTML=`<div><div style="font-family:var(--fd);font-size:32px;letter-spacing:2px;margin-bottom:20px;">${step.title.toUpperCase()}</div><input id="obInput" type="${step.type}" placeholder="${step.placeholder||''}" value="${onboardingData[step.field]||step.default||''}" style="width:100%;background:var(--surface);border:1.5px solid var(--border);border-radius:14px;color:var(--text);font-family:var(--fb);font-size:18px;padding:16px;margin-bottom:20px;"/><div style="display:flex;gap:10px;"><button onclick="nextOnboardingStep()" style="flex:1;background:var(--accent);border:none;border-radius:12px;color:#fff;font-family:var(--fd);font-size:20px;letter-spacing:1px;padding:15px;cursor:pointer;">CONTINUE</button>${step.optional?'<button onclick="nextOnboardingStep()" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-family:var(--fb);font-size:14px;font-weight:600;padding:15px 18px;cursor:pointer;">Skip</button>':''}</div></div>`;
+    content.innerHTML=`<div style="text-align:center;"><div style="font-size:64px;margin-bottom:16px;">🎯</div><div style="font-family:var(--fd);font-size:36px;letter-spacing:2px;margin-bottom:10px;">ALL SET, ${onboardingData.name||'CHAMP'}!</div><div style="font-size:14px;color:var(--text2);margin-bottom:32px;">${step.sub}</div></div>`;
+    setTimeout(finishOnboarding,1800);
   }
-  if(dots){dots.innerHTML=ONBOARDING_STEPS.map((_,i)=>`<div style="width:8px;height:8px;border-radius:50%;background:${i===onboardingStep?'var(--accent)':'var(--border)'}"></div>`).join('');}
+  if(dots){
+    const nonUi=['api-call','review','complete'];
+    dots.innerHTML=ONBOARDING_STEPS.filter(s=>!nonUi.includes(s.type)).map((_,i)=>`<div style="width:7px;height:7px;border-radius:50%;background:${i===onboardingStep?'var(--accent)':'var(--border)'}"></div>`).join('');
+  }
+}
+function obSelect(field,val){
+  onboardingData[field]=val;
+  renderOnboardingStep();
+}
+function obToggle(field,val){
+  const arr=onboardingData[field]||[];
+  const idx=arr.indexOf(val);
+  if(idx>=0)arr.splice(idx,1);else arr.push(val);
+  onboardingData[field]=[...arr];
+  renderOnboardingStep();
+}
+async function callOnboardingMacroAPI(){
+  try{
+    const d=onboardingData;
+    const weight=parseFloat(d.startWeight||180);
+    const age=parseInt(d.age||30);
+    const ft=parseInt(d.heightFt||5);
+    const iN=parseInt(d.heightIn||8);
+    const heightCm=(ft*30.48)+(iN*2.54);
+    const weightKg=weight*0.453592;
+    const sex=d.sex||'Male';
+    const goal=d.primaryGoal||'Fat loss';
+    const activity=d.activityLevel||'Moderately active (3-5 days/week)';
+    const trainDays=d.trainingDays||'4 days';
+    const restrictions=Array.isArray(d.dietaryRestrictions)?d.dietaryRestrictions.join(', '):'None';
+    const prompt=`Calculate precise macro targets for this person:
+- Sex: ${sex}, Age: ${age}, Height: ${ft}'${iN}", Weight: ${weight}lbs
+- Goal: ${goal}, Activity: ${activity}, Training: ${trainDays}/week
+- Dietary restrictions: ${restrictions}
+
+Use Mifflin-St Jeor BMR. Apply correct TDEE multiplier. Adjust for goal (deficit for fat loss, surplus for muscle).
+Return ONLY valid JSON: {"cal":number,"pro":number,"carbs":number,"fat":number,"fiber":number,"sodium":number,"sugar":number,"reasoning":"1-2 sentence explanation"}`;
+    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:300,messages:[{role:'user',content:prompt}]})});
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'{}';
+    const jsonMatch=text.match(/\{[\s\S]*\}/);
+    if(jsonMatch){
+      const targets=JSON.parse(jsonMatch[0]);
+      onboardingData.aiTargets=targets;
+      onboardingData.aiReasoning=targets.reasoning||'';
+    }
+  }catch(e){
+    onboardingData.aiTargets=TARGETS;
+  }
+  onboardingStep++;
+  renderOnboardingStep();
 }
 function nextOnboardingStep(){
   const step=ONBOARDING_STEPS[onboardingStep];
-  if(step.field){const val=document.getElementById('obInput')?.value;if(val)onboardingData[step.field]=val;}
+  if(step.type==='text'||step.type==='number'){
+    const val=document.getElementById('obInput')?.value?.trim();
+    if(val)onboardingData[step.field]=val;
+    else if(!step.optional){showToast('Please fill this in');return;}
+  }else if(step.type==='height'){
+    const ft=document.getElementById('obFt')?.value;
+    const iN=document.getElementById('obIn')?.value;
+    if(ft)onboardingData.heightFt=ft;
+    if(iN)onboardingData.heightIn=iN;
+    if(!ft&&!step.optional){showToast('Please enter your height');return;}
+  }else if(step.type==='select'){
+    if(!onboardingData[step.field]&&!step.optional){showToast('Please select an option');return;}
+  }else if(step.type==='api-call'){
+    return; // handled by callOnboardingMacroAPI
+  }
   onboardingStep++;
   if(onboardingStep>=ONBOARDING_STEPS.length){finishOnboarding();return;}
   renderOnboardingStep();
 }
+function clearAllAppData(){
+  const keep=['mf_onboardingComplete','mf_userProfile','mf_targets'];
+  const keys=[];
+  for(let i=0;i<localStorage.length;i++)keys.push(localStorage.key(i));
+  keys.forEach(k=>{if(!keep.includes(k))localStorage.removeItem(k);});
+}
 function finishOnboarding(){
-  if(onboardingData.name)USER.name=onboardingData.name;
-  if(onboardingData.startWeight)USER.startWeight=parseFloat(onboardingData.startWeight);
-  if(onboardingData.goalWeight)USER.goalWeight=parseFloat(onboardingData.goalWeight);
-  if(onboardingData.gym)USER.gym=onboardingData.gym;
-  if(onboardingData.cal)TARGETS.cal=parseInt(onboardingData.cal);
-  if(onboardingData.pro)TARGETS.pro=parseInt(onboardingData.pro);
-  if(onboardingData.fat)TARGETS.fat=parseInt(onboardingData.fat);
-  sv('onboardingComplete',true);
-  sv('userProfile',{...USER,...onboardingData});
+  const d=onboardingData;
+  const t=d.aiTargets||{};
+  if(d.name)USER.name=d.name;
+  if(d.startWeight)USER.startWeight=parseFloat(d.startWeight);
+  if(d.goalWeight)USER.goalWeight=parseFloat(d.goalWeight);
+  if(d.age)USER.age=parseInt(d.age);
+  if(d.sex)USER.sex=d.sex;
+  if(d.primaryGoal)USER.primaryGoal=d.primaryGoal;
+  if(d.activityLevel)USER.activityLevel=d.activityLevel;
+  if(d.trainingDays)USER.trainingDays=d.trainingDays;
+  if(d.gym)USER.gym=d.gym;
+  if(d.heightFt)USER.heightFt=d.heightFt;
+  if(d.heightIn)USER.heightIn=d.heightIn;
+  if(d.dietaryRestrictions)USER.dietaryRestrictions=d.dietaryRestrictions;
+  USER.programStart=new Date().toISOString().split('T')[0];
+  if(t.cal)TARGETS.cal=t.cal;
+  if(t.pro)TARGETS.pro=t.pro;
+  if(t.carbs)TARGETS.carbs=t.carbs;
+  if(t.fat)TARGETS.fat=t.fat;
+  if(t.fiber)TARGETS.fiber=t.fiber;
+  if(t.sodium)TARGETS.sodium=t.sodium;
+  if(t.sugar)TARGETS.sugar=t.sugar;
+  clearAllAppData();
+  sv('mf_onboardingComplete',true);
+  sv('mf_userProfile',{...USER});
+  sv('mf_targets',{...TARGETS});
   const el=document.getElementById('onboarding-overlay');if(el)el.style.display='none';
   renderHome();
+}
+
+// ═══ SETTINGS ═══
+function renderSettings(){
+  const c=document.getElementById('settingsContent');if(!c)return;
+  const p=USER;const t=TARGETS;
+  const height=p.heightFt?`${p.heightFt}'${p.heightIn||0}"`:(p.height||'Not set');
+  c.innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;">
+      <div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--text2);margin-bottom:12px;">YOUR PROFILE</div>
+      ${[['Name',p.name||'Not set'],['Age',p.age?p.age+' years':'Not set'],['Height',height],['Current Weight',p.startWeight?p.startWeight+' lbs':'Not set'],['Goal Weight',p.goalWeight?p.goalWeight+' lbs':'Not set'],['Biological Sex',p.sex||'Not set'],['Primary Goal',p.primaryGoal||'Not set'],['Activity Level',p.activityLevel||'Not set'],['Training Days',p.trainingDays||'Not set'],['Gym',p.gym||'Not set'],['Dietary Restrictions',Array.isArray(p.dietaryRestrictions)?p.dietaryRestrictions.join(', ')||'None':'None']].map(([l,v])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);"><span style="font-size:13px;color:var(--text2);">${l}</span><span style="font-size:13px;font-weight:600;">${v}</span></div>`).join('')}
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-family:var(--fd);font-size:14px;letter-spacing:2px;color:var(--text2);">MACRO TARGETS</div>
+        <button onclick="recalculateTargets()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:var(--fb);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;">↻ Recalculate</button>
+      </div>
+      ${[['Calories',t.cal,'kcal','var(--accent)'],['Protein',t.pro,'g','var(--accent2)'],['Carbs',t.carbs,'g','var(--accent3)'],['Fat',t.fat,'g','#8b5cf6'],['Fiber',t.fiber,'g','#06b6d4'],['Sodium',t.sodium,'mg','#ec4899'],['Sugar',t.sugar,'g','#f97316']].map(([l,v,u,col])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);"><span style="font-size:13px;color:var(--text2);">${l}</span><span style="font-family:var(--fd);font-size:18px;color:${col};">${v||0}<span style="font-size:10px;color:var(--text3);font-family:var(--fb);"> ${u}</span></span></div>`).join('')}
+    </div>
+    <button onclick="showConfirm('Reset App','This will wipe all your data and restart onboarding. Are you sure?',[{label:'Yes, reset',cls:'danger',fn:resetApp},{label:'Cancel',cls:'no'}])" style="width:100%;background:var(--surface);border:1.5px solid var(--red)44;border-radius:14px;color:var(--red);font-family:var(--fd);font-size:16px;letter-spacing:1px;padding:14px;cursor:pointer;">🗑 RESET APP</button>
+  `;
+}
+async function recalculateTargets(){
+  showToast('Recalculating macros...');
+  const d=USER;
+  const weight=d.startWeight||180;
+  const age=d.age||30;
+  const ft=parseInt(d.heightFt||5);
+  const iN=parseInt(d.heightIn||8);
+  const heightCm=(ft*30.48)+(iN*2.54);
+  const sex=d.sex||'Male';
+  const goal=d.primaryGoal||'Fat loss';
+  const activity=d.activityLevel||'Moderately active (3-5 days/week)';
+  const trainDays=d.trainingDays||'4 days';
+  try{
+    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:300,messages:[{role:'user',content:`Recalculate macro targets: Sex:${sex}, Age:${age}, Height:${ft}'${iN}", Weight:${weight}lbs, Goal:${goal}, Activity:${activity}, Training:${trainDays}/week. Use Mifflin-St Jeor BMR. Return ONLY JSON: {"cal":number,"pro":number,"carbs":number,"fat":number,"fiber":number,"sodium":number,"sugar":number}`}]})});
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'{}';
+    const jsonMatch=text.match(/\{[\s\S]*\}/);
+    if(jsonMatch){
+      const t=JSON.parse(jsonMatch[0]);
+      if(t.cal)TARGETS.cal=t.cal;if(t.pro)TARGETS.pro=t.pro;if(t.carbs)TARGETS.carbs=t.carbs;
+      if(t.fat)TARGETS.fat=t.fat;if(t.fiber)TARGETS.fiber=t.fiber;if(t.sodium)TARGETS.sodium=t.sodium;if(t.sugar)TARGETS.sugar=t.sugar;
+      sv('mf_targets',{...TARGETS});
+      showToast('✅ Targets updated!');
+      renderSettings();
+    }
+  }catch(e){showToast('Could not recalculate. Check API.');}
+}
+function resetApp(){
+  clearAllAppData();
+  localStorage.removeItem('mf_onboardingComplete');
+  localStorage.removeItem('mf_userProfile');
+  localStorage.removeItem('mf_targets');
+  setTimeout(()=>location.reload(),500);
 }
 
 // ═══ FEATURE 19: OFFLINE BANNER ═══
@@ -3100,7 +3325,7 @@ function renderBadges(){
 }
 
 // ═══ FEATURE 24: BACKUP & RESTORE ═══
-const APP_KEYS=['foodLog','weightLog','workoutSels','workoutLogs','grocChecked','customFoods','equipmentChoices','weeklyMealPlan','pantryItems','pantryCustom','recipeLibrary','sessionLogs','workoutPlan','progressionNotes','supplementStack','fitnessJournal','habitData','habitStreaks','waterLog','streaks','badges','oneRepMaxes','workoutNotes','customHabits','lockedMeals','generatedGroceryList','dialRot','sundayAtTop','chosenCoachId','hasSmartScale','onboardingComplete','userProfile'];
+const APP_KEYS=['foodLog','weightLog','workoutSels','workoutLogs','mf_grocChecked','customFoods','equipmentChoices','mf_weeklyMealPlan','mf_pantryItems','mf_pantryCustom','mf_recipeLibrary','sessionLogs','workoutPlan','progressionNotes','supplementStack','fitnessJournal','habitData','habitStreaks','waterLog','streaks','badges','oneRepMaxes','workoutNotes','customHabits','lockedMeals','generatedGroceryList','dialRot','sundayAtTop','chosenCoachId','hasSmartScale','mf_onboardingComplete','mf_userProfile','mf_targets','mf_mealPlanApproved','mf_groceryList'];
 function exportAppData(){
   const data={};
   APP_KEYS.forEach(k=>{const v=ld(k,null);if(v!==null)data[k]=v;});
