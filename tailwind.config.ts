@@ -4,10 +4,11 @@ const config: Config = {
   darkMode: ["class"],
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/dashboard/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
-    // Next.js route groups: literal folder name "(app)" must be escaped for glob — "(app)" alone matches nothing.
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
+    "./hooks/**/*.{js,ts,jsx,tsx,mdx}",
+    // Route group folder "(app)": unescaped "(app)" matches zero files in glob; escape parens for a literal path.
     "./app/\\(app\\)/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
