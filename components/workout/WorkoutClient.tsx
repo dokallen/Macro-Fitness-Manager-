@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, Dumbbell } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ type Props = {
 };
 
 export function WorkoutClient({ userId }: Props) {
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [splits, setSplits] = useState<WorkoutSplit[]>([]);
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -64,49 +65,53 @@ export function WorkoutClient({ userId }: Props) {
     [splits]
   );
 
-  const loadSplits = useCallback(async () => {
-    const supabase = createBrowserSupabaseClient();
-    const { data, error } = await supabase
-      .from("workout_splits")
-      .select("id, day_number, name")
-      .eq("user_id", userId)
-      .order("day_number");
-    if (error) {
-      console.error(error);
-      return;
-    }
-    setSplits(data ?? []);
-  }, [userId]);
-
-  const loadSessions = useCallback(async () => {
-    const supabase = createBrowserSupabaseClient();
-    const { data, error } = await supabase
-      .from("workout_sessions")
-      .select(
-        "id, split_id, logged_at, notes, workout_sets(id, session_id, exercise_name, sets, reps, weight, unit)"
-      )
-      .eq("user_id", userId)
-      .order("logged_at", { ascending: false });
-    if (error) {
-      console.error(error);
-      return;
-    }
-    setSessions((data ?? []) as WorkoutSession[]);
-  }, [userId]);
-
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    await Promise.all([loadSplits(), loadSessions()]);
-    setLoading(false);
-  }, [loadSessions, loadSplits]);
-
   useEffect(() => {
-    void loadAll();
-  }, [loadAll]);
+    let cancelled = false;
+
+    async function loadInitialData() {
+      setLoading(true);
+
+      const [splitsRes, sessionsRes] = await Promise.all([
+        supabase
+          .from("workout_splits")
+          .select("id, day_number, name")
+          .eq("user_id", userId)
+          .order("day_number"),
+        supabase
+          .from("workout_sessions")
+          .select(
+            "id, split_id, logged_at, notes, workout_sets(id, session_id, exercise_name, sets, reps, weight, unit)"
+          )
+          .eq("user_id", userId)
+          .order("logged_at", { ascending: false }),
+      ]);
+
+      if (cancelled) return;
+
+      if (splitsRes.error) {
+        console.error(splitsRes.error);
+      } else {
+        setSplits(splitsRes.data ?? []);
+      }
+
+      if (sessionsRes.error) {
+        console.error(sessionsRes.error);
+      } else {
+        setSessions((sessionsRes.data ?? []) as WorkoutSession[]);
+      }
+
+      setLoading(false);
+    }
+
+    void loadInitialData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId]);
 
   async function startSession(split: WorkoutSplit) {
     setStartingSplitId(split.id);
-    const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase
       .from("workout_sessions")
       .insert({
@@ -127,10 +132,10 @@ export function WorkoutClient({ userId }: Props) {
       ...(data as Omit<WorkoutSession, "workout_sets">),
       workout_sets: [],
     };
+    setSessions((prev) => [session, ...prev]);
     setActiveSessionId(session.id);
     setExpandedSessionId(session.id);
     toast.success("Workout session started.");
-    void loadSessions();
   }
 
   async function addExerciseSet(e: React.FormEvent) {
@@ -151,19 +156,22 @@ export function WorkoutClient({ userId }: Props) {
       return toast.error("Weight must be numeric.");
 
     setSavingSet(true);
-    const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.from("workout_sets").insert({
-      session_id: activeSession.id,
-      exercise_name: name,
-      sets: setsN,
-      reps: repsN,
-      weight: weightN,
-      unit,
-    });
+    const { data, error } = await supabase
+      .from("workout_sets")
+      .insert({
+        session_id: activeSession.id,
+        exercise_name: name,
+        sets: setsN,
+        reps: repsN,
+        weight: weightN,
+        unit,
+      })
+      .select("id, session_id, exercise_name, sets, reps, weight, unit")
+      .single();
     setSavingSet(false);
 
-    if (error) {
-      toast.error(error.message);
+    if (error || !data) {
+      toast.error(error?.message ?? "Could not save exercise.");
       return;
     }
 
@@ -172,16 +180,25 @@ export function WorkoutClient({ userId }: Props) {
     setRepCount("");
     setWeight("");
     toast.success("Exercise logged.");
-    void loadSessions();
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === activeSession.id
+          ? {
+              ...session,
+              workout_sets: [...(session.workout_sets ?? []), data as WorkoutSet],
+            }
+          : session
+      )
+    );
   }
 
   async function finishSession() {
     if (!activeSession) return;
     setFinishing(true);
-    const supabase = createBrowserSupabaseClient();
+    const finishedAt = new Date().toISOString();
     const { error } = await supabase
       .from("workout_sessions")
-      .update({ logged_at: new Date().toISOString() })
+      .update({ logged_at: finishedAt })
       .eq("id", activeSession.id)
       .eq("user_id", userId);
 
@@ -191,8 +208,14 @@ export function WorkoutClient({ userId }: Props) {
       return;
     }
     toast.success("Session finished.");
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === activeSession.id
+          ? { ...session, logged_at: finishedAt }
+          : session
+      )
+    );
     setActiveSessionId(null);
-    void loadSessions();
   }
 
   return (
