@@ -41,7 +41,7 @@ type Props = {
 export function WorkoutClient({ userId }: Props) {
   const [splits, setSplits] = useState<WorkoutSplit[]>([]);
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
-  const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [startingSplitId, setStartingSplitId] = useState<string | null>(null);
@@ -54,10 +54,12 @@ export function WorkoutClient({ userId }: Props) {
   const [weight, setWeight] = useState("");
   const [unit, setUnit] = useState<"lbs" | "kg">("lbs");
 
-  const activeSets = useMemo(
-    () => activeSession?.workout_sets ?? [],
-    [activeSession?.workout_sets]
+  const activeSession = useMemo(
+    () => (activeSessionId ? sessions.find((s) => s.id === activeSessionId) ?? null : null),
+    [activeSessionId, sessions]
   );
+
+  const activeSets = useMemo(() => activeSession?.workout_sets ?? [], [activeSession]);
 
   const loadSplits = useCallback(async () => {
     const supabase = createBrowserSupabaseClient();
@@ -86,14 +88,8 @@ export function WorkoutClient({ userId }: Props) {
       console.error(error);
       return;
     }
-    const all = (data ?? []) as WorkoutSession[];
-    setSessions(all);
-
-    const active = activeSession?.id
-      ? all.find((s) => s.id === activeSession.id) ?? null
-      : null;
-    setActiveSession(active);
-  }, [userId, activeSession?.id]);
+    setSessions((data ?? []) as WorkoutSession[]);
+  }, [userId]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -128,7 +124,7 @@ export function WorkoutClient({ userId }: Props) {
       ...(data as Omit<WorkoutSession, "workout_sets">),
       workout_sets: [],
     };
-    setActiveSession(session);
+    setActiveSessionId(session.id);
     setExpandedSessionId(session.id);
     toast.success("Workout session started.");
     void loadSessions();
@@ -192,7 +188,7 @@ export function WorkoutClient({ userId }: Props) {
       return;
     }
     toast.success("Session finished.");
-    setActiveSession(null);
+    setActiveSessionId(null);
     void loadSessions();
   }
 
