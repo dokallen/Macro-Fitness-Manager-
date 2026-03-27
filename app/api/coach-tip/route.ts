@@ -10,6 +10,14 @@ function jsonError(message: string, status: number) {
 }
 
 export async function GET() {
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) {
+    return jsonError(
+      "ANTHROPIC_API_KEY is missing. Add it to your server environment and redeploy.",
+      503
+    );
+  }
+
   try {
     const supabase = createServerSupabaseClient();
     const {
@@ -43,6 +51,18 @@ export async function GET() {
   } catch (e) {
     const message =
       e instanceof Error ? e.message : "Failed to generate coach tip";
+    if (/not configured/i.test(message)) {
+      return jsonError(
+        "ANTHROPIC_API_KEY is missing or empty. Set a valid key and retry.",
+        503
+      );
+    }
+    if (/Claude API error \(401\)|Claude API error \(403\)/i.test(message)) {
+      return jsonError(
+        "Anthropic rejected the API key (401/403). Verify ANTHROPIC_API_KEY and redeploy.",
+        502
+      );
+    }
     return jsonError(message, 500);
   }
 }
