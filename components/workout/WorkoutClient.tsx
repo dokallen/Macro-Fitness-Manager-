@@ -30,7 +30,6 @@ type WorkoutSession = {
   split_id: string | null;
   logged_at: string;
   notes: string | null;
-  workout_splits: { id: string; day_number: number; name: string } | null;
   workout_sets: WorkoutSet[] | null;
 };
 
@@ -60,6 +59,10 @@ export function WorkoutClient({ userId }: Props) {
   );
 
   const activeSets = useMemo(() => activeSession?.workout_sets ?? [], [activeSession]);
+  const splitById = useMemo(
+    () => new Map(splits.map((s) => [s.id, s] as const)),
+    [splits]
+  );
 
   const loadSplits = useCallback(async () => {
     const supabase = createBrowserSupabaseClient();
@@ -80,7 +83,7 @@ export function WorkoutClient({ userId }: Props) {
     const { data, error } = await supabase
       .from("workout_sessions")
       .select(
-        "id, split_id, logged_at, notes, workout_splits(id, day_number, name), workout_sets(id, session_id, exercise_name, sets, reps, weight, unit)"
+        "id, split_id, logged_at, notes, workout_sets(id, session_id, exercise_name, sets, reps, weight, unit)"
       )
       .eq("user_id", userId)
       .order("logged_at", { ascending: false });
@@ -111,7 +114,7 @@ export function WorkoutClient({ userId }: Props) {
         split_id: split.id,
         logged_at: new Date().toISOString(),
       })
-      .select("id, split_id, logged_at, notes, workout_splits(id, day_number, name)")
+      .select("id, split_id, logged_at, notes")
       .single();
 
     setStartingSplitId(null);
@@ -245,8 +248,10 @@ export function WorkoutClient({ userId }: Props) {
             <div>
               <h2 className="text-sm font-semibold text-foreground">Active session</h2>
               <p className="text-xs text-muted-foreground">
-                {activeSession.workout_splits
-                  ? `Day ${activeSession.workout_splits.day_number}: ${activeSession.workout_splits.name}`
+                {activeSession.split_id && splitById.get(activeSession.split_id)
+                  ? `Day ${splitById.get(activeSession.split_id)!.day_number}: ${
+                      splitById.get(activeSession.split_id)!.name
+                    }`
                   : "Custom session"}
               </p>
             </div>
@@ -373,8 +378,10 @@ export function WorkoutClient({ userId }: Props) {
                   >
                     <div>
                       <p className="text-sm font-medium text-foreground">
-                        {session.workout_splits
-                          ? `Day ${session.workout_splits.day_number}: ${session.workout_splits.name}`
+                        {session.split_id && splitById.get(session.split_id)
+                          ? `Day ${splitById.get(session.split_id)!.day_number}: ${
+                              splitById.get(session.split_id)!.name
+                            }`
                           : "Custom session"}
                       </p>
                       <p className="text-xs text-muted-foreground">{when}</p>
