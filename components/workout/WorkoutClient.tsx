@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ChevronDown, Dumbbell } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -33,17 +34,26 @@ type WorkoutSession = {
   workout_sets: WorkoutSet[] | null;
 };
 
-type Props = {
-  userId: string;
-};
+function ButtonAsLink({ href, children }: { href: string; children: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+    >
+      {children}
+    </Link>
+  );
+}
 
-export function WorkoutClient({ userId }: Props) {
+export function WorkoutClient() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
   const [splits, setSplits] = useState<WorkoutSplit[]>([]);
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [startingSplitId, setStartingSplitId] = useState<string | null>(null);
   const [savingSet, setSavingSet] = useState(false);
   const [finishing, setFinishing] = useState(false);
@@ -69,20 +79,54 @@ export function WorkoutClient({ userId }: Props) {
     let cancelled = false;
 
     async function loadInitialData() {
-      setLoading(true);
+      setInitialLoading(true);
+
+      const guest =
+        typeof document !== "undefined" &&
+        document.cookie
+          .split("; ")
+          .some((entry) => entry.startsWith("macrofit_guest=1"));
+      if (guest) {
+        if (!cancelled) {
+          setIsGuest(true);
+          setInitialLoading(false);
+        }
+        return;
+      }
+
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (userErr) {
+        console.error(userErr);
+        setInitialLoading(false);
+        return;
+      }
+
+      if (!user) {
+        setInitialLoading(false);
+        return;
+      }
+
+      const resolvedUserId = user.id;
+      setUserId(resolvedUserId);
 
       const [splitsRes, sessionsRes] = await Promise.all([
         supabase
           .from("workout_splits")
           .select("id, day_number, name")
-          .eq("user_id", userId)
+          .eq("user_id", resolvedUserId)
           .order("day_number"),
         supabase
           .from("workout_sessions")
           .select(
             "id, split_id, logged_at, notes, workout_sets(id, session_id, exercise_name, sets, reps, weight, unit)"
           )
-          .eq("user_id", userId)
+          .eq("user_id", resolvedUserId)
           .order("logged_at", { ascending: false }),
       ]);
 
@@ -100,7 +144,7 @@ export function WorkoutClient({ userId }: Props) {
         setSessions((sessionsRes.data ?? []) as WorkoutSession[]);
       }
 
-      setLoading(false);
+      setInitialLoading(false);
     }
 
     void loadInitialData();
@@ -108,9 +152,10 @@ export function WorkoutClient({ userId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [supabase, userId]);
+  }, [supabase]);
 
   async function startSession(split: WorkoutSplit) {
+    if (!userId) return;
     setStartingSplitId(split.id);
     const { data, error } = await supabase
       .from("workout_sessions")
@@ -193,7 +238,7 @@ export function WorkoutClient({ userId }: Props) {
   }
 
   async function finishSession() {
-    if (!activeSession) return;
+    if (!activeSession || !userId) return;
     setFinishing(true);
     const finishedAt = new Date().toISOString();
     const { error } = await supabase
@@ -220,6 +265,30 @@ export function WorkoutClient({ userId }: Props) {
 
   return (
     <div className="dark mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+      {isGuest ? (
+        <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
+          <p className="max-w-md text-center text-muted-foreground">
+            Sign in to access workouts and training history.
+          </p>
+          <ButtonAsLink href="/signup">Create Account</ButtonAsLink>
+        </div>
+      ) : null}
+
+      {!isGuest && initialLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : null}
+
+      {!isGuest && !initialLoading && !userId ? (
+        <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
+          <p className="max-w-md text-center text-muted-foreground">
+            Sign in to access workouts and training history.
+          </p>
+          <ButtonAsLink href="/signup">Create Account</ButtonAsLink>
+        </div>
+      ) : null}
+
+      {!isGuest && !initialLoading && userId ? (
+        <>
       <header>
         <h1 className="font-sans text-2xl font-semibold tracking-tight text-foreground">
           Workout
@@ -230,9 +299,7 @@ export function WorkoutClient({ userId }: Props) {
         </p>
       </header>
 
-      {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
-
-      {splits.length === 0 && !loading ? (
+      {splits.length === 0 ? (
         <div className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/10 px-4 py-8 text-center">
           <p className="text-sm text-foreground">No workout splits found.</p>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -446,6 +513,8 @@ export function WorkoutClient({ userId }: Props) {
           </ul>
         )}
       </section>
+        </>
+      ) : null}
     </div>
   );
 }
