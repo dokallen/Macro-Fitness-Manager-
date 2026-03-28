@@ -4,7 +4,6 @@ import {
   startTransition,
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 import { toast } from "sonner";
@@ -89,36 +88,48 @@ export function CardioClient({ userId }: { userId: string }) {
     []
   );
 
-  const quickTypes = useMemo(() => {
-    const seen = new Set<string>();
-    const ordered: string[] = [];
-    for (const s of sessions) {
-      const t = s.type?.trim();
-      if (!t || seen.has(t)) continue;
-      seen.add(t);
-      ordered.push(t);
-    }
-    return ordered;
-  }, [sessions]);
+  const [quickTypeList, setQuickTypeList] = useState<string[]>([]);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("cardio_sessions")
-      .select(
-        "id, logged_at, type, duration_minutes, notes, cardio_metrics(id, key, value, unit)"
-      )
-      .eq("user_id", userId)
-      .order("logged_at", { ascending: false });
+    const [fullRes, typesRes] = await Promise.all([
+      supabase
+        .from("cardio_sessions")
+        .select(
+          "id, logged_at, type, duration_minutes, notes, cardio_metrics(id, key, value, unit)"
+        )
+        .eq("user_id", userId)
+        .order("logged_at", { ascending: false }),
+      supabase
+        .from("cardio_sessions")
+        .select("type")
+        .eq("user_id", userId)
+        .order("logged_at", { ascending: false }),
+    ]);
 
-    if (error) {
-      console.error(error);
+    if (fullRes.error) {
+      console.error(fullRes.error);
       startTransition(() => setInitialLoading(false));
       return;
     }
 
-    const list = (data ?? []) as CardioSession[];
+    if (typesRes.error) {
+      console.error(typesRes.error);
+    }
+
+    const list = (fullRes.data ?? []) as CardioSession[];
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const row of typesRes.data ?? []) {
+      const raw = row?.type;
+      const t = typeof raw === "string" ? raw.trim() : "";
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      ordered.push(t);
+    }
+
     startTransition(() => {
       setSessions(list);
+      setQuickTypeList(ordered);
       setInitialLoading(false);
     });
   }, [userId]);
@@ -364,28 +375,6 @@ export function CardioClient({ userId }: { userId: string }) {
         </p>
       </header>
 
-      {quickTypes.length > 0 ? (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">
-            Your recent types
-          </p>
-          <div className="-mx-1 flex gap-2 overflow-x-auto pb-1">
-            {quickTypes.map((t) => (
-              <Button
-                key={t}
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="shrink-0"
-                onClick={() => applyQuickType(t)}
-              >
-                {t}
-              </Button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
       <section className="rounded-xl border border-border bg-card/80 p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-foreground">Live session</h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -395,11 +384,25 @@ export function CardioClient({ userId }: { userId: string }) {
 
         <div className="mt-3 space-y-1">
           <Label htmlFor="live-cardio-type">Type</Label>
+          {quickTypeList.length > 0 ? (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {quickTypeList.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => applyQuickType(t)}
+                  className="shrink-0 rounded-full border border-border bg-card/90 px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <Input
             id="live-cardio-type"
             value={liveType}
             onChange={(e) => setLiveType(e.target.value)}
-            placeholder="Type or tap a shortcut above"
+            placeholder="Tap a pill above or type here"
             autoComplete="off"
             disabled={liveStartAt !== null}
           />
@@ -552,6 +555,20 @@ export function CardioClient({ userId }: { userId: string }) {
         <form onSubmit={onSubmitManual} className="mt-3 space-y-3">
           <div className="space-y-1">
             <Label htmlFor="cardio-type">Type</Label>
+            {quickTypeList.length > 0 && !manualLocked ? (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {quickTypeList.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => applyQuickType(t)}
+                    className="shrink-0 rounded-full border border-border bg-card/90 px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <Input
               id="cardio-type"
               value={formType}
@@ -699,9 +716,12 @@ export function CardioClient({ userId }: { userId: string }) {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-foreground">History</h2>
         {sessions.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+          <div
+            className="rounded-xl border border-dashed border-border/80 bg-card/80 px-4 py-8 text-center text-sm text-muted-foreground shadow-sm"
+            role="status"
+          >
             No cardio sessions yet. Log your first session above.
-          </p>
+          </div>
         ) : (
           <ul className="space-y-3">
             {sessions.map((s) => {
