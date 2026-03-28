@@ -13,49 +13,59 @@ export type HomeDashboardStats = {
   macroStreak: string;
 };
 
+const NAV_RESERVE =
+  "calc(5.75rem + max(20px, env(safe-area-inset-bottom, 0px)))";
+
 export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="home-hdr shrink-0">
-        <div className="flex items-start justify-between gap-2 sm:gap-3">
+    <div
+      className="box-border flex h-full max-h-full w-full flex-col overflow-hidden"
+      style={{
+        paddingTop: "0.5rem",
+        paddingBottom: NAV_RESERVE,
+        paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
+        paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
+      }}
+    >
+      <header className="flex h-[7.5rem] shrink-0 flex-col justify-center border-b border-[var(--border)]/60">
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h1
-              className="uppercase leading-none text-[var(--text)]"
+              className="truncate uppercase leading-none text-[var(--text)]"
               style={{
                 fontFamily: "var(--fd)",
-                fontSize: "clamp(1.65rem, 5.2vw, 2.625rem)",
-                letterSpacing: "2px",
+                fontSize: "clamp(1.5rem, 4.8vw, 2.25rem)",
+                letterSpacing: "0.08em",
               }}
             >
               MACRO FIT
             </h1>
             <p
-              className="mt-1 font-body text-xs uppercase text-[var(--text2)]"
-              style={{ letterSpacing: "2px" }}
+              className="mt-1 font-body text-[10px] uppercase tracking-[0.2em] text-[var(--text2)] sm:text-xs"
             >
               YOUR PROGRAM
             </p>
             <div
-              className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-body text-xs font-bold text-white"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-body text-[10px] font-bold text-white sm:px-3 sm:py-1.5 sm:text-xs"
               style={{ background: "var(--accent)" }}
             >
               <span aria-hidden>⚡</span>
               <span>WEEK {stats.weekNumber}</span>
             </div>
           </div>
-          <div className="flex shrink-0 gap-1.5 pt-1 sm:gap-2">
+          <div className="flex shrink-0 gap-1.5">
             <Link
               href="/progress"
-              className="flex size-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-lg sm:size-11 sm:text-xl"
+              className="flex size-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-base sm:size-10 sm:text-lg"
               aria-label="Achievements"
             >
               🏆
             </Link>
             <button
               type="button"
-              className="flex size-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] font-body text-lg text-[var(--text)] sm:size-11 sm:text-xl"
+              className="flex size-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] font-body text-base text-[var(--text)] sm:size-10 sm:text-lg"
               aria-label="Open menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen(true)}
@@ -64,36 +74,37 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="mt-2 grid shrink-0 grid-cols-2 gap-2 sm:mt-3 sm:gap-3">
-        {[
-          { label: "CURRENT WEIGHT", value: stats.currentWeight },
-          { label: "LBS TO GOAL", value: stats.lbsToGoal },
-          { label: "WORKOUT STREAK", value: stats.workoutStreak },
-          { label: "MACRO STREAK", value: stats.macroStreak },
-        ].map((s) => (
+      <section className="grid h-[9.25rem] shrink-0 grid-cols-2 gap-2 py-2 sm:h-[10rem] sm:gap-3 sm:py-3">
+        {(
+          [
+            { label: "CURRENT WEIGHT", value: stats.currentWeight },
+            { label: "LBS TO GOAL", value: stats.lbsToGoal },
+            { label: "WORKOUT STREAK", value: stats.workoutStreak },
+            { label: "MACRO STREAK", value: stats.macroStreak },
+          ] as const
+        ).map((s) => (
           <div
             key={s.label}
-            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4"
+            className="flex flex-col justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 sm:px-3 sm:py-2.5"
           >
-            <p
-              className="font-body text-[9px] font-semibold uppercase text-[var(--text2)] sm:text-[10px]"
-              style={{ letterSpacing: "clamp(1px, 0.35vw, 2px)" }}
-            >
+            <p className="font-body text-[8px] font-semibold uppercase leading-tight tracking-[0.12em] text-[var(--text2)] sm:text-[9px]">
               {s.label}
             </p>
             <p
-              className="stat-num mt-1.5 sm:mt-2"
-              style={{ fontSize: "clamp(1.35rem, 4.2vw, 1.75rem)" }}
+              className="mt-1 truncate font-heading leading-none text-[var(--text)] sm:mt-1.5"
+              style={{ fontSize: "clamp(1.15rem, 3.8vw, 1.5rem)" }}
             >
               {s.value}
             </p>
           </div>
         ))}
-      </div>
+      </section>
 
-      <HomeSpinDial />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <HomeSpinDial />
+      </div>
 
       {menuOpen ? (
         <div className="fixed inset-0 z-[70]">
@@ -106,17 +117,17 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
           <nav
             className="absolute right-0 top-0 flex h-full w-[min(100%,280px)] flex-col gap-1 border-l border-[var(--border)] bg-[var(--surface)] p-4 pt-[max(1rem,env(safe-area-inset-top))] font-body shadow-xl"
           >
-            <p
-              className="mb-2 font-display text-xl tracking-[2px] text-[var(--text)]"
-            >
+            <p className="mb-2 font-display text-xl tracking-[2px] text-[var(--text)]">
               MENU
             </p>
-            {[
-              { href: "/cardio", label: "Cardio" },
-              { href: "/coach", label: "Coach" },
-              { href: "/meals", label: "Meals" },
-              { href: "/onboarding", label: "Onboarding" },
-            ].map((l) => (
+            {(
+              [
+                { href: "/cardio", label: "Cardio" },
+                { href: "/coach", label: "Coach" },
+                { href: "/meals", label: "Meals" },
+                { href: "/onboarding", label: "Onboarding" },
+              ] as const
+            ).map((l) => (
               <Link
                 key={l.href}
                 href={l.href}

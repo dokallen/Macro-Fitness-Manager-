@@ -1,72 +1,93 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 
 const N = 5;
 const STEP = (2 * Math.PI) / N;
-const BASE = 320;
+const BASE = 300;
 const FRICTION = 0.994;
-const MIN_V = 0.000045;
-const FLING_VELOCITY_MULT = 2.35;
-const TAP_MAX_MS = 450;
+const FLING_MULT = 2.5;
+const MS_PER_FRAME = 1000 / 60;
+const STOP_V_RAD_PER_FRAME = (0.05 * Math.PI) / 180;
+const TAP_MAX_PX = 12;
+const TAP_MAX_MS = 400;
+const VELOCITY_WINDOW_MS = 80;
+const SNAP_MS = 240;
 
-type DialGeom = {
-  side: number;
-  u: number;
-  cx: number;
-  cy: number;
-  r: number;
-  btn: number;
-  dcx: number;
-  dcy: number;
-  hub: number;
-  slideR: number;
-  glowFade: number;
-  tapMax: number;
-  hitPad: number;
-};
-
-function getGeom(side: number): DialGeom {
-  const u = side / BASE;
-  const cx = side / 2;
-  const cy = side / 2;
-  return {
-    side,
-    u,
-    cx,
-    cy,
-    r: 118 * u,
-    btn: 90 * u,
-    dcx: cx - 20 * u,
-    dcy: cy - 20 * u,
-    hub: 44 * u,
-    slideR: 30 * u,
-    glowFade: 118 * u,
-    tapMax: Math.max(10, 16 * u),
-    hitPad: 14 * u,
-  };
+function snapRotation(rotation: number): number {
+  return Math.round(rotation / STEP) * STEP;
 }
 
-type DialItem = {
+function wrapAngle(d: number): number {
+  let x = d;
+  while (x > Math.PI) x -= 2 * Math.PI;
+  while (x < -Math.PI) x += 2 * Math.PI;
+  return x;
+}
+
+export type DialItem = {
   label: string;
   emoji: string;
   href: string;
 };
 
 export const DIAL_ITEMS: DialItem[] = [
-  { label: "TODAY", emoji: "📅", href: "/" },
+  { label: "TODAY", emoji: "📅", href: "/meals" },
   { label: "WORKOUT", emoji: "🏋🏾", href: "/workout" },
   { label: "MEALS", emoji: "🥗", href: "/meals" },
   { label: "LOG", emoji: "📊", href: "/progress" },
   { label: "SCALE", emoji: "⚖️", href: "/progress" },
 ];
 
-function snapAngle(rotation: number) {
-  return Math.round(rotation / STEP) * STEP;
+type DialGeom = {
+  side: number;
+  cx: number;
+  cy: number;
+  r: number;
+  btn: number;
+  hub: number;
+  slideR: number;
+  hitExtra: number;
+};
+
+function buildGeom(side: number): DialGeom {
+  const u = side / BASE;
+  const btn = Math.max(70, side * 0.28);
+  return {
+    side,
+    cx: side / 2,
+    cy: side / 2,
+    r: side * 0.38,
+    btn,
+    hub: side * 0.13,
+    slideR: side * 0.1,
+    hitExtra: 12 * u,
+  };
 }
 
-function nearestDialIndex(
+function angleToDialIndex(rotation: number): number {
+  let best = 0;
+  let bestAbs = Infinity;
+  for (let i = 0; i < N; i++) {
+    const a = rotation + i * STEP - Math.PI / 2;
+    const diff = Math.abs(wrapAngle(a - -Math.PI / 2));
+    if (diff < bestAbs) {
+      bestAbs = diff;
+      best = i;
+    }
+  }
+  return best;
+}
+
+function hitTestIndex(
   clientX: number,
   clientY: number,
   rect: DOMRect,
@@ -87,267 +108,319 @@ function nearestDialIndex(
       best = i;
     }
   }
-  return bestD < g.btn / 2 + g.hitPad ? best : null;
+  return bestD < g.btn / 2 + g.hitExtra ? best : null;
 }
+
+type RotSample = { t: number; rot: number };
 
 export function HomeSpinDial() {
   const router = useRouter();
-  const hostRef = useRef<HTMLDivElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const dialRef = useRef<HTMLDivElement>(null);
+
   const rotationRef = useRef(0);
   const velocityRef = useRef(0);
   const rafRef = useRef<number | null>(null);
-  const [, setTick] = useState(0);
-  const redraw = useCallback(() => setTick((n) => n + 1), []);
+
+  const [, setRenderTick] = useState(0);
+  const bump = useCallback(() => setRenderTick((n) => n + 1), []);
 
   const [side, setSide] = useState(BASE);
-  const geom = useMemo(() => getGeom(side), [side]);
-  const geomRef = useRef(geom);
-  geomRef.current = geom;
+  const geom = useMemo(() => buildGeom(side), [side]);
 
   useLayoutEffect(() => {
-    const el = hostRef.current;
+    const el = measureRef.current;
     if (!el) return;
-    const measure = () => {
+    const ro = new ResizeObserver(() => {
       const r = el.getBoundingClientRect();
-      const raw = Math.min(r.width, r.height) - 2;
-      if (!Number.isFinite(raw) || raw < 72) return;
-      const s = Math.floor(raw);
-      setSide((prev) => {
-        const next = Math.max(120, Math.min(s, 360));
-        return next === prev ? prev : next;
-      });
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
+      const s = Math.floor(Math.min(r.width, r.height));
+      if (!Number.isFinite(s) || s < 80) return;
+      setSide((prev) => (prev === s ? prev : s));
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
   const draggingRef = useRef(false);
   const pointerIdRef = useRef<number | null>(null);
-  const lastRef = useRef({ x: 0, y: 0, t: 0, ang: 0 });
-  const startRef = useRef({ x: 0, y: 0, t: 0, clientX: 0, clientY: 0 });
-  const sectorRef = useRef<number | null>(null);
-  const lastDistToHubRef = useRef<number>(Infinity);
-  const inwardThisDragRef = useRef(false);
-  const slideDoneRef = useRef(false);
+  const lastPointerRef = useRef({ x: 0, y: 0, t: 0, ang: 0 });
+  const startClientRef = useRef({ x: 0, y: 0, t: 0 });
+  const sectorDownRef = useRef<number | null>(null);
+  const rotSamplesRef = useRef<RotSample[]>([]);
+  const slideTriggeredRef = useRef(false);
+  const hubGlowRef = useRef(0);
   const [hubGlow, setHubGlow] = useState(0);
-  const [navPulse, setNavPulse] = useState(0);
+  const [dialHover, setDialHover] = useState(false);
+  const [pulse, setPulse] = useState(0);
 
-  const stopRaf = useCallback(() => {
+  const stopLoop = useCallback(() => {
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
   }, []);
 
-  const runPhysics = useCallback(() => {
-    const loop = () => {
-      let v = velocityRef.current;
-      let r = rotationRef.current;
-      if (Math.abs(v) > MIN_V) {
-        v *= FRICTION;
-        r += v;
-        rotationRef.current = r;
-        velocityRef.current = v;
-        rafRef.current = requestAnimationFrame(loop);
-        redraw();
-      } else {
-        velocityRef.current = 0;
-        rotationRef.current = snapAngle(r);
-        rafRef.current = null;
-        redraw();
-      }
-    };
-    stopRaf();
-    rafRef.current = requestAnimationFrame(loop);
-  }, [redraw, stopRaf]);
+  const runSnapAnimation = useCallback(
+    (from: number, to: number, onDone?: () => void) => {
+      stopLoop();
+      const t0 = performance.now();
+      let delta = to - from;
+      delta -= Math.round(delta / (2 * Math.PI)) * (2 * Math.PI);
+      const target = from + delta;
+      const tick = (now: number) => {
+        const p = Math.min(1, (now - t0) / SNAP_MS);
+        const e = 1 - (1 - p) * (1 - p);
+        rotationRef.current = from + (target - from) * e;
+        bump();
+        if (p < 1) {
+          rafRef.current = requestAnimationFrame(tick);
+        } else {
+          rotationRef.current = snapRotation(rotationRef.current);
+          rafRef.current = null;
+          onDone?.();
+        }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    },
+    [bump, stopLoop]
+  );
 
-  const trySlideToCenterNav = useCallback(
-    (el: HTMLDivElement, pointerId: number, x: number, y: number) => {
-      const g = geomRef.current;
-      if (slideDoneRef.current || sectorRef.current == null || !inwardThisDragRef.current) return false;
-      const distHub = Math.hypot(x - g.dcx, y - g.dcy);
-      if (distHub >= g.slideR) return false;
-      slideDoneRef.current = true;
+  const runPhysics = useCallback(() => {
+    stopLoop();
+    const tick = () => {
+      let v = velocityRef.current;
+      rotationRef.current += v;
+      v *= FRICTION;
+      velocityRef.current = v;
+      bump();
+
+      if (Math.abs(v) < STOP_V_RAD_PER_FRAME) {
+        velocityRef.current = 0;
+        const r = rotationRef.current;
+        const snapped = snapRotation(r);
+        if (Math.abs(wrapAngle(snapped - r)) > 1e-4) {
+          runSnapAnimation(r, snapped);
+        } else {
+          rotationRef.current = snapped;
+          bump();
+        }
+        rafRef.current = null;
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, [bump, runSnapAnimation, stopLoop]);
+
+  const pushSample = useCallback((t: number, rot: number) => {
+    const arr = rotSamplesRef.current;
+    arr.push({ t, rot });
+    const cutoff = t - VELOCITY_WINDOW_MS - 50;
+    while (arr.length > 0 && arr[0].t < cutoff) arr.shift();
+  }, []);
+
+  const releaseVelocityFromSamples = useCallback((now: number) => {
+    const arr = rotSamplesRef.current.filter((s) => s.t >= now - VELOCITY_WINDOW_MS);
+    if (arr.length < 2) return 0;
+    const a0 = arr[0];
+    const a1 = arr[arr.length - 1];
+    const dt = a1.t - a0.t;
+    if (dt < 1) return 0;
+    let dRot = a1.rot - a0.rot;
+    while (dRot > Math.PI) dRot -= 2 * Math.PI;
+    while (dRot < -Math.PI) dRot += 2 * Math.PI;
+    const radPerMs = dRot / dt;
+    return radPerMs * MS_PER_FRAME * FLING_MULT;
+  }, []);
+
+  const trySlideNavigate = useCallback(
+    (el: HTMLDivElement, pointerId: number, lx: number, ly: number, g: DialGeom) => {
+      if (slideTriggeredRef.current || sectorDownRef.current == null) return false;
+      const d = Math.hypot(lx - g.cx, ly - g.cy);
+      if (d >= g.slideR) return false;
+      slideTriggeredRef.current = true;
       try {
         el.releasePointerCapture(pointerId);
       } catch {
-        // ignore
+        /* ignore */
       }
       draggingRef.current = false;
       pointerIdRef.current = null;
       velocityRef.current = 0;
-      const idx = sectorRef.current;
-      sectorRef.current = null;
-      lastDistToHubRef.current = Infinity;
-      inwardThisDragRef.current = false;
-      setHubGlow(1);
-      setNavPulse(1);
-      window.setTimeout(() => {
-        setNavPulse(0);
-        setHubGlow(0);
-      }, 380);
+      stopLoop();
+      const idx = sectorDownRef.current;
+      sectorDownRef.current = null;
+      rotSamplesRef.current = [];
+      setPulse(1);
+      window.setTimeout(() => setPulse(0), 320);
       router.push(DIAL_ITEMS[idx].href);
       return true;
     },
-    [router]
+    [router, stopLoop]
   );
 
-  const localXY = (e: React.PointerEvent, el: HTMLElement) => {
-    const rect = el.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  };
-
-  const angleFromCenter = (x: number, y: number, g: DialGeom) => Math.atan2(y - g.cy, x - g.cx);
+  const localXY = (e: React.PointerEvent, rect: DOMRect) => ({
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
+  });
 
   const onPointerDown = (e: React.PointerEvent) => {
-    const el = wrapRef.current;
-    if (!el) return;
-    el.setPointerCapture(e.pointerId);
+    const dial = dialRef.current;
+    if (!dial) return;
+    dial.setPointerCapture(e.pointerId);
     pointerIdRef.current = e.pointerId;
     draggingRef.current = true;
-    stopRaf();
+    slideTriggeredRef.current = false;
+    stopLoop();
     velocityRef.current = 0;
-    const g = geomRef.current;
-    const { x, y } = localXY(e, el);
+    rotSamplesRef.current = [];
+    const g = buildGeom(side);
+    const rect = dial.getBoundingClientRect();
+    const { x, y } = localXY(e, rect);
     const t = performance.now();
-    startRef.current = { x, y, t, clientX: e.clientX, clientY: e.clientY };
-    lastRef.current = { x, y, t, ang: angleFromCenter(x, y, g) };
-    lastDistToHubRef.current = Math.hypot(x - g.dcx, y - g.dcy);
-    inwardThisDragRef.current = false;
-    slideDoneRef.current = false;
+    startClientRef.current = { x: e.clientX, y: e.clientY, t };
+    lastPointerRef.current = {
+      x,
+      y,
+      t,
+      ang: Math.atan2(y - g.cy, x - g.cx),
+    };
+    sectorDownRef.current = hitTestIndex(e.clientX, e.clientY, rect, rotationRef.current, g);
+    pushSample(t, rotationRef.current);
+    hubGlowRef.current = 0;
     setHubGlow(0);
-    setNavPulse(0);
-    const rect = el.getBoundingClientRect();
-    sectorRef.current = nearestDialIndex(
-      e.clientX,
-      e.clientY,
-      rect,
-      rotationRef.current,
-      g
-    );
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!draggingRef.current || !wrapRef.current) return;
-    const g = geomRef.current;
-    const { x, y } = localXY(e, wrapRef.current);
+    const dial = dialRef.current;
+    if (!dial || !draggingRef.current) return;
+    const g = buildGeom(side);
+    const rect = dial.getBoundingClientRect();
+    const { x, y } = localXY(e, rect);
     const t = performance.now();
-    const la = lastRef.current;
-    const ang = angleFromCenter(x, y, g);
-    let da = ang - la.ang;
+    const lp = lastPointerRef.current;
+    const ang = Math.atan2(y - g.cy, x - g.cx);
+    let da = ang - lp.ang;
     if (da > Math.PI) da -= 2 * Math.PI;
     if (da < -Math.PI) da += 2 * Math.PI;
     rotationRef.current += da;
-    const dt = Math.max(t - la.t, 1);
-    const instantV = da / dt;
-    velocityRef.current = velocityRef.current * 0.22 + instantV * 0.78;
-    lastRef.current = { x, y, t, ang };
-    const distHub = Math.hypot(x - g.dcx, y - g.dcy);
-    if (distHub < lastDistToHubRef.current) inwardThisDragRef.current = true;
-    lastDistToHubRef.current = distHub;
+    lastPointerRef.current = { x, y, t, ang };
+    pushSample(t, rotationRef.current);
+
+    const dist = Math.hypot(x - g.cx, y - g.cy);
     const glow =
-      distHub <= g.slideR
-        ? 1
-        : distHub >= g.glowFade
-          ? 0
-          : (g.glowFade - distHub) / (g.glowFade - g.slideR);
+      dist >= g.slideR ? 0 : 1 - dist / Math.max(g.slideR, 1e-6);
+    hubGlowRef.current = glow;
     setHubGlow(glow);
-    redraw();
-    const wrap = wrapRef.current;
-    if (wrap && trySlideToCenterNav(wrap, e.pointerId, x, y)) return;
+    bump();
+
+    if (trySlideNavigate(dial, e.pointerId, x, y, g)) return;
   };
 
   const endPointer = (e: React.PointerEvent) => {
-    const el = wrapRef.current;
-    if (!el || pointerIdRef.current !== e.pointerId) return;
-    const g = geomRef.current;
-    const { x, y } = localXY(e, el);
-    if (trySlideToCenterNav(el, e.pointerId, x, y)) return;
+    const dial = dialRef.current;
+    if (!dial || pointerIdRef.current !== e.pointerId) return;
+    const g = buildGeom(side);
+    const rect = dial.getBoundingClientRect();
+    const { x, y } = localXY(e, rect);
+    const t = performance.now();
+
+    if (trySlideNavigate(dial, e.pointerId, x, y, g)) return;
 
     try {
-      el.releasePointerCapture(e.pointerId);
+      dial.releasePointerCapture(e.pointerId);
     } catch {
-      // ignore
+      /* ignore */
     }
     draggingRef.current = false;
     pointerIdRef.current = null;
+    hubGlowRef.current = 0;
     setHubGlow(0);
-    lastDistToHubRef.current = Infinity;
-    inwardThisDragRef.current = false;
-    const t = performance.now();
-    const moveDist = Math.hypot(e.clientX - startRef.current.clientX, e.clientY - startRef.current.clientY);
-    const dt = t - startRef.current.t;
 
-    if (moveDist < g.tapMax && dt < TAP_MAX_MS) {
-      const rect = el.getBoundingClientRect();
-      const idx = nearestDialIndex(
-        startRef.current.clientX,
-        startRef.current.clientY,
+    const move = Math.hypot(e.clientX - startClientRef.current.x, e.clientY - startClientRef.current.y);
+    const dt = t - startClientRef.current.t;
+
+    if (move < TAP_MAX_PX && dt < TAP_MAX_MS) {
+      const idx = hitTestIndex(
+        startClientRef.current.x,
+        startClientRef.current.y,
         rect,
         rotationRef.current,
         g
       );
       if (idx != null) {
         router.push(DIAL_ITEMS[idx].href);
-        sectorRef.current = null;
+        sectorDownRef.current = null;
+        rotSamplesRef.current = [];
         return;
       }
     }
 
-    velocityRef.current *= FLING_VELOCITY_MULT;
-    runPhysics();
-    sectorRef.current = null;
+    pushSample(t, rotationRef.current);
+    const v0 = releaseVelocityFromSamples(t);
+    velocityRef.current = v0;
+    sectorDownRef.current = null;
+    rotSamplesRef.current = [];
+
+    if (Math.abs(v0) >= STOP_V_RAD_PER_FRAME) {
+      runPhysics();
+    } else {
+      const r = rotationRef.current;
+      const snapped = snapRotation(r);
+      if (Math.abs(wrapAngle(snapped - r)) > 1e-4) {
+        runSnapAnimation(r, snapped);
+      }
+    }
   };
 
-  useEffect(() => () => stopRaf(), [stopRaf]);
+  useEffect(() => () => stopLoop(), [stopLoop]);
 
   const rotation = rotationRef.current;
-  const u = geom.u;
-  const hubBorder = Math.max(1, 2 * u);
-  const labelFs = Math.max(7, Math.round(10 * u));
-  const emojiFs = Math.max(12, Math.round(20 * u));
+  const activeIndex = angleToDialIndex(rotation);
+  const u = side / BASE;
+  const labelFs = Math.max(8, Math.round(10 * u));
+  const emojiFs = Math.max(14, Math.round(18 * u));
+
+  const hubPulse = Math.max(hubGlow, pulse);
+  const hubShadow =
+    hubPulse > 0
+      ? `0 0 ${(10 + hubPulse * 28) * u}px ${(2 + hubPulse * 10) * u}px rgba(59,130,246,${0.25 + hubPulse * 0.55})`
+      : dialHover
+        ? `0 0 ${8 * u}px ${2 * u}px rgba(59,130,246,0.2)`
+        : "none";
 
   return (
-    <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col items-center justify-center overflow-hidden">
+    <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
       <div
-        ref={hostRef}
-        className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center"
+        ref={measureRef}
+        className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-hidden bg-transparent"
       >
         <div
-          ref={wrapRef}
-          className="relative shrink-0 touch-none select-none"
+          ref={dialRef}
+          role="presentation"
+          className="relative touch-none select-none bg-transparent"
           style={{ width: side, height: side }}
+          onPointerEnter={() => setDialHover(true)}
+          onPointerLeave={(ev) => {
+            setDialHover(false);
+            if (draggingRef.current) endPointer(ev);
+          }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endPointer}
           onPointerCancel={endPointer}
-          onPointerLeave={(ev) => {
-            if (draggingRef.current) endPointer(ev);
-          }}
         >
           <div
-            className="absolute z-10 rounded-full border border-solid"
+            className="pointer-events-none absolute z-10 rounded-full bg-[var(--surface2)]"
             style={{
-              borderWidth: hubBorder,
               width: geom.hub,
               height: geom.hub,
-              left: geom.dcx,
-              top: geom.dcy,
+              left: geom.cx,
+              top: geom.cy,
               transform: "translate(-50%, -50%)",
-              borderColor: "var(--border)",
-              background: "var(--surface2)",
-              boxShadow: (() => {
-                const glow = Math.min(1, Math.max(hubGlow, navPulse));
-                if (glow <= 0) return "none";
-                const spread = (6 + glow * 16) * u;
-                const blur = (22 + glow * 36) * u;
-                const alpha = 0.38 + glow * 0.52;
-                return `0 0 ${blur}px ${spread}px rgba(59,130,246,${alpha})`;
-              })(),
-              transition: "box-shadow 0.1s ease-out",
+              border: "1.5px solid rgba(59,130,246,0.2)",
+              boxShadow: hubShadow,
+              transition: "box-shadow 0.15s ease-out",
             }}
             aria-hidden
           />
@@ -355,18 +428,21 @@ export function HomeSpinDial() {
             const ang = rotation + i * STEP - Math.PI / 2;
             const bx = geom.cx + geom.r * Math.cos(ang) - geom.btn / 2;
             const by = geom.cy + geom.r * Math.sin(ang) - geom.btn / 2;
+            const active = i === activeIndex;
             return (
               <div
                 key={item.label}
-                className="absolute flex flex-col items-center justify-center rounded-full border bg-[var(--surface)] text-center leading-tight"
+                className="pointer-events-none absolute flex flex-col items-center justify-center rounded-full text-center leading-tight"
                 style={{
                   width: geom.btn,
                   height: geom.btn,
                   left: bx,
                   top: by,
-                  pointerEvents: "none",
-                  borderColor: "var(--border)",
-                  borderWidth: Math.max(1, u),
+                  background: active
+                    ? "linear-gradient(135deg, #0f1f35, #1a2a4a)"
+                    : "var(--surface2)",
+                  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  borderRadius: "50%",
                   fontFamily: "var(--fb)",
                   fontSize: labelFs,
                   color: "var(--text2)",
@@ -377,7 +453,7 @@ export function HomeSpinDial() {
                 </span>
                 <span
                   className="mt-0.5 font-semibold uppercase text-[var(--text)]"
-                  style={{ letterSpacing: `${Math.max(0.5, u)}px` }}
+                  style={{ letterSpacing: "0.06em" }}
                 >
                   {item.label}
                 </span>
@@ -387,16 +463,15 @@ export function HomeSpinDial() {
         </div>
       </div>
       <p
-        className="shrink-0 px-2 pb-0.5 pt-1 text-center uppercase text-[var(--text2)]"
+        className="shrink-0 bg-transparent py-2 text-center uppercase text-[var(--text3)]"
         style={{
-          fontFamily: "var(--fb)",
-          letterSpacing: "clamp(1px, 0.4vw, 2px)",
-          fontSize: "clamp(8px, 2.4vw, 10px)",
-          maxWidth: "min(100%, 22rem)",
-          lineHeight: 1.35,
+          fontFamily: '"DM Sans", var(--fb), sans-serif',
+          fontSize: 11,
+          letterSpacing: "1px",
+          lineHeight: 1.3,
         }}
       >
-        FLING TO SPIN · SLIDE TO CENTER · TAP TO OPEN
+        FLING TO SPIN &middot; SLIDE TO CENTER &middot; TAP TO OPEN
       </p>
     </div>
   );
