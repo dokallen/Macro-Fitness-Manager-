@@ -59,14 +59,14 @@ function formatWhen(iso: string) {
   }
 }
 
-function formatElapsed(totalSec: number) {
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  if (h > 0) {
-    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
-  return `${m}:${String(s).padStart(2, "0")}`;
+function formatElapsedMs(totalMs: number) {
+  const h = Math.floor(totalMs / 3600000);
+  const m = Math.floor((totalMs % 3600000) / 60000);
+  const s = Math.floor((totalMs % 60000) / 1000);
+  const ms = totalMs % 1000;
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const pad3 = (n: number) => String(n).padStart(3, "0");
+  return `${pad2(h)}:${pad2(m)}:${pad2(s)}.${pad3(ms)}`;
 }
 
 export function CardioClient({ userId }: { userId: string }) {
@@ -81,7 +81,7 @@ export function CardioClient({ userId }: { userId: string }) {
 
   const [liveType, setLiveType] = useState("");
   const [liveStartAt, setLiveStartAt] = useState<number | null>(null);
-  const [elapsedSec, setElapsedSec] = useState(0);
+  const [tickMs, setTickMs] = useState(0);
   const [pendingLive, setPendingLive] = useState<PendingLive | null>(null);
   const [pendingNotes, setPendingNotes] = useState("");
   const [pendingMetricRows, setPendingMetricRows] = useState<MetricFormRow[]>(
@@ -91,47 +91,50 @@ export function CardioClient({ userId }: { userId: string }) {
   const [quickTypeList, setQuickTypeList] = useState<string[]>([]);
 
   const load = useCallback(async () => {
-    const [fullRes, typesRes] = await Promise.all([
+    const [fullRes, typesOnlyRes] = await Promise.all([
       supabase
         .from("cardio_sessions")
         .select(
-          "id, logged_at, type, duration_minutes, notes, cardio_metrics(id, key, value, unit)"
+          'id, logged_at, "type", duration_minutes, notes, cardio_metrics(id, key, value, unit)'
         )
         .eq("user_id", userId)
         .order("logged_at", { ascending: false }),
       supabase
         .from("cardio_sessions")
-        .select("type")
+        .select('logged_at, "type"')
         .eq("user_id", userId)
         .order("logged_at", { ascending: false }),
     ]);
 
     if (fullRes.error) {
       console.error(fullRes.error);
-      startTransition(() => setInitialLoading(false));
+      setInitialLoading(false);
       return;
     }
 
-    if (typesRes.error) {
-      console.error(typesRes.error);
-    }
-
     const list = (fullRes.data ?? []) as CardioSession[];
+
+    console.log("[CardioClient] types-only query", {
+      error: typesOnlyRes.error,
+      rowCount: typesOnlyRes.data?.length ?? 0,
+      rawRows: typesOnlyRes.data?.slice(0, 8),
+    });
+
     const seen = new Set<string>();
     const ordered: string[] = [];
-    for (const row of typesRes.data ?? []) {
-      const raw = row?.type;
+    for (const s of list) {
+      const raw = (s as { type?: unknown }).type;
       const t = typeof raw === "string" ? raw.trim() : "";
       if (!t || seen.has(t)) continue;
       seen.add(t);
       ordered.push(t);
     }
 
-    startTransition(() => {
-      setSessions(list);
-      setQuickTypeList(ordered);
-      setInitialLoading(false);
-    });
+    console.log("[CardioClient] quickTypeList (deduped from full session rows)", ordered);
+
+    setSessions(list);
+    setQuickTypeList(ordered);
+    setInitialLoading(false);
   }, [userId]);
 
   useEffect(() => {
@@ -140,15 +143,17 @@ export function CardioClient({ userId }: { userId: string }) {
 
   useEffect(() => {
     if (liveStartAt === null) {
-      setElapsedSec(0);
+      setTickMs(0);
       return;
     }
-    const tick = () =>
-      setElapsedSec(Math.floor((Date.now() - liveStartAt) / 1000));
+    const tick = () => setTickMs(Date.now());
     tick();
-    const id = setInterval(tick, 1000);
+    const id = setInterval(tick, 100);
     return () => clearInterval(id);
   }, [liveStartAt]);
+
+  const elapsedMs =
+    liveStartAt !== null ? Math.max(0, tickMs - liveStartAt) : 0;
 
   function applyQuickType(t: string) {
     setLiveType(t);
@@ -425,7 +430,7 @@ export function CardioClient({ userId }: { userId: string }) {
             <div>
               <p className="text-xs text-muted-foreground">Elapsed</p>
               <p className="font-mono text-3xl font-semibold tabular-nums text-foreground">
-                {formatElapsed(elapsedSec)}
+                {formatElapsedMs(elapsedMs)}
               </p>
             </div>
             <Button type="button" variant="destructive" onClick={stopLiveSession}>
