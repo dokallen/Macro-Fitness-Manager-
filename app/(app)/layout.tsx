@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { BarChart3, Dumbbell, Home, UtensilsCrossed } from "lucide-react";
+import { Activity, BarChart3, Dumbbell, Home, UtensilsCrossed } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", Icon: Home },
   { href: "/workout", label: "Workout", Icon: Dumbbell },
   { href: "/progress", label: "Progress", Icon: BarChart3 },
+  { href: "/cardio", label: "Cardio", Icon: Activity },
   { href: "/meals", label: "Meals", Icon: UtensilsCrossed },
 ] as const;
 
@@ -41,7 +42,7 @@ export default function AppGroupLayout({
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 md:hidden">
-          <div className="grid grid-cols-4 px-2 pb-[env(safe-area-inset-bottom)] pt-1">
+          <div className="grid grid-cols-5 px-1 pb-[env(safe-area-inset-bottom)] pt-1 sm:px-2">
             {NAV_ITEMS.map(({ href, label, Icon }) => (
               <Link
                 key={href}
