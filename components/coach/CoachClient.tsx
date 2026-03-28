@@ -190,7 +190,7 @@ export function CoachClient({ userId }: { userId: string }) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Message your coach…"
-          className="flex-1 min-w-0"
+          className="flex-1 min-w-0 text-foreground caret-foreground placeholder:text-foreground/55"
           disabled={sending}
           autoComplete="off"
           maxLength={12000}
