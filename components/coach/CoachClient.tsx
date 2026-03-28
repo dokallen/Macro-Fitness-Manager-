@@ -124,15 +124,15 @@ export function CoachClient({ userId }: { userId: string }) {
 
   if (loading) {
     return (
-      <div className="dark flex flex-1 flex-col items-center justify-center px-4 py-8">
+      <div className="dark flex flex-1 flex-col items-center justify-center bg-background px-4 py-8">
         <p className="text-sm text-foreground/90">Loading chat…</p>
       </div>
     );
   }
 
   return (
-    <div className="dark flex flex-1 flex-col min-h-0 w-full max-w-2xl mx-auto">
-      <header className="shrink-0 border-b border-border px-4 py-3">
+    <div className="dark flex flex-1 flex-col min-h-0 w-full max-w-2xl mx-auto bg-background">
+      <header className="shrink-0 border-b border-border bg-background px-4 py-3">
         <h1 className="font-sans text-xl font-semibold tracking-tight text-foreground">
           Coach
         </h1>
