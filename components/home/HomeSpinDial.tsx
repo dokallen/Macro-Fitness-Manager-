@@ -226,9 +226,7 @@ export function HomeSpinDial() {
     const a1 = arr[arr.length - 1];
     const dt = a1.t - a0.t;
     if (dt < 1) return 0;
-    let dRot = a1.rot - a0.rot;
-    while (dRot > Math.PI) dRot -= 2 * Math.PI;
-    while (dRot < -Math.PI) dRot += 2 * Math.PI;
+    const dRot = a1.rot - a0.rot;
     const radPerMs = dRot / dt;
     return radPerMs * MS_PER_FRAME * FLING_MULT;
   }, []);
