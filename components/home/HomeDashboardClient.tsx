@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { HomeSpinDial } from "@/components/home/HomeSpinDial";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type HomeDashboardStats = {
   weekNumber: number;
@@ -13,11 +16,53 @@ export type HomeDashboardStats = {
   macroStreak: string;
 };
 
+function weekFromProgramStart(iso: string | null | undefined): number | null {
+  if (!iso?.trim()) return null;
+  const d = new Date(iso.trim());
+  if (!Number.isFinite(d.getTime())) return null;
+  return Math.max(Math.floor((Date.now() - d.getTime()) / WEEK_MS) + 1, 1);
+}
+
 const NAV_RESERVE =
   "calc(5.75rem + max(20px, env(safe-area-inset-bottom, 0px)))";
 
 export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [weekToShow, setWeekToShow] = useState(() => Math.max(stats.weekNumber, 1));
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user || cancelled) {
+          if (!cancelled) setWeekToShow(Math.max(stats.weekNumber, 1));
+          return;
+        }
+        const { data: rows } = await supabase
+          .from("user_preferences")
+          .select("key, value")
+          .eq("user_id", user.id);
+        if (cancelled) return;
+        const map = Object.fromEntries(
+          (rows ?? []).map((r) => [r.key, r.value] as const)
+        );
+        const programStart = map.program_start;
+        const fromPref = weekFromProgramStart(programStart);
+        const fromCreated = weekFromProgramStart(user.created_at ?? undefined);
+        const w = fromPref ?? fromCreated ?? 1;
+        setWeekToShow(w);
+      } catch {
+        if (!cancelled) setWeekToShow(Math.max(stats.weekNumber, 1));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [stats.weekNumber]);
 
   return (
     <div
@@ -52,7 +97,7 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
               style={{ background: "var(--accent)" }}
             >
               <span aria-hidden>⚡</span>
-              <span>WEEK {stats.weekNumber}</span>
+              <span>WEEK {weekToShow}</span>
             </div>
           </div>
           <div className="flex shrink-0 gap-1.5">

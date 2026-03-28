@@ -1,18 +1,19 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const N = 5;
 const STEP = (2 * Math.PI) / N;
-const BASE = 300;
+const SIDE = 280;
+const CX = 140;
+const CY = 140;
+const R = 95;
+const BTN = 78;
+const HUB = 36;
+const HIT_EXTRA = 12;
+const SLIDE_CENTER_R = 80;
+const SLIDE_MIN_DRAG = 15;
 const FRICTION = 0.994;
 const FLING_MULT = 2.5;
 const MS_PER_FRAME = 1000 / 60;
@@ -47,37 +48,15 @@ export const DIAL_ITEMS: DialItem[] = [
   { label: "SCALE", emoji: "⚖️", href: "/progress" },
 ];
 
-type DialGeom = {
-  side: number;
-  cx: number;
-  cy: number;
-  r: number;
-  btn: number;
-  hub: number;
-  slideR: number;
-  hitExtra: number;
-};
-
-function buildGeom(side: number): DialGeom {
-  const u = side / BASE;
-  const btn = Math.max(70, side * 0.28);
-  return {
-    side,
-    cx: side / 2,
-    cy: side / 2,
-    r: side * 0.38,
-    btn,
-    hub: side * 0.13,
-    slideR: side * 0.1,
-    hitExtra: 12 * u,
-  };
+function ringAngle(rotation: number, i: number): number {
+  return rotation + i * STEP;
 }
 
 function angleToDialIndex(rotation: number): number {
   let best = 0;
   let bestAbs = Infinity;
   for (let i = 0; i < N; i++) {
-    const a = rotation + i * STEP - Math.PI / 2;
+    const a = ringAngle(rotation, i);
     const diff = Math.abs(wrapAngle(a - -Math.PI / 2));
     if (diff < bestAbs) {
       bestAbs = diff;
@@ -91,31 +70,29 @@ function hitTestIndex(
   clientX: number,
   clientY: number,
   rect: DOMRect,
-  rotation: number,
-  g: DialGeom
+  rotation: number
 ): number | null {
   const x = clientX - rect.left;
   const y = clientY - rect.top;
   let best = 0;
   let bestD = Infinity;
   for (let i = 0; i < N; i++) {
-    const ang = rotation + i * STEP - Math.PI / 2;
-    const bx = g.cx + g.r * Math.cos(ang);
-    const by = g.cy + g.r * Math.sin(ang);
+    const ang = ringAngle(rotation, i);
+    const bx = CX + R * Math.cos(ang);
+    const by = CY + R * Math.sin(ang);
     const d = Math.hypot(x - bx, y - by);
     if (d < bestD) {
       bestD = d;
       best = i;
     }
   }
-  return bestD < g.btn / 2 + g.hitExtra ? best : null;
+  return bestD < BTN / 2 + HIT_EXTRA ? best : null;
 }
 
 type RotSample = { t: number; rot: number };
 
 export function HomeSpinDial() {
   const router = useRouter();
-  const measureRef = useRef<HTMLDivElement>(null);
   const dialRef = useRef<HTMLDivElement>(null);
 
   const rotationRef = useRef(0);
@@ -125,33 +102,30 @@ export function HomeSpinDial() {
   const [, setRenderTick] = useState(0);
   const bump = useCallback(() => setRenderTick((n) => n + 1), []);
 
-  const [side, setSide] = useState(BASE);
-  const geom = useMemo(() => buildGeom(side), [side]);
-
-  useLayoutEffect(() => {
-    const el = measureRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect();
-      const s = Math.floor(Math.min(r.width, r.height));
-      if (!Number.isFinite(s) || s < 80) return;
-      setSide((prev) => (prev === s ? prev : s));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
   const draggingRef = useRef(false);
   const pointerIdRef = useRef<number | null>(null);
   const lastPointerRef = useRef({ x: 0, y: 0, t: 0, ang: 0 });
   const startClientRef = useRef({ x: 0, y: 0, t: 0 });
+  const lastClientMoveRef = useRef({ x: 0, y: 0 });
+  const totalDragPxRef = useRef(0);
   const sectorDownRef = useRef<number | null>(null);
   const rotSamplesRef = useRef<RotSample[]>([]);
   const slideTriggeredRef = useRef(false);
-  const hubGlowRef = useRef(0);
   const [hubGlow, setHubGlow] = useState(0);
   const [dialHover, setDialHover] = useState(false);
   const [pulse, setPulse] = useState(0);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dayOfMonth, setDayOfMonth] = useState(() => new Date().getDate());
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setDayOfMonth((prev) => {
+        const d = new Date().getDate();
+        return d !== prev ? d : prev;
+      });
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const stopLoop = useCallback(() => {
     if (rafRef.current != null) {
@@ -232,10 +206,16 @@ export function HomeSpinDial() {
   }, []);
 
   const trySlideNavigate = useCallback(
-    (el: HTMLDivElement, pointerId: number, lx: number, ly: number, g: DialGeom) => {
+    (
+      el: HTMLDivElement,
+      pointerId: number,
+      lx: number,
+      ly: number,
+      totalDragPx: number
+    ) => {
       if (slideTriggeredRef.current || sectorDownRef.current == null) return false;
-      const d = Math.hypot(lx - g.cx, ly - g.cy);
-      if (d >= g.slideR) return false;
+      const d = Math.hypot(lx - CX, ly - CY);
+      if (d >= SLIDE_CENTER_R || totalDragPx <= SLIDE_MIN_DRAG) return false;
       slideTriggeredRef.current = true;
       try {
         el.releasePointerCapture(pointerId);
@@ -249,6 +229,8 @@ export function HomeSpinDial() {
       const idx = sectorDownRef.current;
       sectorDownRef.current = null;
       rotSamplesRef.current = [];
+      totalDragPxRef.current = 0;
+      setDragOffset({ x: 0, y: 0 });
       setPulse(1);
       window.setTimeout(() => setPulse(0), 320);
       router.push(DIAL_ITEMS[idx].href);
@@ -272,32 +254,32 @@ export function HomeSpinDial() {
     stopLoop();
     velocityRef.current = 0;
     rotSamplesRef.current = [];
-    const g = buildGeom(side);
+    totalDragPxRef.current = 0;
     const rect = dial.getBoundingClientRect();
     const { x, y } = localXY(e, rect);
     const t = performance.now();
     startClientRef.current = { x: e.clientX, y: e.clientY, t };
+    lastClientMoveRef.current = { x: e.clientX, y: e.clientY };
     lastPointerRef.current = {
       x,
       y,
       t,
-      ang: Math.atan2(y - g.cy, x - g.cx),
+      ang: Math.atan2(y - CY, x - CX),
     };
-    sectorDownRef.current = hitTestIndex(e.clientX, e.clientY, rect, rotationRef.current, g);
+    sectorDownRef.current = hitTestIndex(e.clientX, e.clientY, rect, rotationRef.current);
+    setDragOffset({ x: 0, y: 0 });
     pushSample(t, rotationRef.current);
-    hubGlowRef.current = 0;
     setHubGlow(0);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     const dial = dialRef.current;
     if (!dial || !draggingRef.current) return;
-    const g = buildGeom(side);
     const rect = dial.getBoundingClientRect();
     const { x, y } = localXY(e, rect);
     const t = performance.now();
     const lp = lastPointerRef.current;
-    const ang = Math.atan2(y - g.cy, x - g.cx);
+    const ang = Math.atan2(y - CY, x - CX);
     let da = ang - lp.ang;
     if (da > Math.PI) da -= 2 * Math.PI;
     if (da < -Math.PI) da += 2 * Math.PI;
@@ -305,25 +287,42 @@ export function HomeSpinDial() {
     lastPointerRef.current = { x, y, t, ang };
     pushSample(t, rotationRef.current);
 
-    const dist = Math.hypot(x - g.cx, y - g.cy);
-    const glow =
-      dist >= g.slideR ? 0 : 1 - dist / Math.max(g.slideR, 1e-6);
-    hubGlowRef.current = glow;
+    const lm = lastClientMoveRef.current;
+    totalDragPxRef.current += Math.hypot(e.clientX - lm.x, e.clientY - lm.y);
+    lastClientMoveRef.current = { x: e.clientX, y: e.clientY };
+
+    const dist = Math.hypot(x - CX, y - CY);
+    const glow = dist >= SLIDE_CENTER_R ? 0 : 1 - dist / SLIDE_CENTER_R;
     setHubGlow(glow);
     bump();
 
-    if (trySlideNavigate(dial, e.pointerId, x, y, g)) return;
+    if (trySlideNavigate(dial, e.pointerId, x, y, totalDragPxRef.current)) return;
+
+    const di = sectorDownRef.current;
+    if (di !== null && dialRef.current) {
+      const rectInner = dialRef.current.getBoundingClientRect();
+      const pointerX = e.clientX - rectInner.left;
+      const pointerY = e.clientY - rectInner.top;
+      const ringAng = ringAngle(rotationRef.current, di);
+      const naturalX = CX + R * Math.cos(ringAng);
+      const naturalY = CY + R * Math.sin(ringAng);
+      const offsetX = (pointerX - naturalX) * 0.6;
+      const offsetY = (pointerY - naturalY) * 0.6;
+      setDragOffset({ x: offsetX, y: offsetY });
+    }
   };
 
   const endPointer = (e: React.PointerEvent) => {
     const dial = dialRef.current;
     if (!dial || pointerIdRef.current !== e.pointerId) return;
-    const g = buildGeom(side);
     const rect = dial.getBoundingClientRect();
     const { x, y } = localXY(e, rect);
     const t = performance.now();
 
-    if (trySlideNavigate(dial, e.pointerId, x, y, g)) return;
+    const lmEnd = lastClientMoveRef.current;
+    totalDragPxRef.current += Math.hypot(e.clientX - lmEnd.x, e.clientY - lmEnd.y);
+
+    if (trySlideNavigate(dial, e.pointerId, x, y, totalDragPxRef.current)) return;
 
     try {
       dial.releasePointerCapture(e.pointerId);
@@ -332,8 +331,9 @@ export function HomeSpinDial() {
     }
     draggingRef.current = false;
     pointerIdRef.current = null;
-    hubGlowRef.current = 0;
+    totalDragPxRef.current = 0;
     setHubGlow(0);
+    setDragOffset({ x: 0, y: 0 });
 
     const move = Math.hypot(e.clientX - startClientRef.current.x, e.clientY - startClientRef.current.y);
     const dt = t - startClientRef.current.t;
@@ -343,8 +343,7 @@ export function HomeSpinDial() {
         startClientRef.current.x,
         startClientRef.current.y,
         rect,
-        rotationRef.current,
-        g
+        rotationRef.current
       );
       if (idx != null) {
         router.push(DIAL_ITEMS[idx].href);
@@ -375,90 +374,99 @@ export function HomeSpinDial() {
 
   const rotation = rotationRef.current;
   const activeIndex = angleToDialIndex(rotation);
-  const u = side / BASE;
-  const labelFs = Math.max(8, Math.round(10 * u));
-  const emojiFs = Math.max(14, Math.round(18 * u));
+  const labelFs = 10;
+  const emojiFs = 18;
 
   const hubPulse = Math.max(hubGlow, pulse);
   const hubShadow =
     hubPulse > 0
-      ? `0 0 ${(10 + hubPulse * 28) * u}px ${(2 + hubPulse * 10) * u}px rgba(59,130,246,${0.25 + hubPulse * 0.55})`
+      ? `0 0 ${10 + hubPulse * 28}px ${2 + hubPulse * 10}px rgba(59,130,246,${0.25 + hubPulse * 0.55})`
       : dialHover
-        ? `0 0 ${8 * u}px ${2 * u}px rgba(59,130,246,0.2)`
+        ? "0 0 8px 2px rgba(59,130,246,0.2)"
         : "none";
 
   return (
-    <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
+    <div className="flex w-full flex-col items-center justify-center overflow-hidden bg-transparent">
       <div
-        ref={measureRef}
-        className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-hidden bg-transparent"
+        ref={dialRef}
+        role="presentation"
+        className="relative mx-auto touch-none select-none bg-transparent"
+        style={{ width: SIDE, height: SIDE }}
+        onPointerEnter={() => setDialHover(true)}
+        onPointerLeave={(ev) => {
+          setDialHover(false);
+          if (draggingRef.current) endPointer(ev);
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endPointer}
+        onPointerCancel={endPointer}
       >
         <div
-          ref={dialRef}
-          role="presentation"
-          className="relative touch-none select-none bg-transparent"
-          style={{ width: side, height: side }}
-          onPointerEnter={() => setDialHover(true)}
-          onPointerLeave={(ev) => {
-            setDialHover(false);
-            if (draggingRef.current) endPointer(ev);
+          className="pointer-events-none absolute z-10 rounded-full bg-[var(--surface2)]"
+          style={{
+            width: HUB,
+            height: HUB,
+            left: CX,
+            top: CY,
+            transform: "translate(-50%, -50%)",
+            border: "1.5px solid rgba(59,130,246,0.2)",
+            boxShadow: hubShadow,
+            transition: "box-shadow 0.15s ease-out",
           }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endPointer}
-          onPointerCancel={endPointer}
-        >
-          <div
-            className="pointer-events-none absolute z-10 rounded-full bg-[var(--surface2)]"
-            style={{
-              width: geom.hub,
-              height: geom.hub,
-              left: geom.cx,
-              top: geom.cy,
-              transform: "translate(-50%, -50%)",
-              border: "1.5px solid rgba(59,130,246,0.2)",
-              boxShadow: hubShadow,
-              transition: "box-shadow 0.15s ease-out",
-            }}
-            aria-hidden
-          />
-          {DIAL_ITEMS.map((item, i) => {
-            const ang = rotation + i * STEP - Math.PI / 2;
-            const bx = geom.cx + geom.r * Math.cos(ang) - geom.btn / 2;
-            const by = geom.cy + geom.r * Math.sin(ang) - geom.btn / 2;
-            const active = i === activeIndex;
-            return (
-              <div
-                key={item.label}
-                className="pointer-events-none absolute flex flex-col items-center justify-center rounded-full text-center leading-tight"
-                style={{
-                  width: geom.btn,
-                  height: geom.btn,
-                  left: bx,
-                  top: by,
-                  background: active
-                    ? "linear-gradient(135deg, #0f1f35, #1a2a4a)"
-                    : "var(--surface2)",
-                  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
-                  borderRadius: "50%",
-                  fontFamily: "var(--fb)",
-                  fontSize: labelFs,
-                  color: "var(--text2)",
-                }}
-              >
-                <span className="leading-none" style={{ fontSize: emojiFs }} aria-hidden>
-                  {item.emoji}
+          aria-hidden
+        />
+        {DIAL_ITEMS.map((item, i) => {
+          const ang = ringAngle(rotation, i);
+          const cxBtn = CX + R * Math.cos(ang);
+          const cyBtn = CY + R * Math.sin(ang);
+          const active = i === activeIndex;
+          const isDragging = draggingRef.current && sectorDownRef.current === i;
+          const offsetX = isDragging ? dragOffset.x : 0;
+          const offsetY = isDragging ? dragOffset.y : 0;
+          return (
+            <div
+              key={item.label}
+              className="pointer-events-none absolute flex flex-col items-center justify-center rounded-full text-center leading-tight"
+              style={{
+                width: BTN,
+                height: BTN,
+                left: cxBtn + offsetX,
+                top: cyBtn + offsetY,
+                transform: "translate(-50%, -50%)",
+                background: active
+                  ? "linear-gradient(135deg, #0f1f35, #1a2a4a)"
+                  : "var(--surface2)",
+                border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                borderRadius: "50%",
+                fontFamily: "var(--fb)",
+                fontSize: labelFs,
+                color: "var(--text2)",
+                transition: isDragging ? "none" : "left 0.2s ease-out, top 0.2s ease-out",
+                zIndex: isDragging ? 20 : 1,
+              }}
+            >
+              <span className="leading-none" style={{ fontSize: emojiFs }} aria-hidden>
+                {item.emoji}
+              </span>
+              {item.label === "TODAY" ? (
+                <span
+                  className="mt-0.5 font-bold tabular-nums text-[var(--text)]"
+                  style={{ fontSize: Math.max(11, labelFs + 2), lineHeight: 1 }}
+                >
+                  {dayOfMonth}
                 </span>
+              ) : (
                 <span
                   className="mt-0.5 font-semibold uppercase text-[var(--text)]"
                   style={{ letterSpacing: "0.06em" }}
                 >
                   {item.label}
                 </span>
-              </div>
-            );
-          })}
-        </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       <p
         className="shrink-0 bg-transparent py-2 text-center uppercase text-[var(--text3)]"
