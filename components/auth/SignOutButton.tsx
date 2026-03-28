@@ -23,8 +23,8 @@ export function SignOutButton() {
   return (
     <Button
       type="button"
-      variant="ghost"
-      className="border border-slate-300/30 bg-transparent text-slate-400 hover:bg-slate-500/10 hover:text-slate-200"
+      variant="outline"
+      className="shrink-0 border-border bg-surface-2 text-muted-foreground hover:bg-accent hover:text-foreground"
       onClick={onSignOut}
     >
       Sign out

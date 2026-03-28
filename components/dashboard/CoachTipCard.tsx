@@ -15,16 +15,16 @@ export function CoachTipCard({ tip, errorFallback }: Props) {
 
   return (
     <section
-      className="rounded-xl border border-primary/25 bg-primary/5 p-5 shadow-sm"
+      className="coach-tip-card rounded-2xl p-5 shadow-sm"
       aria-labelledby="coach-tip-heading"
     >
       <div className="flex items-center gap-2">
         <Sparkles className="size-5 text-primary" aria-hidden />
-        <h2 id="coach-tip-heading" className="text-lg font-semibold text-foreground">
+        <h2 id="coach-tip-heading" className="font-heading text-xl tracking-[0.125em] text-foreground">
           Coach tip
         </h2>
       </div>
-      <p className="mt-3 text-sm leading-relaxed text-foreground">{body}</p>
+      <p className="mt-3 text-sm font-sans leading-relaxed text-foreground">{body}</p>
     </section>
   );
 }

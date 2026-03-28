@@ -15,10 +15,8 @@ export function DashboardHeader({ displayName }: { displayName: string }) {
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <p className="text-sm text-muted-foreground">{greet}</p>
-        <h1 className="mt-1 font-sans text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          {displayName || "Athlete"}
-        </h1>
+        <p className="section-label">{greet}</p>
+        <h1 className="page-title mt-2">{displayName || "Athlete"}</h1>
       </div>
       <SignOutButton />
     </header>

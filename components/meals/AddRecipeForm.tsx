@@ -124,7 +124,7 @@ export function AddRecipeForm({ userId, onAdded }: Props) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-4 rounded-xl border border-border bg-card/80 p-4 shadow-sm"
+      className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm"
     >
       <h3 className="text-sm font-semibold text-foreground">New recipe</h3>
       <div className="space-y-1.5">

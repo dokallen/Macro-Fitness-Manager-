@@ -363,26 +363,24 @@ export function CardioClient({ userId }: { userId: string }) {
 
   if (initialLoading) {
     return (
-      <div className="dark mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+        <p className="text-sm font-sans text-muted-foreground">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="dark mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
       <header>
-        <h1 className="font-sans text-2xl font-semibold tracking-tight text-foreground">
-          Cardio
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="page-title">Cardio</h1>
+        <p className="mt-2 text-sm font-sans text-muted-foreground">
           Start a timed session or log manually with optional custom metrics.
         </p>
       </header>
 
-      <section className="rounded-xl border border-border bg-card/80 p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-foreground">Live session</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="section-label">Live session</h2>
+        <p className="mt-2 text-xs font-sans text-muted-foreground">
           Start the timer, then stop when you&apos;re done. Duration is saved
           automatically; add notes and metrics before saving.
         </p>
@@ -396,7 +394,7 @@ export function CardioClient({ userId }: { userId: string }) {
                   key={t}
                   type="button"
                   onClick={() => applyQuickType(t)}
-                  className="shrink-0 rounded-full border border-border bg-card/90 px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
+                  className="shrink-0 rounded-full border border-border bg-surface-2 px-3 py-1.5 text-sm font-sans font-medium text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
                 >
                   {t}
                 </button>
@@ -426,10 +424,10 @@ export function CardioClient({ userId }: { userId: string }) {
         ) : null}
 
         {liveStartAt !== null ? (
-          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-primary/40 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-primary/40 bg-surface-2 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">Elapsed</p>
-              <p className="font-mono text-3xl font-semibold tabular-nums text-foreground">
+              <p className="text-xs font-sans text-muted-foreground">Elapsed</p>
+              <p className="font-heading text-4xl tracking-[0.06em] tabular-nums text-foreground">
                 {formatElapsedMs(elapsedMs)}
               </p>
             </div>
@@ -484,7 +482,7 @@ export function CardioClient({ userId }: { userId: string }) {
                 {pendingMetricRows.map((row, index) => (
                   <li
                     key={index}
-                    className="grid grid-cols-12 gap-2 rounded-lg border border-border/60 bg-background/40 p-2"
+                    className="grid grid-cols-12 gap-2 rounded-lg border border-border bg-surface-2 p-2"
                   >
                     <div className="col-span-12 space-y-1 sm:col-span-4">
                       <Input
@@ -549,12 +547,12 @@ export function CardioClient({ userId }: { userId: string }) {
       </section>
 
       <section
-        className={`rounded-xl border border-border bg-card/80 p-4 shadow-sm ${
+        className={`rounded-2xl border border-border bg-card p-4 shadow-sm ${
           manualLocked ? "opacity-60" : ""
         }`}
       >
-        <h2 className="text-sm font-semibold text-foreground">Log manually</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <h2 className="section-label">Log manually</h2>
+        <p className="mt-2 text-xs font-sans text-muted-foreground">
           Enter duration and date yourself (same types as above).
         </p>
         <form onSubmit={onSubmitManual} className="mt-3 space-y-3">
@@ -567,7 +565,7 @@ export function CardioClient({ userId }: { userId: string }) {
                     key={t}
                     type="button"
                     onClick={() => applyQuickType(t)}
-                    className="shrink-0 rounded-full border border-border bg-card/90 px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
+                    className="shrink-0 rounded-full border border-border bg-surface-2 px-3 py-1.5 text-sm font-sans font-medium text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
                   >
                     {t}
                   </button>
@@ -639,7 +637,7 @@ export function CardioClient({ userId }: { userId: string }) {
               {metricRows.map((row, index) => (
                 <li
                   key={index}
-                  className="grid grid-cols-12 gap-2 rounded-lg border border-border/60 bg-background/40 p-2 sm:grid-cols-12"
+                  className="grid grid-cols-12 gap-2 rounded-lg border border-border bg-surface-2 p-2 sm:grid-cols-12"
                 >
                   <div className="col-span-12 space-y-1 sm:col-span-4">
                     <Label className="sr-only" htmlFor={`cm-key-${index}`}>
@@ -719,10 +717,10 @@ export function CardioClient({ userId }: { userId: string }) {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">History</h2>
+        <h2 className="section-label">History</h2>
         {sessions.length === 0 ? (
           <div
-            className="rounded-xl border border-dashed border-border/80 bg-card/80 px-4 py-8 text-center text-sm text-muted-foreground shadow-sm"
+            className="rounded-2xl border border-dashed border-border bg-surface-2 px-4 py-8 text-center text-sm font-sans text-muted-foreground shadow-sm"
             role="status"
           >
             No cardio sessions yet. Log your first session above.
@@ -734,13 +732,13 @@ export function CardioClient({ userId }: { userId: string }) {
               return (
                 <li
                   key={s.id}
-                  className="rounded-xl border border-border bg-card/80 p-4 shadow-sm"
+                  className="rounded-2xl border border-border bg-card p-4 shadow-sm"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-base font-semibold text-foreground">
+                    <p className="font-heading text-lg tracking-[0.08em] text-foreground">
                       {s.type || "Session"}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs font-sans text-muted-foreground">
                       {formatWhen(s.logged_at)}
                     </p>
                   </div>

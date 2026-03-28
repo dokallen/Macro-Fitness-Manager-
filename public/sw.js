@@ -34,8 +34,8 @@ function offlineDocumentResponse() {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Offline</title>
   <style>
-    body { font-family: system-ui, sans-serif; background: #09090b; color: #fafafa; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; text-align: center; }
-    a { color: #a1a1aa; }
+    body { font-family: system-ui, sans-serif; background: #080c12; color: #e2e8f0; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; text-align: center; }
+    a { color: #94a3b8; }
   </style>
 </head>
 <body>

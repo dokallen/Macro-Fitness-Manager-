@@ -180,23 +180,21 @@ export function MealsClient({ userId, macroTargets }: Props) {
   ];
 
   return (
-    <div className="dark mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Link
             href="/"
-            className="text-xs text-muted-foreground hover:text-foreground"
+            className="text-xs font-sans text-muted-foreground hover:text-foreground"
           >
             ← Home
           </Link>
-          <h1 className="mt-1 font-sans text-2xl font-semibold tracking-tight text-foreground">
-            Meals
-          </h1>
+          <h1 className="page-title mt-2">Meals</h1>
         </div>
       </header>
 
       <div
-        className="flex gap-1 rounded-lg border border-border bg-card/50 p-1"
+        className="flex gap-1 rounded-2xl border border-border bg-card p-1"
         role="tablist"
         aria-label="Meals sections"
       >

@@ -8,7 +8,7 @@ function ButtonAsLink({ href, children }: { href: string; children: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+      className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 py-2 font-heading text-sm uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90"
     >
       {children}
     </Link>
@@ -19,8 +19,8 @@ export default async function CoachPage() {
   const isGuest = cookies().get("macrofit_guest")?.value === "1";
   if (isGuest) {
     return (
-      <div className="dark flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
-        <p className="max-w-md text-center text-foreground/90">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background p-6">
+        <p className="max-w-md text-center font-sans text-sm text-muted-foreground">
           Sign in to chat with your coach.
         </p>
         <ButtonAsLink href="/signup">Create Account</ButtonAsLink>
@@ -38,7 +38,7 @@ export default async function CoachPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col w-full">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col">
       <CoachClient userId={user.id} />
     </div>
   );

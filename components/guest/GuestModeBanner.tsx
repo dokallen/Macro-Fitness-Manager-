@@ -37,9 +37,9 @@ export function GuestModeBanner() {
   }
 
   return (
-    <div className="sticky top-0 z-50 border-b border-amber-300/40 bg-amber-100/90 px-4 py-2 text-amber-950 backdrop-blur dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100">
+    <div className="sticky top-0 z-50 border-b border-warning/35 bg-warning/10 px-4 py-2 backdrop-blur">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
-        <p className="text-xs sm:text-sm">
+        <p className="text-xs font-sans text-foreground sm:text-sm">
           Guest mode: data is saved only on this device.
         </p>
         <Button

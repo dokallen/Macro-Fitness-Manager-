@@ -57,7 +57,7 @@ export function MealPlanTab({ weekLabel, entries, hasPlan }: Props) {
           return (
             <section
               key={day}
-              className="rounded-xl border border-border bg-card/80 p-4 shadow-sm"
+              className="rounded-2xl border border-border bg-card p-4 shadow-sm"
             >
               <h3 className="text-sm font-semibold text-foreground">
                 {label}

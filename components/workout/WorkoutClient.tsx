@@ -195,7 +195,7 @@ function ButtonAsLink({ href, children }: { href: string; children: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+      className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 py-2 font-heading text-sm uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90"
     >
       {children}
     </Link>
@@ -402,10 +402,10 @@ export function WorkoutClient() {
   }
 
   return (
-    <div className="dark mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
       {state.isGuest ? (
-        <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
-          <p className="max-w-md text-center text-muted-foreground">
+        <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background p-6">
+          <p className="max-w-md text-center font-sans text-sm text-muted-foreground">
             Sign in to access workouts and training history.
           </p>
           <ButtonAsLink href="/signup">Create Account</ButtonAsLink>
@@ -413,12 +413,12 @@ export function WorkoutClient() {
       ) : null}
 
       {!state.isGuest && state.initialLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm font-sans text-muted-foreground">Loading…</p>
       ) : null}
 
       {!state.isGuest && !state.initialLoading && !state.userId ? (
-        <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
-          <p className="max-w-md text-center text-muted-foreground">
+        <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background p-6">
+          <p className="max-w-md text-center font-sans text-sm text-muted-foreground">
             Sign in to access workouts and training history.
           </p>
           <ButtonAsLink href="/signup">Create Account</ButtonAsLink>
@@ -428,19 +428,17 @@ export function WorkoutClient() {
       {!state.isGuest && !state.initialLoading && state.userId ? (
         <>
           <header>
-            <h1 className="font-sans text-2xl font-semibold tracking-tight text-foreground">
-              Workout
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <h1 className="page-title">Workout</h1>
+            <p className="mt-2 text-sm font-sans text-muted-foreground">
               Start a session from your split, log exercises, then finish and
               review history.
             </p>
           </header>
 
           {state.splits.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/10 px-4 py-8 text-center">
-              <p className="text-sm text-foreground">No workout splits found.</p>
-              <p className="mt-2 text-sm text-muted-foreground">
+            <div className="rounded-2xl border border-dashed border-warning/40 bg-warning/10 px-4 py-8 text-center">
+              <p className="text-sm font-sans text-foreground">No workout splits found.</p>
+              <p className="mt-2 text-sm font-sans text-muted-foreground">
                 Ask Coach to generate your training split plan first.
               </p>
             </div>
@@ -448,11 +446,11 @@ export function WorkoutClient() {
 
           {state.splits.length > 0 ? (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-foreground">Your splits</h2>
+              <h2 className="section-label">Your splits</h2>
               {state.pendingConfirmSplit && !activeSession ? (
-                <div className="space-y-4 rounded-xl border border-border bg-card/80 p-4 shadow-sm">
-                  <p className="text-sm text-muted-foreground">Start a session for:</p>
-                  <p className="text-base font-semibold text-foreground">
+                <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <p className="text-sm font-sans text-muted-foreground">Start a session for:</p>
+                  <p className="font-heading text-lg tracking-[0.08em] text-foreground">
                     Day {state.pendingConfirmSplit.day_number}: {state.pendingConfirmSplit.name}
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -465,8 +463,7 @@ export function WorkoutClient() {
                     </Button>
                     <Button
                       type="button"
-                      variant="ghost"
-                      className="border border-muted-foreground/55 bg-muted/40 text-foreground hover:bg-muted/60 hover:text-foreground"
+                      variant="outline"
                       disabled={!!state.startingSplitId}
                       onClick={() => dispatch({ type: "clear_split_confirm" })}
                     >
@@ -500,13 +497,11 @@ export function WorkoutClient() {
           ) : null}
 
           {activeSession ? (
-            <section className="space-y-4 rounded-xl border border-border bg-card/80 p-4 shadow-sm">
+            <section className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Active session
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
+                  <h2 className="section-label">Active session</h2>
+                  <p className="mt-1 text-xs font-sans text-muted-foreground">
                     {activeSession.split_id &&
                     splitById.get(activeSession.split_id)
                       ? `Day ${splitById.get(activeSession.split_id)!.day_number}: ${
@@ -583,7 +578,7 @@ export function WorkoutClient() {
                     <Label htmlFor="unit">Unit</Label>
                     <select
                       id="unit"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex h-10 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={state.unit}
                       onChange={(e) =>
                         dispatch({
@@ -608,7 +603,7 @@ export function WorkoutClient() {
                   {activeSets.map((s) => (
                     <li
                       key={s.id}
-                      className="rounded-lg border border-border/80 bg-background/60 px-3 py-2 text-sm"
+                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm font-sans"
                     >
                       <span className="font-medium text-foreground">{s.exercise_name}</span>
                       <p className="text-muted-foreground">
@@ -619,7 +614,7 @@ export function WorkoutClient() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs font-sans text-muted-foreground">
                   No exercises logged yet for this session.
                 </p>
               )}
@@ -627,9 +622,9 @@ export function WorkoutClient() {
           ) : null}
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-foreground">Session history</h2>
+            <h2 className="section-label">Session history</h2>
             {state.sessions.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+              <p className="rounded-2xl border border-dashed border-border bg-surface-2 px-4 py-6 text-center text-sm font-sans text-muted-foreground">
                 No sessions yet.
               </p>
             ) : (
@@ -641,7 +636,7 @@ export function WorkoutClient() {
                   return (
                     <li
                       key={session.id}
-                      className="rounded-xl border border-border bg-card/80 p-3 shadow-sm"
+                      className="rounded-2xl border border-border bg-card p-3 shadow-sm"
                     >
                       <button
                         type="button"
@@ -676,7 +671,7 @@ export function WorkoutClient() {
                             {setRows.map((s) => (
                               <li
                                 key={s.id}
-                                className="rounded-lg border border-border/80 bg-background/60 px-3 py-2 text-sm"
+                                className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm font-sans"
                               >
                                 <span className="font-medium text-foreground">
                                   {s.exercise_name}

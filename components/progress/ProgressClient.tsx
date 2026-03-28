@@ -103,7 +103,7 @@ function MetricTrendChart({ points }: { points: { at: string; value: number }[] 
           y={0}
           width={w}
           height={h}
-          className="fill-muted/20"
+          className="fill-surface-2"
           rx={8}
         />
         {points.length > 1 ? (
@@ -244,26 +244,24 @@ export function ProgressClient({ userId }: { userId: string }) {
 
   if (initialLoading) {
     return (
-      <div className="dark mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+        <p className="text-sm font-sans text-muted-foreground">Loading…</p>
       </div>
     );
   }
 
   if (metricKeys.length === 0) {
     return (
-      <div className="dark mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
         <header>
-          <h1 className="font-sans text-2xl font-semibold tracking-tight text-foreground">
-            Progress
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="page-title">Progress</h1>
+          <p className="mt-2 text-sm font-sans text-muted-foreground">
             Track metrics over time with simple charts.
           </p>
         </header>
-        <div className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/10 px-4 py-8 text-center">
-          <p className="text-sm text-foreground">No metrics to track yet.</p>
-          <p className="mt-2 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-dashed border-warning/40 bg-warning/10 px-4 py-8 text-center">
+          <p className="text-sm font-sans text-foreground">No metrics to track yet.</p>
+          <p className="mt-2 text-sm font-sans text-muted-foreground">
             Set up progress metrics during onboarding, or ask Coach from the home
             screen to help you choose what to measure.
           </p>
@@ -281,24 +279,22 @@ export function ProgressClient({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="dark mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
       <header>
-        <h1 className="font-sans text-2xl font-semibold tracking-tight text-foreground">
-          Progress
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="page-title">Progress</h1>
+        <p className="mt-2 text-sm font-sans text-muted-foreground">
           Log entries and review trends for each tracked metric.
         </p>
       </header>
 
-      <section className="rounded-xl border border-border bg-card/80 p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-foreground">Log entry</h2>
-        <form onSubmit={onSubmit} className="mt-3 space-y-3">
+      <section className="macro-card">
+        <h2 className="section-label">Log entry</h2>
+        <form onSubmit={onSubmit} className="mt-4 space-y-3">
           <div className="space-y-1">
             <Label htmlFor="progress-metric">Metric</Label>
             <select
               id="progress-metric"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-10 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={formMetric}
               onChange={(e) => setFormMetric(e.target.value)}
             >
@@ -346,7 +342,7 @@ export function ProgressClient({ userId }: { userId: string }) {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">Your metrics</h2>
+        <h2 className="section-label">Your metrics</h2>
         <ul className="grid gap-4">
           {metricKeys.map((key, idx) => {
             const forMetric = entriesByMetric.get(key) ?? [];
@@ -359,10 +355,10 @@ export function ProgressClient({ userId }: { userId: string }) {
             return (
               <li
                 key={`${key}-${idx}`}
-                className="rounded-xl border border-border bg-card/80 p-4 shadow-sm"
+                className="rounded-2xl border border-border bg-card p-4 shadow-sm"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="text-base font-semibold text-foreground">{key}</h3>
+                  <h3 className="font-heading text-lg tracking-[0.08em] text-foreground">{key}</h3>
                   {latest ? (
                     <p className="text-sm text-muted-foreground">
                       Latest:{" "}

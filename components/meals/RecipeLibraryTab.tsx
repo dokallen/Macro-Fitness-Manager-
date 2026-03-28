@@ -57,7 +57,7 @@ export function RecipeLibraryTab({ recipes }: Props) {
                 type="button"
                 onClick={() => setOpenId(r.id)}
                 className={cn(
-                  "w-full rounded-xl border border-border bg-card/80 px-4 py-3 text-left shadow-sm transition-colors",
+                  "w-full rounded-2xl border border-border bg-card px-4 py-3 text-left font-sans shadow-sm transition-colors",
                   "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 )}
               >

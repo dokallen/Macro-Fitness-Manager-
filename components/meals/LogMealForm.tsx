@@ -98,9 +98,9 @@ export function LogMealForm({ userId, macroTargets, onLogged }: Props) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-4 rounded-xl border border-border bg-card/80 p-4 shadow-sm"
+      className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm"
     >
-      <h3 className="text-sm font-semibold text-foreground">Quick log</h3>
+      <h3 className="section-label">Quick log</h3>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="food-name">Food name</Label>
@@ -135,7 +135,7 @@ export function LogMealForm({ userId, macroTargets, onLogged }: Props) {
           <Label htmlFor="meal-num">Meal (1–4)</Label>
           <select
             id="meal-num"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-10 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             value={mealNumber}
             onChange={(e) => setMealNumber(Number(e.target.value))}
           >

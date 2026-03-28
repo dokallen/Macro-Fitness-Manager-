@@ -8,14 +8,6 @@ import { formatMacroLabel } from "@/lib/dashboard/preferences";
 import { fetchTodayMacroTotals } from "@/lib/dashboard/food-macros";
 import { cn } from "@/lib/utils";
 
-const BAR_COLORS = [
-  "bg-chart-1",
-  "bg-chart-2",
-  "bg-chart-3",
-  "bg-chart-4",
-  "bg-chart-5",
-] as const;
-
 type Props = {
   userId: string;
   targets: MacroTargetRow[];
@@ -66,16 +58,16 @@ export function MacroSummaryCard({
   if (targets.length === 0) {
     return (
       <section
-        className="rounded-xl border border-border bg-card p-5 shadow-sm"
+        className="macro-card"
         aria-labelledby="macro-summary-heading"
       >
         <h2
           id="macro-summary-heading"
-          className="text-lg font-semibold text-foreground"
+          className="font-heading text-xl tracking-[0.125em] text-foreground"
         >
           Today&apos;s macros
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-sm font-sans text-muted-foreground">
           No macro targets found. Complete onboarding or add targets in preferences
           to see progress here.
         </p>
@@ -85,12 +77,12 @@ export function MacroSummaryCard({
 
   return (
     <section
-      className="rounded-xl border border-border bg-card p-5 shadow-sm"
+      className="macro-card"
       aria-labelledby="macro-summary-heading"
     >
       <h2
         id="macro-summary-heading"
-        className="text-lg font-semibold text-foreground"
+        className="font-heading text-xl tracking-[0.125em] text-foreground"
       >
         Today&apos;s macros
       </h2>
@@ -100,11 +92,16 @@ export function MacroSummaryCard({
           const target = t.targetNumber;
           const pct =
             target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
-          const color = BAR_COLORS[i % BAR_COLORS.length];
+          const fillClass =
+            pct >= 100
+              ? "bg-warning"
+              : i % 2 === 0
+                ? "bg-success"
+                : "bg-primary";
 
           return (
             <li key={t.key}>
-              <div className="flex items-baseline justify-between gap-2 text-sm">
+              <div className="flex items-baseline justify-between gap-2 text-sm font-sans">
                 <span className="font-medium text-foreground">
                   {formatMacroLabel(t.key)}
                 </span>
@@ -113,7 +110,7 @@ export function MacroSummaryCard({
                 </span>
               </div>
               <div
-                className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-muted"
+                className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-surface-2"
                 role="progressbar"
                 aria-valuenow={pct}
                 aria-valuemin={0}
@@ -121,7 +118,7 @@ export function MacroSummaryCard({
                 aria-label={`${formatMacroLabel(t.key)} progress`}
               >
                 <div
-                  className={cn("h-full rounded-full transition-all", color)}
+                  className={cn("h-full rounded-full transition-all", fillClass)}
                   style={{ width: `${pct}%` }}
                 />
               </div>

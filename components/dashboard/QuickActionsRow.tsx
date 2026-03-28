@@ -13,17 +13,14 @@ const actions = [
 export function QuickActionsRow() {
   return (
     <section aria-labelledby="quick-actions-heading">
-      <h2
-        id="quick-actions-heading"
-        className="text-lg font-semibold text-foreground"
-      >
+      <h2 id="quick-actions-heading" className="font-heading text-xl tracking-[0.125em] text-foreground">
         Quick actions
       </h2>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         {actions.map(({ href, label, icon: Icon }) => (
           <Button key={href} variant="secondary" className="h-auto justify-start gap-2 py-3" asChild>
             <Link href={href}>
-              <Icon className="shrink-0 opacity-80" aria-hidden />
+              <Icon className="shrink-0 text-primary" aria-hidden />
               {label}
             </Link>
           </Button>

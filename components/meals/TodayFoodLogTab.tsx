@@ -25,7 +25,7 @@ type Props = {
 export function TodayFoodLogTab({ logs, onDelete, busyId }: Props) {
   if (logs.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+      <p className="rounded-2xl border border-dashed border-border bg-surface-2 px-4 py-8 text-center text-sm font-sans text-muted-foreground">
         Nothing logged today yet. Use Quick log below.
       </p>
     );
@@ -45,7 +45,7 @@ export function TodayFoodLogTab({ logs, onDelete, busyId }: Props) {
           <li
             key={log.id}
             className={cn(
-              "rounded-xl border border-border bg-card/80 p-4 shadow-sm",
+              "rounded-2xl border border-border bg-card p-4 shadow-sm",
               "flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
             )}
           >
