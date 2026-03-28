@@ -9,9 +9,13 @@ const R = 118;
 const BTN = 90;
 const CX = 160;
 const CY = 160;
-const FRICTION = 0.988;
-const MIN_V = 0.00012;
-const CENTER_HIT = 52;
+const DCX = 140;
+const DCY = 140;
+const FRICTION = 0.994;
+const MIN_V = 0.000045;
+const FLING_VELOCITY_MULT = 2.35;
+const SLIDE_CENTER_R = 30;
+const GLOW_FADE_DIST = 118;
 const TAP_MAX_DIST = 16;
 const TAP_MAX_MS = 450;
 
@@ -64,9 +68,12 @@ export function HomeSpinDial() {
   const pointerIdRef = useRef<number | null>(null);
   const lastRef = useRef({ x: 0, y: 0, t: 0, ang: 0 });
   const startRef = useRef({ x: 0, y: 0, t: 0, clientX: 0, clientY: 0 });
-  const nearCenterRef = useRef(false);
   const sectorRef = useRef<number | null>(null);
-  const [nearCenter, setNearCenter] = useState(false);
+  const lastDistToHubRef = useRef<number>(Infinity);
+  const inwardThisDragRef = useRef(false);
+  const slideDoneRef = useRef(false);
+  const [hubGlow, setHubGlow] = useState(0);
+  const [navPulse, setNavPulse] = useState(0);
 
   const stopRaf = useCallback(() => {
     if (rafRef.current != null) {
@@ -97,6 +104,36 @@ export function HomeSpinDial() {
     rafRef.current = requestAnimationFrame(loop);
   }, [redraw, stopRaf]);
 
+  const trySlideToCenterNav = useCallback(
+    (el: HTMLDivElement, pointerId: number, x: number, y: number) => {
+      if (slideDoneRef.current || sectorRef.current == null || !inwardThisDragRef.current) return false;
+      const distHub = Math.hypot(x - DCX, y - DCY);
+      if (distHub >= SLIDE_CENTER_R) return false;
+      slideDoneRef.current = true;
+      try {
+        el.releasePointerCapture(pointerId);
+      } catch {
+        // ignore
+      }
+      draggingRef.current = false;
+      pointerIdRef.current = null;
+      velocityRef.current = 0;
+      const idx = sectorRef.current;
+      sectorRef.current = null;
+      lastDistToHubRef.current = Infinity;
+      inwardThisDragRef.current = false;
+      setHubGlow(1);
+      setNavPulse(1);
+      window.setTimeout(() => {
+        setNavPulse(0);
+        setHubGlow(0);
+      }, 380);
+      router.push(DIAL_ITEMS[idx].href);
+      return true;
+    },
+    [router]
+  );
+
   const localXY = (e: React.PointerEvent, el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -116,8 +153,11 @@ export function HomeSpinDial() {
     const t = performance.now();
     startRef.current = { x, y, t, clientX: e.clientX, clientY: e.clientY };
     lastRef.current = { x, y, t, ang: angleFromCenter(x, y) };
-    nearCenterRef.current = false;
-    setNearCenter(false);
+    lastDistToHubRef.current = Math.hypot(x - DCX, y - DCY);
+    inwardThisDragRef.current = false;
+    slideDoneRef.current = false;
+    setHubGlow(0);
+    setNavPulse(0);
     const rect = el.getBoundingClientRect();
     sectorRef.current = nearestDialIndex(
       e.clientX,
@@ -139,19 +179,29 @@ export function HomeSpinDial() {
     rotationRef.current += da;
     const dt = Math.max(t - la.t, 1);
     const instantV = da / dt;
-    velocityRef.current = velocityRef.current * 0.45 + instantV * 0.55;
+    velocityRef.current = velocityRef.current * 0.22 + instantV * 0.78;
     lastRef.current = { x, y, t, ang };
-    const dist = Math.hypot(x - CX, y - CY);
-    const startD = Math.hypot(startRef.current.x - CX, startRef.current.y - CY);
-    const nc = dist < CENTER_HIT && startD > R - 35 && sectorRef.current != null;
-    nearCenterRef.current = nc;
-    setNearCenter(nc);
+    const distHub = Math.hypot(x - DCX, y - DCY);
+    if (distHub < lastDistToHubRef.current) inwardThisDragRef.current = true;
+    lastDistToHubRef.current = distHub;
+    const g =
+      distHub <= SLIDE_CENTER_R
+        ? 1
+        : distHub >= GLOW_FADE_DIST
+          ? 0
+          : (GLOW_FADE_DIST - distHub) / (GLOW_FADE_DIST - SLIDE_CENTER_R);
+    setHubGlow(g);
     redraw();
+    const wrap = wrapRef.current;
+    if (wrap && trySlideToCenterNav(wrap, e.pointerId, x, y)) return;
   };
 
   const endPointer = (e: React.PointerEvent) => {
     const el = wrapRef.current;
     if (!el || pointerIdRef.current !== e.pointerId) return;
+    const { x, y } = localXY(e, el);
+    if (trySlideToCenterNav(el, e.pointerId, x, y)) return;
+
     try {
       el.releasePointerCapture(e.pointerId);
     } catch {
@@ -159,33 +209,25 @@ export function HomeSpinDial() {
     }
     draggingRef.current = false;
     pointerIdRef.current = null;
+    setHubGlow(0);
+    lastDistToHubRef.current = Infinity;
+    inwardThisDragRef.current = false;
     const t = performance.now();
     const moveDist = Math.hypot(e.clientX - startRef.current.clientX, e.clientY - startRef.current.clientY);
     const dt = t - startRef.current.t;
-
-    if (nearCenterRef.current && sectorRef.current != null) {
-      router.push(DIAL_ITEMS[sectorRef.current].href);
-      nearCenterRef.current = false;
-      setNearCenter(false);
-      sectorRef.current = null;
-      return;
-    }
 
     if (moveDist < TAP_MAX_DIST && dt < TAP_MAX_MS) {
       const rect = el.getBoundingClientRect();
       const idx = nearestDialIndex(startRef.current.clientX, startRef.current.clientY, rect, rotationRef.current);
       if (idx != null) {
         router.push(DIAL_ITEMS[idx].href);
-        nearCenterRef.current = false;
-        setNearCenter(false);
         sectorRef.current = null;
         return;
       }
     }
 
+    velocityRef.current *= FLING_VELOCITY_MULT;
     runPhysics();
-    nearCenterRef.current = false;
-    setNearCenter(false);
     sectorRef.current = null;
   };
 
@@ -208,14 +250,24 @@ export function HomeSpinDial() {
         }}
       >
         <div
-          className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
+          className="absolute z-10 rounded-full border-2"
           style={{
             width: 44,
             height: 44,
+            left: DCX,
+            top: DCY,
+            transform: "translate(-50%, -50%)",
             borderColor: "var(--border)",
             background: "var(--surface2)",
-            boxShadow: nearCenter ? "0 0 22px 6px rgba(59,130,246,0.85)" : "none",
-            transition: "box-shadow 0.12s ease",
+            boxShadow: (() => {
+              const g = Math.min(1, Math.max(hubGlow, navPulse));
+              if (g <= 0) return "none";
+              const spread = 6 + g * 16;
+              const blur = 22 + g * 36;
+              const alpha = 0.38 + g * 0.52;
+              return `0 0 ${blur}px ${spread}px rgba(59,130,246,${alpha})`;
+            })(),
+            transition: "box-shadow 0.1s ease-out",
           }}
           aria-hidden
         />
