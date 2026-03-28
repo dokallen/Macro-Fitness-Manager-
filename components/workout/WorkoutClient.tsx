@@ -57,6 +57,7 @@ type WorkoutState = {
   repCount: string;
   weight: string;
   unit: "lbs" | "kg";
+  pendingConfirmSplit: WorkoutSplit | null;
 };
 
 const initialState: WorkoutState = {
@@ -75,6 +76,7 @@ const initialState: WorkoutState = {
   repCount: "",
   weight: "",
   unit: "lbs",
+  pendingConfirmSplit: null,
 };
 
 type WorkoutAction =
@@ -105,7 +107,9 @@ type WorkoutAction =
       finishedAt: string;
     }
   | { type: "set_expanded"; id: string | null }
-  | { type: "form_patch"; patch: Partial<Pick<WorkoutState, "exerciseName" | "setCount" | "repCount" | "weight" | "unit">> };
+  | { type: "form_patch"; patch: Partial<Pick<WorkoutState, "exerciseName" | "setCount" | "repCount" | "weight" | "unit">> }
+  | { type: "select_split_confirm"; split: WorkoutSplit }
+  | { type: "clear_split_confirm" };
 
 function workoutReducer(state: WorkoutState, action: WorkoutAction): WorkoutState {
   switch (action.type) {
@@ -123,7 +127,11 @@ function workoutReducer(state: WorkoutState, action: WorkoutAction): WorkoutStat
         initialLoading: false,
       };
     case "start_session_begin":
-      return { ...state, startingSplitId: action.splitId };
+      return {
+        ...state,
+        startingSplitId: action.splitId,
+        pendingConfirmSplit: null,
+      };
     case "start_session_fail":
       return { ...state, startingSplitId: null };
     case "start_session_success":
@@ -174,6 +182,10 @@ function workoutReducer(state: WorkoutState, action: WorkoutAction): WorkoutStat
       return { ...state, expandedSessionId: action.id };
     case "form_patch":
       return { ...state, ...action.patch };
+    case "select_split_confirm":
+      return { ...state, pendingConfirmSplit: action.split };
+    case "clear_split_confirm":
+      return { ...state, pendingConfirmSplit: null };
     default:
       return state;
   }
@@ -437,24 +449,52 @@ export function WorkoutClient() {
           {state.splits.length > 0 ? (
             <section className="space-y-3">
               <h2 className="text-sm font-semibold text-foreground">Your splits</h2>
-              <ul className="grid gap-2">
-                {state.splits.map((split) => (
-                  <li key={split.id}>
+              {state.pendingConfirmSplit && !activeSession ? (
+                <div className="space-y-4 rounded-xl border border-border bg-card/80 p-4 shadow-sm">
+                  <p className="text-sm text-muted-foreground">Start a session for:</p>
+                  <p className="text-base font-semibold text-foreground">
+                    Day {state.pendingConfirmSplit.day_number}: {state.pendingConfirmSplit.name}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      variant="secondary"
-                      className="min-h-[48px] w-full justify-between"
-                      disabled={!!activeSession || state.startingSplitId === split.id}
-                      onClick={() => void startSession(split)}
+                      disabled={!!state.startingSplitId}
+                      onClick={() => void startSession(state.pendingConfirmSplit!)}
                     >
-                      <span>
-                        Day {split.day_number}: {split.name}
-                      </span>
-                      <Dumbbell className="size-4" />
+                      {state.startingSplitId ? "Starting…" : "Start Session"}
                     </Button>
-                  </li>
-                ))}
-              </ul>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!!state.startingSplitId}
+                      onClick={() => dispatch({ type: "clear_split_confirm" })}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <ul className="grid gap-2">
+                  {state.splits.map((split) => (
+                    <li key={split.id}>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="min-h-[48px] w-full justify-between"
+                        disabled={!!activeSession || state.startingSplitId === split.id}
+                        onClick={() =>
+                          dispatch({ type: "select_split_confirm", split })
+                        }
+                      >
+                        <span>
+                          Day {split.day_number}: {split.name}
+                        </span>
+                        <Dumbbell className="size-4" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           ) : null}
 
