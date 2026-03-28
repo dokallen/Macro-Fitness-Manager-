@@ -465,7 +465,8 @@ export function WorkoutClient() {
                     </Button>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
+                      className="border border-muted-foreground/55 bg-muted/40 text-foreground hover:bg-muted/60 hover:text-foreground"
                       disabled={!!state.startingSplitId}
                       onClick={() => dispatch({ type: "clear_split_confirm" })}
                     >
