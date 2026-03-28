@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { GuestModeBanner } from "@/components/guest/GuestModeBanner";
+import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { SonnerToaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#09090b" />
+      </head>
       <body
         className={cn(
           geistSans.variable,
@@ -38,6 +43,7 @@ export default function RootLayout({
         <GuestModeBanner />
         {children}
         <SonnerToaster />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
