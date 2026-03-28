@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { Activity, BarChart3, Dumbbell, Home, UtensilsCrossed } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  Dumbbell,
+  Home,
+  MessageCircle,
+  UtensilsCrossed,
+} from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", Icon: Home },
@@ -7,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/progress", label: "Progress", Icon: BarChart3 },
   { href: "/cardio", label: "Cardio", Icon: Activity },
   { href: "/meals", label: "Meals", Icon: UtensilsCrossed },
+  { href: "/coach", label: "Coach", Icon: MessageCircle },
 ] as const;
 
 export default function AppGroupLayout({
@@ -36,18 +44,18 @@ export default function AppGroupLayout({
         </div>
       </aside>
 
-      <div className="flex min-h-dvh flex-1 flex-col">
-        <main className="flex flex-1 flex-col bg-background text-foreground pt-[env(safe-area-inset-top)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:pb-[env(safe-area-inset-bottom)]">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <main className="flex min-h-0 flex-1 flex-col bg-background text-foreground pt-[env(safe-area-inset-top)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:pb-[env(safe-area-inset-bottom)]">
           {children}
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 md:hidden">
-          <div className="grid grid-cols-5 px-1 pb-[env(safe-area-inset-bottom)] pt-1 sm:px-2">
+          <div className="grid grid-cols-6 px-0.5 pb-[env(safe-area-inset-bottom)] pt-1 sm:px-1">
             {NAV_ITEMS.map(({ href, label, Icon }) => (
               <Link
                 key={href}
                 href={href}
-                className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-md text-[11px] font-medium text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
+                className="flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-md text-[10px] font-medium leading-tight text-foreground/90 transition-colors hover:bg-accent hover:text-foreground sm:text-[11px]"
               >
                 <Icon className="size-4" aria-hidden />
                 <span>{label}</span>
