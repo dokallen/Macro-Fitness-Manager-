@@ -17,15 +17,15 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <>
-      <div className="home-hdr">
-        <div className="flex items-start justify-between gap-3">
-          <div>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="home-hdr shrink-0">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
+          <div className="min-w-0">
             <h1
               className="uppercase leading-none text-[var(--text)]"
               style={{
                 fontFamily: "var(--fd)",
-                fontSize: 42,
+                fontSize: "clamp(1.65rem, 5.2vw, 2.625rem)",
                 letterSpacing: "2px",
               }}
             >
@@ -45,17 +45,17 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
               <span>WEEK {stats.weekNumber}</span>
             </div>
           </div>
-          <div className="flex shrink-0 gap-2 pt-1">
+          <div className="flex shrink-0 gap-1.5 pt-1 sm:gap-2">
             <Link
               href="/progress"
-              className="flex size-11 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-xl"
+              className="flex size-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-lg sm:size-11 sm:text-xl"
               aria-label="Achievements"
             >
               🏆
             </Link>
             <button
               type="button"
-              className="flex size-11 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] font-body text-xl text-[var(--text)]"
+              className="flex size-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] font-body text-lg text-[var(--text)] sm:size-11 sm:text-xl"
               aria-label="Open menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen(true)}
@@ -66,7 +66,7 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-2 grid shrink-0 grid-cols-2 gap-2 sm:mt-3 sm:gap-3">
         {[
           { label: "CURRENT WEIGHT", value: stats.currentWeight },
           { label: "LBS TO GOAL", value: stats.lbsToGoal },
@@ -75,22 +75,25 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
         ].map((s) => (
           <div
             key={s.label}
-            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4"
+            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4"
           >
             <p
-              className="font-body text-[10px] font-semibold uppercase text-[var(--text2)]"
-              style={{ letterSpacing: "2px" }}
+              className="font-body text-[9px] font-semibold uppercase text-[var(--text2)] sm:text-[10px]"
+              style={{ letterSpacing: "clamp(1px, 0.35vw, 2px)" }}
             >
               {s.label}
             </p>
-            <p className="stat-num mt-2">{s.value}</p>
+            <p
+              className="stat-num mt-1.5 sm:mt-2"
+              style={{ fontSize: "clamp(1.35rem, 4.2vw, 1.75rem)" }}
+            >
+              {s.value}
+            </p>
           </div>
         ))}
       </div>
 
-      <div className="mt-8 flex justify-center">
-        <HomeSpinDial />
-      </div>
+      <HomeSpinDial />
 
       {menuOpen ? (
         <div className="fixed inset-0 z-[70]">
@@ -133,6 +136,6 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
           </nav>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

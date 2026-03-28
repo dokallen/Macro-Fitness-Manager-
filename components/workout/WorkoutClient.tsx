@@ -18,6 +18,10 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createBrowserSupabaseClient();
 
+const workoutExampleHintClass = "text-[10px] italic leading-tight text-[var(--text3)]";
+const workoutPlaceholderInputClass =
+  "placeholder:text-[var(--text3)] placeholder:italic";
+
 type WorkoutSplit = {
   id: string;
   day_number: number;
@@ -522,8 +526,10 @@ export function WorkoutClient() {
               <form onSubmit={addExerciseSet} className="space-y-3">
                 <div className="space-y-1">
                   <Label htmlFor="exercise-name">Exercise name</Label>
+                  <p className={workoutExampleHintClass}>Example:</p>
                   <Input
                     id="exercise-name"
+                    className={workoutPlaceholderInputClass}
                     value={state.exerciseName}
                     onChange={(e) =>
                       dispatch({
@@ -531,15 +537,17 @@ export function WorkoutClient() {
                         patch: { exerciseName: e.target.value },
                       })
                     }
-                    placeholder="Bench Press"
+                    placeholder="Bench press"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <div className="space-y-1">
                     <Label htmlFor="set-count">Sets</Label>
+                    <p className={workoutExampleHintClass}>e.g.</p>
                     <Input
                       id="set-count"
+                      className={workoutPlaceholderInputClass}
                       inputMode="numeric"
                       value={state.setCount}
                       onChange={(e) =>
@@ -550,8 +558,10 @@ export function WorkoutClient() {
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="rep-count">Reps</Label>
+                    <p className={workoutExampleHintClass}>e.g.</p>
                     <Input
                       id="rep-count"
+                      className={workoutPlaceholderInputClass}
                       inputMode="numeric"
                       value={state.repCount}
                       onChange={(e) =>
@@ -562,8 +572,10 @@ export function WorkoutClient() {
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="weight">Weight</Label>
+                    <p className={workoutExampleHintClass}>e.g.</p>
                     <Input
                       id="weight"
+                      className={workoutPlaceholderInputClass}
                       inputMode="decimal"
                       value={state.weight}
                       onChange={(e) =>

@@ -118,7 +118,7 @@ export default async function HomePage() {
   const stats = buildHomeStats(prefMap);
 
   return (
-    <div className="mx-auto w-full max-w-lg px-4 pb-8 pt-4 sm:max-w-md">
+    <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col overflow-hidden px-4 pb-2 pt-3 sm:max-w-md">
       <HomeDashboardClient stats={stats} />
     </div>
   );
