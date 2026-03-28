@@ -110,7 +110,7 @@ export function MacroSummaryCard({
                 </span>
               </div>
               <div
-                className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-surface-2"
+                className="app-progress-track mt-2 w-full overflow-hidden"
                 role="progressbar"
                 aria-valuenow={pct}
                 aria-valuemin={0}

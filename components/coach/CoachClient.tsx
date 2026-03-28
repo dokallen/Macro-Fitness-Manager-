@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -131,14 +132,25 @@ export function CoachClient({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col bg-background">
-      <header className="shrink-0 border-b border-border bg-background px-4 py-3">
-        <h1 className="font-heading text-2xl tracking-[0.125em] text-foreground">
-          Coach
-        </h1>
-        <p className="mt-1 text-xs font-sans text-muted-foreground">
-          Chat with your AI coach using your saved goals and targets.
-        </p>
+    <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col bg-[var(--bg)]">
+      <header className="sticky top-0 z-20 flex shrink-0 items-start gap-3 border-b border-[var(--border)] bg-[var(--bg)] px-4 py-3">
+        <Link
+          href="/"
+          className="mt-0.5 min-h-[44px] min-w-[44px] font-body text-sm text-[var(--accent)]"
+          aria-label="Back to home"
+        >
+          ←
+        </Link>
+        <div>
+          <h1
+            className="font-display text-[32px] uppercase leading-none tracking-[2px] text-[var(--text)]"
+          >
+            COACH
+          </h1>
+          <p className="mt-1 font-body text-xs text-[var(--text2)]">
+            Chat with your AI coach using your saved goals and targets.
+          </p>
+        </div>
       </header>
 
       <div

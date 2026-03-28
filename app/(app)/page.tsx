@@ -1,28 +1,93 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
-import { CoachTipCard } from "@/components/dashboard/CoachTipCard";
-import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { MacroSummaryCard } from "@/components/dashboard/MacroSummaryCard";
-import { QuickActionsRow } from "@/components/dashboard/QuickActionsRow";
-import { WorkoutDayCard } from "@/components/dashboard/WorkoutDayCard";
-import { generateCoachTip } from "@/lib/coach-tip";
-import { fetchTodayMacroTotals } from "@/lib/dashboard/food-macros";
-import { extractMacroTargets } from "@/lib/dashboard/preferences";
-import {
-  isTrainingDay,
-  parseTrainingDaysPerWeek,
-} from "@/lib/dashboard/workout-schedule";
+import { HomeDashboardClient } from "@/components/home/HomeDashboardClient";
+import type { HomeDashboardStats } from "@/components/home/HomeDashboardClient";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+function getIsoWeek(d: Date): number {
+  const utc = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - day);
+  const y0 = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  return Math.ceil(((+utc - +y0) / 86400000 + 1) / 7);
+}
+
+function computeLbsToGoal(prefMap: Record<string, string>): string {
+  const curKeys = [
+    "current_weight_lbs",
+    "current_weight",
+    "weight_lbs",
+    "weight",
+    "body_weight",
+  ];
+  const goalKeys = [
+    "goal_weight_lbs",
+    "goal_weight",
+    "target_weight_lbs",
+    "target_weight",
+  ];
+  let cur: number | null = null;
+  let goal: number | null = null;
+  for (const k of curKeys) {
+    const n = parseFloat(prefMap[k] ?? "");
+    if (Number.isFinite(n)) {
+      cur = n;
+      break;
+    }
+  }
+  for (const k of goalKeys) {
+    const n = parseFloat(prefMap[k] ?? "");
+    if (Number.isFinite(n)) {
+      goal = n;
+      break;
+    }
+  }
+  if (cur == null || goal == null) return "—";
+  const d = Math.abs(goal - cur);
+  return d % 1 === 0 ? String(d) : d.toFixed(1);
+}
+
+function pickWeightDisplay(prefMap: Record<string, string>): string {
+  const keys = [
+    "current_weight_lbs",
+    "current_weight",
+    "weight_lbs",
+    "weight",
+    "body_weight",
+  ];
+  for (const k of keys) {
+    const v = prefMap[k]?.trim();
+    if (v) return v;
+  }
+  return "—";
+}
+
+function buildHomeStats(prefMap: Record<string, string>): HomeDashboardStats {
+  return {
+    weekNumber: getIsoWeek(new Date()),
+    currentWeight: pickWeightDisplay(prefMap),
+    lbsToGoal: computeLbsToGoal(prefMap),
+    workoutStreak: "—",
+    macroStreak: "—",
+  };
+}
 
 export default async function HomePage() {
   const isGuest = cookies().get("macrofit_guest")?.value === "1";
   if (isGuest) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background p-6">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-[var(--bg)] p-6">
         <div className="text-center">
-          <h1 className="page-title text-4xl sm:text-5xl">Macro Fit</h1>
-          <p className="mt-2 max-w-md font-sans text-sm text-muted-foreground">
+          <h1
+            className="text-[var(--text)]"
+            style={{ fontFamily: "var(--fd)", fontSize: 42, letterSpacing: "2px" }}
+          >
+            MACRO FIT
+          </h1>
+          <p
+            className="mt-2 max-w-md font-body text-sm text-[var(--text2)]"
+          >
             You are in guest mode. This dashboard starts empty and stores data
             only on this device.
           </p>
@@ -41,58 +106,20 @@ export default async function HomePage() {
     return null;
   }
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("display_name")
-    .eq("id", user.id)
-    .maybeSingle();
-
   const { data: prefRows } = await supabase
     .from("user_preferences")
     .select("key, value")
     .eq("user_id", user.id);
 
-  const prefList = prefRows ?? [];
-  const macroTargets = extractMacroTargets(prefList);
   const prefMap = Object.fromEntries(
-    prefList.map((p) => [p.key, p.value] as const)
+    (prefRows ?? []).map((p) => [p.key, p.value] as const)
   );
 
-  const initialTotals = await fetchTodayMacroTotals(supabase, user.id);
-
-  const freqRaw = prefMap.recommended_workout_frequency ?? "";
-  const trainingDays = parseTrainingDaysPerWeek(freqRaw);
-  const trainToday = isTrainingDay(trainingDays, new Date());
-
-  let coachTip: string | null = null;
-  let coachTipError = false;
-  try {
-    coachTip = await generateCoachTip({
-      goal: prefMap.goal ?? "",
-      recommended_goal_timeframe: prefMap.recommended_goal_timeframe ?? "",
-      recommended_workout_frequency: freqRaw,
-    });
-  } catch {
-    coachTipError = true;
-  }
-
-  const displayName = profile?.display_name?.trim() || "Athlete";
-  const frequencySummary = freqRaw ? `Plan: ${freqRaw}` : "";
+  const stats = buildHomeStats(prefMap);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 p-6 pb-12">
-      <DashboardHeader displayName={displayName} />
-      <MacroSummaryCard
-        userId={user.id}
-        targets={macroTargets}
-        initialTotals={initialTotals}
-      />
-      <WorkoutDayCard
-        isTrainingDay={trainToday}
-        frequencySummary={frequencySummary}
-      />
-      <QuickActionsRow />
-      <CoachTipCard tip={coachTip} errorFallback={coachTipError} />
+    <div className="mx-auto w-full max-w-lg px-4 pb-8 pt-4 sm:max-w-md">
+      <HomeDashboardClient stats={stats} />
     </div>
   );
 }
@@ -101,7 +128,8 @@ function ButtonAsLink({ href, children }: { href: string; children: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 py-2 font-heading text-sm uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90"
+      className="inline-flex h-11 items-center justify-center rounded-xl px-6 font-display text-sm uppercase tracking-wider text-white"
+      style={{ background: "var(--accent)" }}
     >
       {children}
     </Link>

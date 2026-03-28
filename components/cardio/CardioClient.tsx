@@ -8,6 +8,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { SubpageHeader } from "@/components/layout/SubpageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -363,20 +364,18 @@ export function CardioClient({ userId }: { userId: string }) {
 
   if (initialLoading) {
     return (
-      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
         <p className="text-sm font-sans text-muted-foreground">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
-      <header>
-        <h1 className="page-title">Cardio</h1>
-        <p className="mt-2 text-sm font-sans text-muted-foreground">
-          Start a timed session or log manually with optional custom metrics.
-        </p>
-      </header>
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+      <SubpageHeader
+        title="CARDIO"
+        subtitle="Start a timed session or log manually with optional custom metrics."
+      />
 
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <h2 className="section-label">Live session</h2>

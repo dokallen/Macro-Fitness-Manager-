@@ -40,6 +40,11 @@ export default function RootLayout({
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#080c12" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font -- required Google Fonts link per design spec */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body
         className={cn(

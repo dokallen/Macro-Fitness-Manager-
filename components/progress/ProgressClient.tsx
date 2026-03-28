@@ -10,6 +10,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { SubpageHeader } from "@/components/layout/SubpageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -244,7 +245,7 @@ export function ProgressClient({ userId }: { userId: string }) {
 
   if (initialLoading) {
     return (
-      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
         <p className="text-sm font-sans text-muted-foreground">Loading…</p>
       </div>
     );
@@ -252,13 +253,11 @@ export function ProgressClient({ userId }: { userId: string }) {
 
   if (metricKeys.length === 0) {
     return (
-      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
-        <header>
-          <h1 className="page-title">Progress</h1>
-          <p className="mt-2 text-sm font-sans text-muted-foreground">
-            Track metrics over time with simple charts.
-          </p>
-        </header>
+      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+        <SubpageHeader
+          title="PROGRESS"
+          subtitle="Track metrics over time with simple charts."
+        />
         <div className="rounded-2xl border border-dashed border-warning/40 bg-warning/10 px-4 py-8 text-center">
           <p className="text-sm font-sans text-foreground">No metrics to track yet.</p>
           <p className="mt-2 text-sm font-sans text-muted-foreground">
@@ -279,13 +278,11 @@ export function ProgressClient({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
-      <header>
-        <h1 className="page-title">Progress</h1>
-        <p className="mt-2 text-sm font-sans text-muted-foreground">
-          Log entries and review trends for each tracked metric.
-        </p>
-      </header>
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+      <SubpageHeader
+        title="PROGRESS"
+        subtitle="Log entries and review trends for each tracked metric."
+      />
 
       <section className="macro-card">
         <h2 className="section-label">Log entry</h2>

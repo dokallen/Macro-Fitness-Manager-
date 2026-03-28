@@ -10,6 +10,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { SubpageHeader } from "@/components/layout/SubpageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -402,7 +403,7 @@ export function WorkoutClient() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
       {state.isGuest ? (
         <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background p-6">
           <p className="max-w-md text-center font-sans text-sm text-muted-foreground">
@@ -427,13 +428,10 @@ export function WorkoutClient() {
 
       {!state.isGuest && !state.initialLoading && state.userId ? (
         <>
-          <header>
-            <h1 className="page-title">Workout</h1>
-            <p className="mt-2 text-sm font-sans text-muted-foreground">
-              Start a session from your split, log exercises, then finish and
-              review history.
-            </p>
-          </header>
+          <SubpageHeader
+            title="WORKOUT"
+            subtitle="Start a session from your split, log exercises, then finish and review history."
+          />
 
           {state.splits.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-warning/40 bg-warning/10 px-4 py-8 text-center">

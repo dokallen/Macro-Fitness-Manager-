@@ -4,116 +4,140 @@
 
 @layer base {
   :root {
-    /* Macro Fit design tokens */
-    --background: 218 42% 5%;
-    --foreground: 214 32% 91%;
-    --surface: 217 36% 9%;
-    --surface2: 217 35% 12%;
-    --card: 217 36% 9%;
-    --card-foreground: 214 32% 91%;
-    --popover: 217 36% 9%;
-    --popover-foreground: 214 32% 91%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217 35% 12%;
-    --secondary-foreground: 214 32% 91%;
-    --muted: 217 35% 12%;
-    --muted-foreground: 215 20% 65%;
-    --subtle: 215 16% 35%;
-    --accent: 217 32% 16%;
-    --accent-foreground: 214 32% 91%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 160 84% 39%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 218 42% 5%;
-    --border: 217 38% 19%;
-    --input: 217 38% 19%;
-    --ring: 217 91% 60%;
+    --bg: #080c12;
+    --surface: #0f1520;
+    --surface2: #141c2a;
+    --border: #1e2d42;
+    --accent: #3b82f6;
+    --accent2: #10b981;
+    --accent3: #f59e0b;
+    --red: #ef4444;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #475569;
+    --fd: "Bebas Neue", sans-serif;
+    --fb: "DM Sans", sans-serif;
+
+    /* Tailwind / shadcn bridge (same palette) */
+    --background: var(--bg);
+    --foreground: var(--text);
+    --card: var(--surface);
+    --card-foreground: var(--text);
+    --popover: var(--surface);
+    --popover-foreground: var(--text);
+    --primary: var(--accent);
+    --primary-foreground: #ffffff;
+    --secondary: var(--surface2);
+    --secondary-foreground: var(--text);
+    --muted: var(--surface2);
+    --muted-foreground: var(--text2);
+    --subtle: var(--text3);
+    --accent-ui: var(--surface2);
+    --accent-ui-foreground: var(--text);
+    --destructive: var(--red);
+    --destructive-foreground: #ffffff;
+    --success: var(--accent2);
+    --success-foreground: #ffffff;
+    --warning: var(--accent3);
+    --warning-foreground: var(--bg);
+    --input: var(--border);
+    --ring: var(--accent);
     --radius: 1rem;
-    --chart-1: 217 91% 60%;
-    --chart-2: 160 84% 39%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 214 32% 91%;
-    --chart-5: 215 20% 65%;
-    --sidebar: 217 36% 9%;
-    --sidebar-foreground: 214 32% 91%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 32% 16%;
-    --sidebar-accent-foreground: 214 32% 91%;
-    --sidebar-border: 217 38% 19%;
-    --sidebar-ring: 217 91% 60%;
+    --chart-1: var(--accent);
+    --chart-2: var(--accent2);
+    --chart-3: var(--accent3);
+    --chart-4: var(--text);
+    --chart-5: var(--text2);
+    --sidebar: var(--surface);
+    --sidebar-foreground: var(--text);
+    --sidebar-primary: var(--accent);
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: var(--surface2);
+    --sidebar-accent-foreground: var(--text);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--accent);
   }
 
   .dark {
-    --background: 218 42% 5%;
-    --foreground: 214 32% 91%;
-    --surface: 217 36% 9%;
-    --surface2: 217 35% 12%;
-    --card: 217 36% 9%;
-    --card-foreground: 214 32% 91%;
-    --popover: 217 36% 9%;
-    --popover-foreground: 214 32% 91%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217 35% 12%;
-    --secondary-foreground: 214 32% 91%;
-    --muted: 217 35% 12%;
-    --muted-foreground: 215 20% 65%;
-    --subtle: 215 16% 35%;
-    --accent: 217 32% 16%;
-    --accent-foreground: 214 32% 91%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 160 84% 39%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 218 42% 5%;
-    --border: 217 38% 19%;
-    --input: 217 38% 19%;
-    --ring: 217 91% 60%;
-    --chart-1: 217 91% 60%;
-    --chart-2: 160 84% 39%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 214 32% 91%;
-    --chart-5: 215 20% 65%;
-    --sidebar: 217 36% 9%;
-    --sidebar-foreground: 214 32% 91%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 32% 16%;
-    --sidebar-accent-foreground: 214 32% 91%;
-    --sidebar-border: 217 38% 19%;
-    --sidebar-ring: 217 91% 60%;
+    --background: var(--bg);
+    --foreground: var(--text);
+    --card: var(--surface);
+    --card-foreground: var(--text);
+    --popover: var(--surface);
+    --popover-foreground: var(--text);
+    --primary: var(--accent);
+    --primary-foreground: #ffffff;
+    --secondary: var(--surface2);
+    --secondary-foreground: var(--text);
+    --muted: var(--surface2);
+    --muted-foreground: var(--text2);
+    --destructive: var(--red);
+    --destructive-foreground: #ffffff;
+    --input: var(--border);
+    --ring: var(--accent);
   }
 
   * {
-    @apply border-border;
+    border-color: var(--border);
   }
 
   body {
-    @apply bg-background text-foreground;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--fb), ui-sans-serif, system-ui, sans-serif;
   }
 }
 
 @layer components {
   .macro-card {
-    @apply rounded-2xl border border-border bg-card p-5;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 1.25rem;
   }
 
   .page-title {
-    @apply font-heading text-2xl tracking-[0.125em] text-foreground sm:text-3xl;
+    font-family: var(--fd);
+    font-size: 32px;
+    letter-spacing: 2px;
+    color: var(--text);
+    line-height: 1.1;
   }
 
   .section-label {
-    @apply text-[10px] font-medium uppercase tracking-[0.125em] text-muted-foreground sm:text-[11px];
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text2);
+  }
+
+  .home-hdr {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
   }
 
   .coach-tip-card {
     background: linear-gradient(135deg, #0d1e33, #111827);
     border: 1px solid rgba(59, 130, 246, 0.27);
+  }
+
+  .stat-num {
+    font-family: var(--fd);
+    font-size: 1.75rem;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .app-progress-track {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--surface2);
   }
 }
 
@@ -123,6 +147,14 @@
   }
 
   .text-subtle {
-    color: hsl(var(--subtle));
+    color: var(--text3);
+  }
+
+  .font-display {
+    font-family: var(--fd);
+  }
+
+  .font-body {
+    font-family: var(--fb);
   }
 }

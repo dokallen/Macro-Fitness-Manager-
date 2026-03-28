@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -14,6 +13,7 @@ import {
   RecipeLibraryTab,
   type RecipeRow,
 } from "@/components/meals/RecipeLibraryTab";
+import { SubpageHeader } from "@/components/layout/SubpageHeader";
 import {
   TodayFoodLogTab,
   type FoodLogRow,
@@ -180,18 +180,8 @@ export function MealsClient({ userId, macroTargets }: Props) {
   ];
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-background px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <Link
-            href="/"
-            className="text-xs font-sans text-muted-foreground hover:text-foreground"
-          >
-            ← Home
-          </Link>
-          <h1 className="page-title mt-2">Meals</h1>
-        </div>
-      </header>
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
+      <SubpageHeader title="MEALS" subtitle="Log food, meal plan, and recipes." />
 
       <div
         className="flex gap-1 rounded-2xl border border-border bg-card p-1"
