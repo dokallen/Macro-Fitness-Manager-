@@ -4,6 +4,7 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { toast } from "sonner";
@@ -33,6 +34,11 @@ type CardioSession = {
 
 type MetricFormRow = { key: string; value: string; unit: string };
 
+type PendingLive = {
+  startAt: number;
+  durationMinutes: number;
+};
+
 function localDateInputValue(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -54,6 +60,16 @@ function formatWhen(iso: string) {
   }
 }
 
+function formatElapsed(totalSec: number) {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export function CardioClient({ userId }: { userId: string }) {
   const [initialLoading, setInitialLoading] = useState(true);
   const [sessions, setSessions] = useState<CardioSession[]>([]);
@@ -63,6 +79,27 @@ export function CardioClient({ userId }: { userId: string }) {
   const [formDate, setFormDate] = useState(localDateInputValue);
   const [metricRows, setMetricRows] = useState<MetricFormRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  const [liveType, setLiveType] = useState("");
+  const [liveStartAt, setLiveStartAt] = useState<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [pendingLive, setPendingLive] = useState<PendingLive | null>(null);
+  const [pendingNotes, setPendingNotes] = useState("");
+  const [pendingMetricRows, setPendingMetricRows] = useState<MetricFormRow[]>(
+    []
+  );
+
+  const quickTypes = useMemo(() => {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const s of sessions) {
+      const t = s.type?.trim();
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      ordered.push(t);
+    }
+    return ordered;
+  }, [sessions]);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -90,6 +127,23 @@ export function CardioClient({ userId }: { userId: string }) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (liveStartAt === null) {
+      setElapsedSec(0);
+      return;
+    }
+    const tick = () =>
+      setElapsedSec(Math.floor((Date.now() - liveStartAt) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [liveStartAt]);
+
+  function applyQuickType(t: string) {
+    setLiveType(t);
+    setFormType(t);
+  }
+
   function addMetricRow() {
     setMetricRows((rows) => [...rows, { key: "", value: "", unit: "" }]);
   }
@@ -104,7 +158,153 @@ export function CardioClient({ userId }: { userId: string }) {
     );
   }
 
-  async function onSubmit(e: React.FormEvent) {
+  function addPendingMetricRow() {
+    setPendingMetricRows((rows) => [...rows, { key: "", value: "", unit: "" }]);
+  }
+
+  function removePendingMetricRow(index: number) {
+    setPendingMetricRows((rows) => rows.filter((_, i) => i !== index));
+  }
+
+  function updatePendingMetricRow(index: number, patch: Partial<MetricFormRow>) {
+    setPendingMetricRows((rows) =>
+      rows.map((r, i) => (i === index ? { ...r, ...patch } : r))
+    );
+  }
+
+  function validateMetricRows(
+    rows: MetricFormRow[]
+  ): { key: string; value: number; unit: string }[] | null {
+    const out: { key: string; value: number; unit: string }[] = [];
+    for (const r of rows) {
+      const k = r.key.trim();
+      const vStr = r.value.trim();
+      const u = r.unit.trim();
+      if (!k && !vStr) continue;
+      if (k && !vStr) {
+        toast.error(`Enter a value for "${k}" or clear that row.`);
+        return null;
+      }
+      if (!k && vStr) {
+        toast.error("Each metric needs a name (key).");
+        return null;
+      }
+      const v = Number(vStr);
+      if (!Number.isFinite(v)) {
+        toast.error(`Metric "${k}" must be a number.`);
+        return null;
+      }
+      out.push({ key: k, value: v, unit: u });
+    }
+    return out;
+  }
+
+  async function insertSessionAndMetrics(
+    type: string,
+    durationMinutes: number,
+    loggedAtIso: string,
+    notes: string | null,
+    metrics: { key: string; value: number; unit: string }[]
+  ): Promise<boolean> {
+    const { data: sessionRow, error: sessionErr } = await supabase
+      .from("cardio_sessions")
+      .insert({
+        user_id: userId,
+        type,
+        duration_minutes: durationMinutes,
+        notes,
+        logged_at: loggedAtIso,
+      })
+      .select("id, logged_at, type, duration_minutes, notes")
+      .single();
+
+    if (sessionErr || !sessionRow) {
+      toast.error(sessionErr?.message ?? "Could not log session.");
+      return false;
+    }
+
+    if (metrics.length > 0) {
+      const { error: metricsErr } = await supabase.from("cardio_metrics").insert(
+        metrics.map((m) => ({
+          cardio_session_id: sessionRow.id,
+          key: m.key,
+          value: m.value,
+          unit: m.unit,
+        }))
+      );
+
+      if (metricsErr) {
+        toast.error(metricsErr.message);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function startLiveSession() {
+    if (pendingLive !== null) {
+      toast.error("Finish or cancel the pending session first.");
+      return;
+    }
+    setLiveStartAt(Date.now());
+  }
+
+  function stopLiveSession() {
+    if (liveStartAt === null) return;
+    const end = Date.now();
+    const durationMinutes = (end - liveStartAt) / 60000;
+    if (durationMinutes < 1 / 120) {
+      toast.error("Session is too short to save.");
+      setLiveStartAt(null);
+      return;
+    }
+    setPendingLive({ startAt: liveStartAt, durationMinutes });
+    setLiveStartAt(null);
+    setPendingNotes("");
+    setPendingMetricRows([]);
+  }
+
+  function cancelPendingLive() {
+    setPendingLive(null);
+    setPendingNotes("");
+    setPendingMetricRows([]);
+  }
+
+  async function onSubmitPendingLive(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pendingLive) return;
+    const type = liveType.trim();
+    if (!type) {
+      toast.error("Enter a cardio type.");
+      return;
+    }
+    const metrics = validateMetricRows(pendingMetricRows);
+    if (!metrics) return;
+
+    setSubmitting(true);
+    const loggedAtIso = new Date(pendingLive.startAt).toISOString();
+    const ok = await insertSessionAndMetrics(
+      type,
+      pendingLive.durationMinutes,
+      loggedAtIso,
+      pendingNotes.trim() || null,
+      metrics
+    );
+    if (ok) {
+      toast.success("Cardio session saved.");
+      await load();
+      startTransition(() => {
+        setPendingLive(null);
+        setPendingNotes("");
+        setPendingMetricRows([]);
+        setLiveType("");
+      });
+    }
+    setSubmitting(false);
+  }
+
+  async function onSubmitManual(e: React.FormEvent) {
     e.preventDefault();
     const type = formType.trim();
     if (!type) {
@@ -117,79 +317,33 @@ export function CardioClient({ userId }: { userId: string }) {
       return;
     }
 
-    const metricsToInsert: { key: string; value: number; unit: string }[] = [];
-    for (const r of metricRows) {
-      const k = r.key.trim();
-      const vStr = r.value.trim();
-      const u = r.unit.trim();
-      if (!k && !vStr) continue;
-      if (k && !vStr) {
-        toast.error(`Enter a value for "${k}" or clear that row.`);
-        return;
-      }
-      if (!k && vStr) {
-        toast.error("Each metric needs a name (key).");
-        return;
-      }
-      const v = Number(vStr);
-      if (!Number.isFinite(v)) {
-        toast.error(`Metric "${k}" must be a number.`);
-        return;
-      }
-      metricsToInsert.push({ key: k, value: v, unit: u });
-    }
+    const metrics = validateMetricRows(metricRows);
+    if (!metrics) return;
 
     setSubmitting(true);
     const loggedAt = dateInputToIso(formDate);
-
-    const { data: sessionRow, error: sessionErr } = await supabase
-      .from("cardio_sessions")
-      .insert({
-        user_id: userId,
-        type,
-        duration_minutes: dur,
-        notes: formNotes.trim() || null,
-        logged_at: loggedAt,
-      })
-      .select("id, logged_at, type, duration_minutes, notes")
-      .single();
-
-    if (sessionErr || !sessionRow) {
-      setSubmitting(false);
-      toast.error(sessionErr?.message ?? "Could not log session.");
-      return;
+    const ok = await insertSessionAndMetrics(
+      type,
+      dur,
+      loggedAt,
+      formNotes.trim() || null,
+      metrics
+    );
+    if (ok) {
+      toast.success("Cardio session logged.");
+      await load();
+      startTransition(() => {
+        setFormType("");
+        setFormDuration("");
+        setFormNotes("");
+        setFormDate(localDateInputValue());
+        setMetricRows([]);
+      });
     }
-
-    const sessionId = sessionRow.id;
-
-    if (metricsToInsert.length > 0) {
-      const { error: metricsErr } = await supabase.from("cardio_metrics").insert(
-        metricsToInsert.map((m) => ({
-          cardio_session_id: sessionId,
-          key: m.key,
-          value: m.value,
-          unit: m.unit,
-        }))
-      );
-
-      if (metricsErr) {
-        setSubmitting(false);
-        toast.error(metricsErr.message);
-        return;
-      }
-    }
-
-    toast.success("Cardio session logged.");
-    await load();
-    startTransition(() => {
-      setFormType("");
-      setFormDuration("");
-      setFormNotes("");
-      setFormDate(localDateInputValue());
-      setMetricRows([]);
-    });
     setSubmitting(false);
   }
+
+  const manualLocked = liveStartAt !== null || pendingLive !== null;
 
   if (initialLoading) {
     return (
@@ -206,14 +360,196 @@ export function CardioClient({ userId }: { userId: string }) {
           Cardio
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Log sessions with optional custom metrics (distance, pace, heart rate,
-          etc.).
+          Start a timed session or log manually with optional custom metrics.
         </p>
       </header>
 
+      {quickTypes.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">
+            Your recent types
+          </p>
+          <div className="-mx-1 flex gap-2 overflow-x-auto pb-1">
+            {quickTypes.map((t) => (
+              <Button
+                key={t}
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="shrink-0"
+                onClick={() => applyQuickType(t)}
+              >
+                {t}
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <section className="rounded-xl border border-border bg-card/80 p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-foreground">Log session</h2>
-        <form onSubmit={onSubmit} className="mt-3 space-y-3">
+        <h2 className="text-sm font-semibold text-foreground">Live session</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Start the timer, then stop when you&apos;re done. Duration is saved
+          automatically; add notes and metrics before saving.
+        </p>
+
+        <div className="mt-3 space-y-1">
+          <Label htmlFor="live-cardio-type">Type</Label>
+          <Input
+            id="live-cardio-type"
+            value={liveType}
+            onChange={(e) => setLiveType(e.target.value)}
+            placeholder="Type or tap a shortcut above"
+            autoComplete="off"
+            disabled={liveStartAt !== null}
+          />
+        </div>
+
+        {pendingLive === null && liveStartAt === null ? (
+          <div className="mt-4">
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={startLiveSession}
+            >
+              Start Cardio
+            </Button>
+          </div>
+        ) : null}
+
+        {liveStartAt !== null ? (
+          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-primary/40 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Elapsed</p>
+              <p className="font-mono text-3xl font-semibold tabular-nums text-foreground">
+                {formatElapsed(elapsedSec)}
+              </p>
+            </div>
+            <Button type="button" variant="destructive" onClick={stopLiveSession}>
+              Stop
+            </Button>
+          </div>
+        ) : null}
+
+        {pendingLive !== null ? (
+          <form onSubmit={onSubmitPendingLive} className="mt-4 space-y-3 border-t border-border pt-4">
+            <p className="text-sm text-foreground">
+              <span className="font-medium">Duration: </span>
+              {pendingLive.durationMinutes < 1
+                ? `${Math.round(pendingLive.durationMinutes * 60)} sec`
+                : `${pendingLive.durationMinutes.toFixed(
+                    pendingLive.durationMinutes >= 10 ? 1 : 2
+                  )} min`}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Started: {formatWhen(new Date(pendingLive.startAt).toISOString())}
+            </p>
+
+            <div className="space-y-1">
+              <Label htmlFor="pending-notes">Notes (optional)</Label>
+              <Input
+                id="pending-notes"
+                value={pendingNotes}
+                onChange={(e) => setPendingNotes(e.target.value)}
+                placeholder="How it felt, route, etc."
+              />
+            </div>
+
+            <div className="space-y-2 border-t border-border pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-foreground">Extra metrics (optional)</Label>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={addPendingMetricRow}
+                >
+                  Add metric
+                </Button>
+              </div>
+              {pendingMetricRows.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  None added. Tap &quot;Add metric&quot; for distance, pace, etc.
+                </p>
+              ) : null}
+              <ul className="space-y-2">
+                {pendingMetricRows.map((row, index) => (
+                  <li
+                    key={index}
+                    className="grid grid-cols-12 gap-2 rounded-lg border border-border/60 bg-background/40 p-2"
+                  >
+                    <div className="col-span-12 space-y-1 sm:col-span-4">
+                      <Input
+                        value={row.key}
+                        onChange={(e) =>
+                          updatePendingMetricRow(index, { key: e.target.value })
+                        }
+                        placeholder="Name"
+                      />
+                    </div>
+                    <div className="col-span-6 sm:col-span-3">
+                      <Input
+                        inputMode="decimal"
+                        value={row.value}
+                        onChange={(e) =>
+                          updatePendingMetricRow(index, { value: e.target.value })
+                        }
+                        placeholder="Value"
+                      />
+                    </div>
+                    <div className="col-span-4 sm:col-span-3">
+                      <Input
+                        value={row.unit}
+                        onChange={(e) =>
+                          updatePendingMetricRow(index, { unit: e.target.value })
+                        }
+                        placeholder="Unit"
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-end justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={() => removePendingMetricRow(index)}
+                        aria-label="Remove metric row"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Saving…" : "Save session"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={submitting}
+                onClick={cancelPendingLive}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </section>
+
+      <section
+        className={`rounded-xl border border-border bg-card/80 p-4 shadow-sm ${
+          manualLocked ? "opacity-60" : ""
+        }`}
+      >
+        <h2 className="text-sm font-semibold text-foreground">Log manually</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Enter duration and date yourself (same types as above).
+        </p>
+        <form onSubmit={onSubmitManual} className="mt-3 space-y-3">
           <div className="space-y-1">
             <Label htmlFor="cardio-type">Type</Label>
             <Input
@@ -222,6 +558,7 @@ export function CardioClient({ userId }: { userId: string }) {
               onChange={(e) => setFormType(e.target.value)}
               placeholder="e.g. bike, walk, elliptical"
               autoComplete="off"
+              disabled={manualLocked}
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -233,6 +570,7 @@ export function CardioClient({ userId }: { userId: string }) {
                 value={formDuration}
                 onChange={(e) => setFormDuration(e.target.value)}
                 placeholder="30"
+                disabled={manualLocked}
               />
             </div>
             <div className="space-y-1">
@@ -242,6 +580,7 @@ export function CardioClient({ userId }: { userId: string }) {
                 type="date"
                 value={formDate}
                 onChange={(e) => setFormDate(e.target.value)}
+                disabled={manualLocked}
               />
             </div>
           </div>
@@ -252,19 +591,23 @@ export function CardioClient({ userId }: { userId: string }) {
               value={formNotes}
               onChange={(e) => setFormNotes(e.target.value)}
               placeholder="How it felt, route, etc."
+              disabled={manualLocked}
             />
           </div>
 
           <div className="space-y-2 border-t border-border pt-3">
             <div className="flex items-center justify-between gap-2">
               <Label className="text-foreground">Extra metrics (optional)</Label>
-              <Button type="button" variant="secondary" size="sm" onClick={addMetricRow}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={addMetricRow}
+                disabled={manualLocked}
+              >
                 Add metric
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Use any names you like — numeric value plus optional unit per row.
-            </p>
             {metricRows.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 None added. Tap &quot;Add metric&quot; to include distance, pace, etc.
@@ -287,6 +630,7 @@ export function CardioClient({ userId }: { userId: string }) {
                         updateMetricRow(index, { key: e.target.value })
                       }
                       placeholder="Name"
+                      disabled={manualLocked}
                     />
                   </div>
                   <div className="col-span-6 space-y-1 sm:col-span-3">
@@ -301,6 +645,7 @@ export function CardioClient({ userId }: { userId: string }) {
                         updateMetricRow(index, { value: e.target.value })
                       }
                       placeholder="Value"
+                      disabled={manualLocked}
                     />
                   </div>
                   <div className="col-span-4 space-y-1 sm:col-span-3">
@@ -314,6 +659,7 @@ export function CardioClient({ userId }: { userId: string }) {
                         updateMetricRow(index, { unit: e.target.value })
                       }
                       placeholder="Unit"
+                      disabled={manualLocked}
                     />
                   </div>
                   <div className="col-span-2 flex items-end justify-end sm:col-span-2">
@@ -323,6 +669,7 @@ export function CardioClient({ userId }: { userId: string }) {
                       size="sm"
                       className="shrink-0 text-muted-foreground hover:text-foreground"
                       onClick={() => removeMetricRow(index)}
+                      disabled={manualLocked}
                       aria-label="Remove metric row"
                     >
                       ✕
@@ -333,9 +680,19 @@ export function CardioClient({ userId }: { userId: string }) {
             </ul>
           </div>
 
-          <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
-            {submitting ? "Saving…" : "Save session"}
+          <Button
+            type="submit"
+            disabled={submitting || manualLocked}
+            variant="secondary"
+            className="w-full sm:w-auto"
+          >
+            {submitting ? "Saving…" : "Save manual entry"}
           </Button>
+          {manualLocked ? (
+            <p className="text-xs text-muted-foreground">
+              Finish or cancel the live session to use manual logging.
+            </p>
+          ) : null}
         </form>
       </section>
 
