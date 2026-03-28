@@ -31,14 +31,14 @@ function TypingIndicator() {
   return (
     <div className="flex justify-start">
       <div
-        className="max-w-[85%] rounded-2xl rounded-bl-md border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground"
+        className="max-w-[85%] rounded-2xl rounded-bl-md border border-border bg-muted/50 px-4 py-3 text-sm text-foreground/90"
         aria-live="polite"
         aria-label="Coach is typing"
       >
         <span className="inline-flex gap-1">
-          <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:0ms]" />
-          <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:150ms]" />
-          <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:300ms]" />
+          <span className="size-1.5 animate-bounce rounded-full bg-foreground/55 [animation-delay:0ms]" />
+          <span className="size-1.5 animate-bounce rounded-full bg-foreground/55 [animation-delay:150ms]" />
+          <span className="size-1.5 animate-bounce rounded-full bg-foreground/55 [animation-delay:300ms]" />
         </span>
       </div>
     </div>
@@ -125,7 +125,7 @@ export function CoachClient({ userId }: { userId: string }) {
   if (loading) {
     return (
       <div className="dark flex flex-1 flex-col items-center justify-center px-4 py-8">
-        <p className="text-sm text-muted-foreground">Loading chat…</p>
+        <p className="text-sm text-foreground/90">Loading chat…</p>
       </div>
     );
   }
@@ -136,7 +136,7 @@ export function CoachClient({ userId }: { userId: string }) {
         <h1 className="font-sans text-xl font-semibold tracking-tight text-foreground">
           Coach
         </h1>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="mt-0.5 text-xs text-foreground/90">
           Chat with your AI coach using your saved goals and targets.
         </p>
       </header>
@@ -146,7 +146,7 @@ export function CoachClient({ userId }: { userId: string }) {
         className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-3"
       >
         {messages.length === 0 && !sending ? (
-          <p className="text-center text-sm text-muted-foreground py-8">
+          <p className="text-center text-sm text-foreground/90 py-8">
             Say hello to start. Your onboarding preferences shape every reply.
           </p>
         ) : null}
@@ -168,7 +168,7 @@ export function CoachClient({ userId }: { userId: string }) {
                 <p className="whitespace-pre-wrap break-words">{m.content}</p>
                 <p
                   className={`mt-1 text-[10px] ${
-                    isUser ? "text-primary-foreground/70" : "text-muted-foreground"
+                    isUser ? "text-primary-foreground/85" : "text-foreground/80"
                   }`}
                 >
                   {formatTime(m.created_at)}

@@ -20,7 +20,7 @@ export default async function CoachPage() {
   if (isGuest) {
     return (
       <div className="dark flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
-        <p className="max-w-md text-center text-muted-foreground">
+        <p className="max-w-md text-center text-foreground/90">
           Sign in to chat with your coach.
         </p>
         <ButtonAsLink href="/signup">Create Account</ButtonAsLink>
