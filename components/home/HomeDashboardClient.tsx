@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { HomeSpinDial } from "@/components/home/HomeSpinDial";
+import { fetchTodayMacroTotals } from "@/lib/dashboard/food-macros";
+import type { MacroTargetRow } from "@/lib/dashboard/preferences";
+import { formatMacroLabel } from "@/lib/dashboard/preferences";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -59,8 +63,58 @@ function computeEtaWeeks(
   return `~${Math.max(1, Math.round(wk))} wk to goal`;
 }
 
-export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
+function macroBarFillColor(current: number, target: number): string {
+  if (target <= 0) return "var(--accent)";
+  if (current >= target) return "var(--accent2)";
+  if (current >= target * 0.85) return "var(--yellow)";
+  return "var(--accent)";
+}
+
+export function HomeDashboardClient({
+  stats,
+  macroTargets,
+  userId,
+}: {
+  stats: HomeDashboardStats;
+  macroTargets: MacroTargetRow[];
+  userId: string;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [macroTotals, setMacroTotals] = useState<Record<string, number>>({});
+
+  const refreshMacroTotals = useCallback(async () => {
+    const supabase = createBrowserSupabaseClient();
+    const next = await fetchTodayMacroTotals(supabase, userId);
+    setMacroTotals(next);
+  }, [userId]);
+
+  useEffect(() => {
+    void refreshMacroTotals();
+  }, [refreshMacroTotals]);
+
+  useEffect(() => {
+    const supabase = createBrowserSupabaseClient();
+    const channel = supabase
+      .channel(`home_dashboard_food_logs_${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "food_logs",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void refreshMacroTotals();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [userId, refreshMacroTotals]);
+
   const weekToShow = programWeekFromStart(stats.programStart);
 
   const goalBlock = useMemo(() => {
@@ -142,6 +196,51 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
           </div>
         ))}
       </section>
+
+      {macroTargets.length === 0 ? (
+        <p
+          className="font-body"
+          style={{
+            fontSize: 12,
+            color: "var(--text3)",
+            textAlign: "center",
+            padding: "4px 20px 10px",
+          }}
+        >
+          Set up your macros in onboarding
+        </p>
+      ) : (
+        <div
+          className="font-body"
+          style={{ padding: "0 20px 12px" }}
+          aria-label="Today's macro progress"
+        >
+          {macroTargets.map((t) => {
+            const current = macroTotals[t.key] ?? 0;
+            const target = t.targetNumber;
+            const widthPct =
+              target > 0 ? Math.min(100, (current / target) * 100) : 0;
+            const fill = macroBarFillColor(current, target);
+            return (
+              <div key={t.key} className="macro-bars-row">
+                <div className="macro-bar-label">{formatMacroLabel(t.key)}</div>
+                <div className="macro-bar-track">
+                  <div
+                    className="macro-bar-fill"
+                    style={{
+                      width: `${widthPct}%`,
+                      background: fill,
+                    }}
+                  />
+                </div>
+                <div className="macro-bar-value">
+                  {Math.round(current)} / {Math.round(target)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {goalBlock.goalPct != null ? (
         <div

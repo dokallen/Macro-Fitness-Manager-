@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { HomeDashboardClient } from "@/components/home/HomeDashboardClient";
 import type { HomeDashboardStats } from "@/components/home/HomeDashboardClient";
+import { extractMacroTargets } from "@/lib/dashboard/preferences";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function getIsoWeek(d: Date): number {
@@ -159,11 +160,16 @@ export default async function HomePage() {
     (prefRows ?? []).map((p) => [p.key, p.value] as const)
   );
 
+  const macroTargets = extractMacroTargets(prefRows ?? []);
   const stats = buildHomeStats(prefMap);
 
   return (
     <div className="mx-auto h-[100dvh] max-h-[100dvh] w-full max-w-lg overflow-hidden sm:max-w-md">
-      <HomeDashboardClient stats={stats} />
+      <HomeDashboardClient
+        stats={stats}
+        macroTargets={macroTargets}
+        userId={user.id}
+      />
     </div>
   );
 }
