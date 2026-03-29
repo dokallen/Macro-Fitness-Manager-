@@ -1,101 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { HomeSpinDial } from "@/components/home/HomeSpinDial";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type HomeDashboardStats = {
   weekNumber: number;
+  /** When set (e.g. from server), drives program week badge; otherwise week is 1. */
+  programStart?: string | null;
   currentWeight: string;
   lbsToGoal: string;
   workoutStreak: string;
   macroStreak: string;
 };
 
-function weekFromProgramStart(iso: string | null | undefined): number | null {
-  if (!iso?.trim()) return null;
-  const d = new Date(iso.trim());
-  if (!Number.isFinite(d.getTime())) return null;
+function programWeekFromStart(programStart: string | null | undefined): number {
+  if (!programStart?.trim()) return 1;
+  const d = new Date(programStart.trim());
+  if (!Number.isFinite(d.getTime())) return 1;
   return Math.max(Math.floor((Date.now() - d.getTime()) / WEEK_MS) + 1, 1);
 }
 
-const NAV_RESERVE =
-  "calc(5.75rem + max(20px, env(safe-area-inset-bottom, 0px)))";
-
 export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [weekToShow, setWeekToShow] = useState(() => Math.max(stats.weekNumber, 1));
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const supabase = createBrowserSupabaseClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user || cancelled) {
-          if (!cancelled) setWeekToShow(Math.max(stats.weekNumber, 1));
-          return;
-        }
-        const { data: rows } = await supabase
-          .from("user_preferences")
-          .select("key, value")
-          .eq("user_id", user.id);
-        if (cancelled) return;
-        const map = Object.fromEntries(
-          (rows ?? []).map((r) => [r.key, r.value] as const)
-        );
-        const programStart = map.program_start;
-        const fromPref = weekFromProgramStart(programStart);
-        const fromCreated = weekFromProgramStart(user.created_at ?? undefined);
-        const w = fromPref ?? fromCreated ?? 1;
-        setWeekToShow(w);
-      } catch {
-        if (!cancelled) setWeekToShow(Math.max(stats.weekNumber, 1));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [stats.weekNumber]);
+  const weekToShow = programWeekFromStart(stats.programStart);
 
   return (
     <div
       className="box-border flex h-full max-h-full w-full flex-col overflow-hidden"
       style={{
-        paddingTop: "0.5rem",
-        paddingBottom: NAV_RESERVE,
         paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
         paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
       }}
     >
-      <header className="flex h-[7.5rem] shrink-0 flex-col justify-center border-b border-[var(--border)]/60">
+      <header className="home-hdr">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h1
-              className="truncate uppercase leading-none text-[var(--text)]"
-              style={{
-                fontFamily: "var(--fd)",
-                fontSize: "clamp(1.5rem, 4.8vw, 2.25rem)",
-                letterSpacing: "0.08em",
-              }}
-            >
-              MACRO FIT
-            </h1>
-            <p
-              className="mt-1 font-body text-[10px] uppercase tracking-[0.2em] text-[var(--text2)] sm:text-xs"
-            >
-              YOUR PROGRAM
-            </p>
-            <div
-              className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-body text-[10px] font-bold text-white sm:px-3 sm:py-1.5 sm:text-xs"
-              style={{ background: "var(--accent)" }}
-            >
+            <h1 className="home-name">MACRO FIT</h1>
+            <p className="home-sub">YOUR PROGRAM</p>
+            <div className="week-badge" aria-label={`Program week ${weekToShow}`}>
               <span aria-hidden>⚡</span>
               <span>WEEK {weekToShow}</span>
             </div>
@@ -110,7 +56,7 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
             </Link>
             <button
               type="button"
-              className="flex size-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] font-body text-base text-[var(--text)] sm:size-10 sm:text-lg"
+              className="flex size-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-base text-[var(--text)] sm:size-10 sm:text-lg"
               aria-label="Open menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen(true)}
@@ -121,7 +67,7 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
         </div>
       </header>
 
-      <section className="grid h-[9.25rem] shrink-0 grid-cols-2 gap-2 py-2 sm:h-[10rem] sm:gap-3 sm:py-3">
+      <section className="stats-row">
         {(
           [
             { label: "CURRENT WEIGHT", value: stats.currentWeight },
@@ -130,19 +76,9 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
             { label: "MACRO STREAK", value: stats.macroStreak },
           ] as const
         ).map((s) => (
-          <div
-            key={s.label}
-            className="flex flex-col justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 sm:px-3 sm:py-2.5"
-          >
-            <p className="font-body text-[8px] font-semibold uppercase leading-tight tracking-[0.12em] text-[var(--text2)] sm:text-[9px]">
-              {s.label}
-            </p>
-            <p
-              className="mt-1 truncate font-heading leading-none text-[var(--text)] sm:mt-1.5"
-              style={{ fontSize: "clamp(1.15rem, 3.8vw, 1.5rem)" }}
-            >
-              {s.value}
-            </p>
+          <div key={s.label} className="stat-card">
+            <div className="sl">{s.label}</div>
+            <div className="sv">{s.value}</div>
           </div>
         ))}
       </section>
@@ -152,15 +88,16 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
       </div>
 
       {menuOpen ? (
-        <div className="fixed inset-0 z-[70]">
+        <>
           <button
             type="button"
-            className="absolute inset-0 bg-black/55"
+            className="drawer-overlay open"
             aria-label="Close menu"
             onClick={() => setMenuOpen(false)}
           />
           <nav
-            className="absolute right-0 top-0 flex h-full w-[min(100%,280px)] flex-col gap-1 border-l border-[var(--border)] bg-[var(--surface)] p-4 pt-[max(1rem,env(safe-area-inset-top))] font-body shadow-xl"
+            className="side-drawer open flex flex-col gap-1 p-4 pt-[max(1rem,env(safe-area-inset-top))] font-body shadow-xl"
+            aria-label="Menu"
           >
             <p className="mb-2 font-display text-xl tracking-[2px] text-[var(--text)]">
               MENU
@@ -176,7 +113,7 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
               <Link
                 key={l.href}
                 href={l.href}
-                className="rounded-lg px-3 py-3 text-[var(--text)] hover:bg-[var(--surface2)]"
+                className="rounded-lg px-3 py-3 text-[var(--text)] no-underline hover:bg-[var(--surface2)]"
                 onClick={() => setMenuOpen(false)}
               >
                 {l.label}
@@ -190,7 +127,7 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
               Close
             </button>
           </nav>
-        </div>
+        </>
       ) : null}
     </div>
   );

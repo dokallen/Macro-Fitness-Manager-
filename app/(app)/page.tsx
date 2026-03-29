@@ -64,8 +64,10 @@ function pickWeightDisplay(prefMap: Record<string, string>): string {
 }
 
 function buildHomeStats(prefMap: Record<string, string>): HomeDashboardStats {
+  const programStart = prefMap.program_start?.trim() || null;
   return {
     weekNumber: getIsoWeek(new Date()),
+    programStart,
     currentWeight: pickWeightDisplay(prefMap),
     lbsToGoal: computeLbsToGoal(prefMap),
     workoutStreak: "—",

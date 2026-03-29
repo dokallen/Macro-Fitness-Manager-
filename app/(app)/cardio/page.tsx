@@ -19,7 +19,7 @@ export default async function CardioPage() {
   const isGuest = cookies().get("macrofit_guest")?.value === "1";
   if (isGuest) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background p-6">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-[var(--bg)] p-6">
         <p className="max-w-md text-center font-sans text-sm text-muted-foreground">
           Sign in to log cardio sessions and view history.
         </p>
