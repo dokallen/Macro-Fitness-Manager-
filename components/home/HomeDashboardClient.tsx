@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { HomeSpinDial } from "@/components/home/HomeSpinDial";
 
@@ -12,6 +12,10 @@ export type HomeDashboardStats = {
   /** When set (e.g. from server), drives program week badge; otherwise week is 1. */
   programStart?: string | null;
   currentWeight: string;
+  currentWeightLbs?: number | null;
+  goalWeight?: number | null;
+  startWeight?: number | null;
+  weightLog?: { date: string; weight: number }[];
   lbsToGoal: string;
   workoutStreak: string;
   macroStreak: string;
@@ -24,9 +28,65 @@ function programWeekFromStart(programStart: string | null | undefined): number {
   return Math.max(Math.floor((Date.now() - d.getTime()) / WEEK_MS) + 1, 1);
 }
 
+function parseLbsFromDisplay(s: string): number | null {
+  const n = parseFloat(String(s).replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function computeEtaWeeks(
+  weightLog: { date: string; weight: number }[] | undefined,
+  goalWeight: number,
+  currentWeight: number
+): string | null {
+  const log = weightLog ?? [];
+  if (log.length < 2) return null;
+  const sorted = [...log].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const dt = new Date(last.date).getTime() - new Date(first.date).getTime();
+  const weeks = dt / WEEK_MS;
+  if (weeks <= 0) return null;
+  const dw = first.weight - last.weight;
+  if (dw <= 0) return null;
+  const ratePerWeek = dw / weeks;
+  if (ratePerWeek <= 0) return null;
+  const remaining = currentWeight - goalWeight;
+  if (remaining <= 0) return null;
+  const wk = remaining / ratePerWeek;
+  if (!Number.isFinite(wk)) return null;
+  return `~${Math.max(1, Math.round(wk))} wk to goal`;
+}
+
 export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const weekToShow = programWeekFromStart(stats.programStart);
+
+  const goalBlock = useMemo(() => {
+    const goalWeight = stats.goalWeight ?? null;
+    const startWeight = stats.startWeight ?? null;
+    const currentWeight =
+      stats.currentWeightLbs ?? parseLbsFromDisplay(stats.currentWeight);
+    if (
+      goalWeight == null ||
+      startWeight == null ||
+      currentWeight == null
+    ) {
+      return { goalPct: null as number | null, eta: null as string | null };
+    }
+    const totalNeeded = startWeight - goalWeight;
+    const totalLost = startWeight - currentWeight;
+    const goalPct =
+      goalWeight > 0 && totalNeeded > 0
+        ? Math.min(Math.max((totalLost / totalNeeded) * 100, 0), 100)
+        : null;
+    const eta =
+      goalPct != null
+        ? computeEtaWeeks(stats.weightLog, goalWeight, currentWeight)
+        : null;
+    return { goalPct, eta };
+  }, [stats]);
 
   return (
     <div
@@ -82,6 +142,86 @@ export function HomeDashboardClient({ stats }: { stats: HomeDashboardStats }) {
           </div>
         ))}
       </section>
+
+      {goalBlock.goalPct != null ? (
+        <div
+          style={{
+            gridColumn: "1/-1",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 12,
+            padding: "10px 12px",
+            margin: "0 20px 0",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 6,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text3)",
+                letterSpacing: 1,
+              }}
+            >
+              GOAL PROGRESS
+            </div>
+            <div
+              style={{ fontSize: 12, fontWeight: 600, color: "var(--accent2)" }}
+            >
+              {Math.round(goalBlock.goalPct)}%
+            </div>
+          </div>
+          <div
+            style={{
+              height: 6,
+              background: "var(--surface2)",
+              borderRadius: 3,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${goalBlock.goalPct}%`,
+                background:
+                  goalBlock.goalPct >= 100 ? "var(--accent2)" : "var(--accent)",
+                borderRadius: 3,
+                transition: "width .4s",
+              }}
+            />
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginTop: 4,
+              fontSize: 10,
+              color: "var(--text3)",
+            }}
+          >
+            <span>{stats.startWeight} lbs</span>
+            <span>{stats.goalWeight} lbs</span>
+          </div>
+          {goalBlock.eta ? (
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 10,
+                color: "var(--text2)",
+                textAlign: "center",
+              }}
+            >
+              {goalBlock.eta}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <HomeSpinDial />

@@ -63,12 +63,54 @@ function pickWeightDisplay(prefMap: Record<string, string>): string {
   return "—";
 }
 
+const GOAL_LBS_KEYS = [
+  "goal_weight_lbs",
+  "goal_weight",
+  "target_weight_lbs",
+  "target_weight",
+] as const;
+
+const START_LBS_KEYS = [
+  "starting_weight_lbs",
+  "start_weight_lbs",
+  "start_weight",
+  "starting_weight",
+  "baseline_weight_lbs",
+  "program_start_weight_lbs",
+] as const;
+
+const CURRENT_LBS_KEYS = [
+  "current_weight_lbs",
+  "current_weight",
+  "weight_lbs",
+  "weight",
+  "body_weight",
+] as const;
+
+function firstFiniteFromKeys(
+  prefMap: Record<string, string>,
+  keys: readonly string[]
+): number | null {
+  for (const k of keys) {
+    const n = parseFloat(prefMap[k] ?? "");
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 function buildHomeStats(prefMap: Record<string, string>): HomeDashboardStats {
   const programStart = prefMap.program_start?.trim() || null;
+  const currentWeightLbs = firstFiniteFromKeys(prefMap, CURRENT_LBS_KEYS);
+  const goalWeight = firstFiniteFromKeys(prefMap, GOAL_LBS_KEYS);
+  const startWeight = firstFiniteFromKeys(prefMap, START_LBS_KEYS);
   return {
     weekNumber: getIsoWeek(new Date()),
     programStart,
     currentWeight: pickWeightDisplay(prefMap),
+    currentWeightLbs,
+    goalWeight,
+    startWeight,
+    weightLog: [],
     lbsToGoal: computeLbsToGoal(prefMap),
     workoutStreak: "—",
     macroStreak: "—",

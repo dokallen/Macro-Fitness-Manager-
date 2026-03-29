@@ -39,6 +39,15 @@ export default async function CoachPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col">
+      <div className="shrink-0 border-b border-[var(--border)] bg-[var(--bg)] px-4 py-2">
+        <Link
+          href="/coach#choose-coach"
+          className="font-body text-sm text-[var(--accent)] underline-offset-2 hover:underline"
+        >
+          Choose your coach
+        </Link>
+      </div>
+      <div id="choose-coach" className="sr-only" aria-hidden />
       <CoachClient userId={user.id} />
     </div>
   );

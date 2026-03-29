@@ -111,7 +111,7 @@ export function HomeSpinDial() {
       rafIdRef.current = null;
     }
     function spin() {
-      dialVelRef.current *= 0.988;
+      dialVelRef.current *= 0.992;
       dialRotRef.current += dialVelRef.current;
       renderDial();
       if (Math.abs(dialVelRef.current) > 0.15) {
@@ -239,12 +239,12 @@ export function HomeSpinDial() {
         );
         return;
       }
-      const recent = vbuf.slice(-6);
+      const recent = vbuf.slice(-4);
       const smoothV = recent.length
         ? recent.reduce((s, e) => s + e.v, 0) / recent.length
         : 0;
-      dialVelRef.current = smoothV;
-      if (Math.abs(dialVelRef.current) > 1.5) {
+      dialVelRef.current = smoothV * 3.5;
+      if (Math.abs(dialVelRef.current) > 0.8) {
         startMomentum();
       } else {
         dialVelRef.current = 0;

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { CoachClient } from "@/components/coach/CoachClient";
+import { CoachFabPanel } from "@/components/home/CoachFabPanel";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const NAV = [
@@ -26,7 +26,6 @@ export default function AppGroupLayout({
   children: ReactNode;
 }>) {
   const pathname = usePathname();
-  const [coachOpen, setCoachOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,63 +75,7 @@ export default function AppGroupLayout({
           );
         })}
       </nav>
-      {userId ? (
-        <>
-          <button
-            type="button"
-            className="coach-fab"
-            style={{
-              bottom: "calc(90px + env(safe-area-inset-bottom, 0px))",
-            }}
-            aria-label="Open coach"
-            onClick={() => setCoachOpen(true)}
-          >
-            💬
-          </button>
-          <button
-            type="button"
-            className={`sheet-overlay${coachOpen ? " open" : ""}`}
-            aria-label="Close coach"
-            onClick={() => setCoachOpen(false)}
-          />
-          <div
-            className={`coach-panel-base${coachOpen ? " open" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Coach"
-            style={{
-              paddingBottom: "env(safe-area-inset-bottom)",
-              pointerEvents: coachOpen ? "auto" : "none",
-            }}
-          >
-            <div className="coach-panel-hdr">
-              <span style={{ fontFamily: "var(--fb)", color: "#fff" }}>
-                Coach
-              </span>
-              <button
-                type="button"
-                onClick={() => setCoachOpen(false)}
-                style={{
-                  fontFamily: "var(--fb)",
-                  color: "#fff",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 14,
-                }}
-              >
-                Close
-              </button>
-            </div>
-            <div
-              className="min-h-0 flex-1 overflow-y-auto"
-              style={{ maxHeight: "calc(70vh - 52px)" }}
-            >
-              <CoachClient userId={userId} />
-            </div>
-          </div>
-        </>
-      ) : null}
+      {userId ? <CoachFabPanel /> : null}
     </div>
   );
 }

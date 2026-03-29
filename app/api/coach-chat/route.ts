@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { buildCoachSystemPromptFromPreferences } from "@/lib/coach-chat-context";
@@ -28,12 +29,14 @@ export async function POST(req: Request) {
     return jsonError("Invalid JSON body", 400);
   }
 
+  const bodyObj =
+    typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+
   const content =
-    typeof body === "object" &&
-    body !== null &&
-    "content" in body &&
-    typeof (body as { content: unknown }).content === "string"
-      ? (body as { content: string }).content.trim()
+    bodyObj &&
+    "content" in bodyObj &&
+    typeof bodyObj.content === "string"
+      ? bodyObj.content.trim()
       : "";
 
   if (!content) {
@@ -77,7 +80,21 @@ export async function POST(req: Request) {
       return jsonError(prefErr.message, 500);
     }
 
-    const system = buildCoachSystemPromptFromPreferences(prefs ?? []);
+    const fromBody =
+      bodyObj &&
+      "coachId" in bodyObj &&
+      typeof bodyObj.coachId === "string"
+        ? bodyObj.coachId.trim()
+        : "";
+    const fromPref = (prefs ?? []).find((r) => r.key === "chosen_coach_id");
+    const fromCookie = cookies().get("mf_chosenCoachId")?.value?.trim() ?? "";
+    const coachId =
+      fromBody ||
+      (fromPref?.value?.trim() ?? "") ||
+      fromCookie ||
+      "drdata";
+
+    const system = buildCoachSystemPromptFromPreferences(prefs ?? [], coachId);
 
     const { data: history, error: histErr } = await supabase
       .from("coach_messages")
