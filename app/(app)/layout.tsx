@@ -15,6 +15,8 @@ const NAV = [
   { href: "/progress", label: "Scale", emoji: "⚖️" },
 ] as const;
 
+const NAV_RESERVE_PX = 68;
+
 function navActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -41,18 +43,36 @@ export default function AppGroupLayout({
     return () => subscription.unsubscribe();
   }, []);
 
+  const mainHeight = `calc(100dvh - ${NAV_RESERVE_PX}px)`;
+
   return (
-    <div className="flex min-h-dvh flex-1 flex-col bg-[var(--bg)] text-[var(--text)]">
+    <div
+      className="flex flex-1 flex-col bg-[var(--bg)] text-[var(--text)]"
+      style={{
+        height: "100dvh",
+        maxHeight: "100dvh",
+        overflow: "hidden",
+      }}
+    >
       <main
-        className="flex min-h-0 flex-1 flex-col"
+        className="flex min-h-0 w-full min-w-0 flex-col overflow-hidden"
         style={{
-          paddingBottom: 100,
+          height: mainHeight,
+          maxHeight: mainHeight,
+          flexShrink: 0,
           paddingLeft: "env(safe-area-inset-left)",
           paddingRight: "env(safe-area-inset-right)",
           paddingTop: "env(safe-area-inset-top)",
+          boxSizing: "border-box",
         }}
       >
-        {children}
+        <div
+          className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+            pathname === "/" ? "overflow-hidden" : "overflow-y-auto"
+          }`}
+        >
+          {children}
+        </div>
       </main>
       <nav
         className="bnav"

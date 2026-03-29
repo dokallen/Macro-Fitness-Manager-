@@ -142,35 +142,90 @@ export function HomeDashboardClient({
     return { goalPct, eta };
   }, [stats]);
 
+  const macrosToShow = macroTargets.slice(0, 4);
+
+  const viewportMainH =
+    "calc(100dvh - 68px - env(safe-area-inset-top, 0px))";
+
   return (
     <div
-      className="box-border flex h-full max-h-full w-full flex-col overflow-hidden"
+      className="box-border flex min-h-0 w-full flex-col overflow-hidden"
       style={{
-        paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
-        paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
+        height: viewportMainH,
+        maxHeight: viewportMainH,
+        paddingLeft: "max(0.75rem, env(safe-area-inset-left, 0px))",
+        paddingRight: "max(0.75rem, env(safe-area-inset-right, 0px))",
       }}
     >
-      <header className="home-hdr">
+      <style>{`
+        .home-dial-scaler {
+          flex: 1 1 0;
+          min-height: 0;
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .home-dial-scaler-inner {
+          transform-origin: center center;
+          flex-shrink: 0;
+        }
+        @media (max-height: 820px) {
+          .home-dial-scaler-inner { transform: scale(0.88); }
+        }
+        @media (max-height: 700px) {
+          .home-dial-scaler-inner { transform: scale(0.76); }
+        }
+        @media (max-height: 620px) {
+          .home-dial-scaler-inner { transform: scale(0.66); }
+        }
+        @media (max-height: 540px) {
+          .home-dial-scaler-inner { transform: scale(0.56); }
+        }
+      `}</style>
+
+      <header
+        className="home-hdr shrink-0"
+        style={{
+          padding: "16px 24px 8px",
+          background: "linear-gradient(180deg, #0a1628 0%, transparent 100%)",
+        }}
+      >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="home-name">MACRO FIT</h1>
-            <p className="home-sub">YOUR PROGRAM</p>
-            <div className="week-badge" aria-label={`Program week ${weekToShow}`}>
+            <h1
+              className="home-name"
+              style={{
+                fontSize: "clamp(1.5rem, 6.5vw, 2.25rem)",
+                lineHeight: 1.05,
+              }}
+            >
+              MACRO FIT
+            </h1>
+            <p className="home-sub" style={{ marginTop: 4, fontSize: 12 }}>
+              YOUR PROGRAM
+            </p>
+            <div
+              className="week-badge"
+              style={{ marginTop: 6 }}
+              aria-label={`Program week ${weekToShow}`}
+            >
               <span aria-hidden>⚡</span>
               <span>WEEK {weekToShow}</span>
             </div>
           </div>
-          <div className="flex shrink-0 gap-1.5">
+          <div className="flex shrink-0 gap-1">
             <Link
               href="/progress"
-              className="flex size-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-base sm:size-10 sm:text-lg"
+              className="flex size-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-sm sm:size-9"
               aria-label="Achievements"
             >
               🏆
             </Link>
             <button
               type="button"
-              className="flex size-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-base text-[var(--text)] sm:size-10 sm:text-lg"
+              className="flex size-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-sm text-[var(--text)] sm:size-9"
               aria-label="Open menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen(true)}
@@ -181,7 +236,10 @@ export function HomeDashboardClient({
         </div>
       </header>
 
-      <section className="stats-row">
+      <section
+        className="stats-row shrink-0"
+        style={{ gap: 6, padding: "0 12px 4px" }}
+      >
         {(
           [
             { label: "CURRENT WEIGHT", value: stats.currentWeight },
@@ -190,41 +248,58 @@ export function HomeDashboardClient({
             { label: "MACRO STREAK", value: stats.macroStreak },
           ] as const
         ).map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="sl">{s.label}</div>
-            <div className="sv">{s.value}</div>
+          <div
+            key={s.label}
+            className="stat-card"
+            style={{ padding: "8px 6px", borderRadius: 12 }}
+          >
+            <div className="sl" style={{ fontSize: 9, letterSpacing: 1 }}>
+              {s.label}
+            </div>
+            <div className="sv" style={{ fontSize: "clamp(1.1rem, 4vw, 1.35rem)" }}>
+              {s.value}
+            </div>
           </div>
         ))}
       </section>
 
       {macroTargets.length === 0 ? (
         <p
-          className="font-body"
+          className="shrink-0 font-body"
           style={{
-            fontSize: 12,
+            fontSize: 11,
             color: "var(--text3)",
             textAlign: "center",
-            padding: "4px 20px 10px",
+            padding: "2px 16px 4px",
           }}
         >
           Set up your macros in onboarding
         </p>
       ) : (
         <div
-          className="font-body"
-          style={{ padding: "0 20px 12px" }}
+          className="shrink-0 font-body"
+          style={{ padding: "0 16px 4px" }}
           aria-label="Today's macro progress"
         >
-          {macroTargets.map((t) => {
+          {macrosToShow.map((t) => {
             const current = macroTotals[t.key] ?? 0;
             const target = t.targetNumber;
             const widthPct =
               target > 0 ? Math.min(100, (current / target) * 100) : 0;
             const fill = macroBarFillColor(current, target);
             return (
-              <div key={t.key} className="macro-bars-row">
-                <div className="macro-bar-label">{formatMacroLabel(t.key)}</div>
-                <div className="macro-bar-track">
+              <div
+                key={t.key}
+                className="macro-bars-row"
+                style={{ marginBottom: 2, gap: 6 }}
+              >
+                <div
+                  className="macro-bar-label"
+                  style={{ fontSize: 10, width: 54 }}
+                >
+                  {formatMacroLabel(t.key)}
+                </div>
+                <div className="macro-bar-track" style={{ height: 5 }}>
                   <div
                     className="macro-bar-fill"
                     style={{
@@ -233,7 +308,10 @@ export function HomeDashboardClient({
                     }}
                   />
                 </div>
-                <div className="macro-bar-value">
+                <div
+                  className="macro-bar-value"
+                  style={{ fontSize: 10, width: 68 }}
+                >
                   {Math.round(current)} / {Math.round(target)}
                 </div>
               </div>
@@ -244,13 +322,13 @@ export function HomeDashboardClient({
 
       {goalBlock.goalPct != null ? (
         <div
+          className="shrink-0"
           style={{
-            gridColumn: "1/-1",
             background: "var(--surface)",
             border: "1px solid var(--border)",
-            borderRadius: 12,
-            padding: "10px 12px",
-            margin: "0 20px 0",
+            borderRadius: 10,
+            padding: "8px 12px",
+            margin: "0 16px 0",
           }}
         >
           <div
@@ -258,27 +336,27 @@ export function HomeDashboardClient({
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: 6,
+              marginBottom: 4,
             }}
           >
             <div
               style={{
-                fontSize: 11,
+                fontSize: 10,
                 color: "var(--text3)",
-                letterSpacing: 1,
+                letterSpacing: 0.8,
               }}
             >
               GOAL PROGRESS
             </div>
             <div
-              style={{ fontSize: 12, fontWeight: 600, color: "var(--accent2)" }}
+              style={{ fontSize: 11, fontWeight: 600, color: "var(--accent2)" }}
             >
               {Math.round(goalBlock.goalPct)}%
             </div>
           </div>
           <div
             style={{
-              height: 6,
+              height: 5,
               background: "var(--surface2)",
               borderRadius: 3,
               overflow: "hidden",
@@ -299,8 +377,8 @@ export function HomeDashboardClient({
             style={{
               display: "flex",
               justifyContent: "space-between",
-              marginTop: 4,
-              fontSize: 10,
+              marginTop: 3,
+              fontSize: 9,
               color: "var(--text3)",
             }}
           >
@@ -310,8 +388,8 @@ export function HomeDashboardClient({
           {goalBlock.eta ? (
             <div
               style={{
-                marginTop: 4,
-                fontSize: 10,
+                marginTop: 2,
+                fontSize: 9,
                 color: "var(--text2)",
                 textAlign: "center",
               }}
@@ -322,8 +400,10 @@ export function HomeDashboardClient({
         </div>
       ) : null}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <HomeSpinDial />
+      <div className="home-dial-scaler">
+        <div className="home-dial-scaler-inner">
+          <HomeSpinDial />
+        </div>
       </div>
 
       {menuOpen ? (
