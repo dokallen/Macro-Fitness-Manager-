@@ -158,18 +158,11 @@ export function HomeDashboardClient({
       }}
     >
       <style>{`
-        .home-dial-scaler {
-          flex: 1 1 0;
-          min-height: 0;
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-        }
         .home-dial-scaler-inner {
           transform-origin: center center;
           flex-shrink: 0;
+          overflow: visible;
+          touch-action: none;
         }
         @media (max-height: 820px) {
           .home-dial-scaler-inner { transform: scale(0.88); }
@@ -400,7 +393,19 @@ export function HomeDashboardClient({
         </div>
       ) : null}
 
-      <div className="home-dial-scaler">
+      <div
+        className="home-dial-scaler"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "visible",
+          touchAction: "none",
+        }}
+      >
         <div className="home-dial-scaler-inner">
           <HomeSpinDial />
         </div>
