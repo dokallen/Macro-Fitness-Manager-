@@ -296,6 +296,12 @@ export function HomeSpinDial() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dial uses refs; resubscribe only on router change
   }, [router]);
 
+  const todayCal = new Date();
+  const todayMonthAbbr = todayCal
+    .toLocaleString("en-US", { month: "short" })
+    .toUpperCase();
+  const todayDayNum = todayCal.getDate();
+
   return (
     <div className="dial-wrapper">
       <div className="dial-container" ref={containerRef}>
@@ -303,21 +309,63 @@ export function HomeSpinDial() {
         <div className="dial-center-dot" />
         {DIAL_BTNS.map((btn, i) => (
           <div key={i} className="dial-btn" data-i={i}>
-            <div className="di">{btn.icon}</div>
+            <div className="di">
+              {i === 0 ? (
+                <div
+                  style={{
+                    width: 40,
+                    height: 44,
+                    background: "#fff",
+                    borderRadius: 6,
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: 12,
+                      background: "var(--accent)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 7,
+                        color: "#fff",
+                        fontFamily: "var(--fd)",
+                        letterSpacing: 1,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {todayMonthAbbr}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: "#1a1a1a",
+                      fontFamily: "var(--fd)",
+                      textAlign: "center",
+                      minHeight: 0,
+                    }}
+                  >
+                    {todayDayNum}
+                  </div>
+                </div>
+              ) : (
+                btn.icon
+              )}
+            </div>
             <div className="dl">{btn.label}</div>
-            {i === 0 ? (
-              <div
-                style={{
-                  fontSize: 9,
-                  color: "var(--accent2)",
-                  fontFamily: "var(--fd)",
-                  lineHeight: 1,
-                  pointerEvents: "none",
-                }}
-              >
-                {new Date().getDate()}
-              </div>
-            ) : null}
           </div>
         ))}
       </div>
