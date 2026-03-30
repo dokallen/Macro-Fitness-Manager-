@@ -305,6 +305,19 @@ export function HomeSpinDial() {
           <div key={i} className="dial-btn" data-i={i}>
             <div className="di">{btn.icon}</div>
             <div className="dl">{btn.label}</div>
+            {i === 0 ? (
+              <div
+                style={{
+                  fontSize: 9,
+                  color: "var(--accent2)",
+                  fontFamily: "var(--fd)",
+                  lineHeight: 1,
+                  pointerEvents: "none",
+                }}
+              >
+                {new Date().getDate()}
+              </div>
+            ) : null}
           </div>
         ))}
       </div>

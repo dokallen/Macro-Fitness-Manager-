@@ -149,7 +149,7 @@ export function HomeDashboardClient({
 
   return (
     <div
-      className="box-border flex min-h-0 w-full flex-col overflow-hidden"
+      className="home-dashboard box-border flex min-h-0 w-full flex-col overflow-hidden"
       style={{
         height: viewportMainH,
         maxHeight: viewportMainH,
@@ -158,6 +158,9 @@ export function HomeDashboardClient({
       }}
     >
       <style>{`
+        .home-dashboard .sd {
+          font-size: 9px;
+        }
         .home-dial-scaler-inner {
           transform-origin: center center;
           flex-shrink: 0;
@@ -181,7 +184,7 @@ export function HomeDashboardClient({
       <header
         className="home-hdr shrink-0"
         style={{
-          padding: "16px 24px 8px",
+          padding: "10px 20px 6px",
           background: "linear-gradient(180deg, #0a1628 0%, transparent 100%)",
         }}
       >
@@ -201,7 +204,7 @@ export function HomeDashboardClient({
             </p>
             <div
               className="week-badge"
-              style={{ marginTop: 6 }}
+              style={{ marginTop: 4 }}
               aria-label={`Program week ${weekToShow}`}
             >
               <span aria-hidden>⚡</span>
@@ -231,7 +234,7 @@ export function HomeDashboardClient({
 
       <section
         className="stats-row shrink-0"
-        style={{ gap: 6, padding: "0 12px 4px" }}
+        style={{ gap: 6, padding: "0 16px 8px" }}
       >
         {(
           [
@@ -244,12 +247,12 @@ export function HomeDashboardClient({
           <div
             key={s.label}
             className="stat-card"
-            style={{ padding: "8px 6px", borderRadius: 12 }}
+            style={{ padding: "8px 10px", borderRadius: 12 }}
           >
             <div className="sl" style={{ fontSize: 9, letterSpacing: 1 }}>
               {s.label}
             </div>
-            <div className="sv" style={{ fontSize: "clamp(1.1rem, 4vw, 1.35rem)" }}>
+            <div className="sv" style={{ fontSize: 18, letterSpacing: 1 }}>
               {s.value}
             </div>
           </div>
