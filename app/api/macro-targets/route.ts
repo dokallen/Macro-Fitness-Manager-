@@ -26,6 +26,16 @@ type MacroRequest = {
     | "body recomposition";
 };
 
+type TargetRow = { key: string; value: string; unit?: string };
+
+type CustomMacroEvaluationRequest = MacroRequest & {
+  mode: "evaluate_custom_target";
+  recommendationTargets: TargetRow[];
+  coachSummary?: string;
+  userTargetMessage: string;
+  userTargetCalories: number;
+};
+
 type MacroResponse = {
   summary: string;
   timeframe: string;
@@ -182,7 +192,6 @@ function normalizeMacroPayload(raw: unknown): MacroResponse | null {
 
 function parseClaudeMacroJson(assistantText: string): MacroResponse | null {
   const trimmed = assistantText.trim();
-  console.log("[macro-targets] raw Claude assistant text (length=%d):\n%s", trimmed.length, trimmed);
 
   const candidates: string[] = [];
   candidates.push(trimmed);
@@ -212,6 +221,91 @@ function parseClaudeMacroJson(assistantText: string): MacroResponse | null {
   return null;
 }
 
+function parseCaloriesFromTargets(targets: TargetRow[]): number | null {
+  const row = targets.find((t) => t.key.trim().toLowerCase() === "calories");
+  if (!row) return null;
+  const n = Number.parseFloat(String(row.value).replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+async function askClaudeForCustomTargetEvaluation(
+  apiKey: string,
+  input: CustomMacroEvaluationRequest
+) {
+  const recommendedCalories = parseCaloriesFromTargets(input.recommendationTargets);
+  if (!recommendedCalories) {
+    throw new Error("Coach recommendation is missing calories.");
+  }
+
+  const x = Math.round(recommendedCalories);
+  const y = Math.round(input.userTargetCalories);
+  const system = `You are a fitness coach. The user has been recommended ${x} calories based on their profile. They want to try their own target. Evaluate their request honestly — give 2-3 sentences of context on what their chosen target means for their goals. Then ask them clearly: which do you want to go with — my recommendation of ${x} or your target of ${y}? Keep it conversational and short.`;
+
+  const userContent = `User profile:
+${JSON.stringify(
+    {
+      currentWeight: input.currentWeight,
+      currentWeightUnit: input.currentWeightUnit,
+      goalWeight: input.goalWeight,
+      goalWeightUnit: input.goalWeightUnit,
+      age: input.age,
+      height: input.height,
+      biologicalSex: input.biologicalSex,
+      activityLevel: input.activityLevel,
+      primaryGoal: input.primaryGoal,
+    },
+    null,
+    2
+  )}
+
+Coach recommendation summary:
+${input.coachSummary ?? ""}
+
+Coach recommendation targets:
+${JSON.stringify(input.recommendationTargets, null, 2)}
+
+User message:
+${input.userTargetMessage}
+
+User target calories:
+${Math.round(input.userTargetCalories)}`;
+
+  const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 260,
+      temperature: 0.35,
+      system,
+      messages: [{ role: "user", content: userContent }],
+    }),
+  });
+
+  if (!anthropicRes.ok) {
+    const txt = (await anthropicRes.text()).slice(0, 2000);
+    throw new Error(`Claude API error (${anthropicRes.status}): ${txt}`);
+  }
+
+  const raw = (await anthropicRes.json()) as {
+    content?: Array<{ type: string; text?: string }>;
+  };
+  const text = raw.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
+  if (!text) {
+    throw new Error("Claude returned an empty response.");
+  }
+
+  return {
+    message: text,
+    recommendedCalories: String(Math.round(recommendedCalories)),
+    userCalories: String(Math.round(input.userTargetCalories)),
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
@@ -222,12 +316,31 @@ export async function POST(req: Request) {
       );
     }
 
-    let input: MacroRequest;
+    let body: unknown;
     try {
-      input = (await req.json()) as MacroRequest;
+      body = await req.json();
     } catch {
       return jsonError("Invalid JSON body.", 400);
     }
+
+    const maybeCustom =
+      typeof body === "object" && body !== null
+        ? (body as Partial<CustomMacroEvaluationRequest>)
+        : null;
+
+    if (maybeCustom?.mode === "evaluate_custom_target") {
+      const input = maybeCustom as CustomMacroEvaluationRequest;
+      if (!Number.isFinite(input.userTargetCalories) || input.userTargetCalories <= 0) {
+        return jsonError("Invalid custom calorie target.", 400);
+      }
+      if (!Array.isArray(input.recommendationTargets) || input.recommendationTargets.length === 0) {
+        return jsonError("Missing recommendation targets.", 400);
+      }
+      const result = await askClaudeForCustomTargetEvaluation(apiKey, input);
+      return NextResponse.json(result);
+    }
+
+    const input = body as MacroRequest;
 
     const userPrompt = `User profile (JSON):
 ${JSON.stringify(input, null, 2)}

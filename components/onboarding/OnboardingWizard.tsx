@@ -110,6 +110,16 @@ const COACH_CELEBRATION_TEMPLATES = [
   "Plan locked. Focus up, {name} - we're building toward {goal}.",
 ] as const;
 
+function normalizeTargetKey(key: string): string {
+  return key.trim().toLowerCase();
+}
+
+function parseTargetNumber(value: string): number | null {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const n = Number.parseFloat(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function OnboardingWizard() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -118,6 +128,16 @@ export function OnboardingWizard() {
   const [showTargets, setShowTargets] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState("");
+  const [customTargetPrompt, setCustomTargetPrompt] = useState("");
+  const [customCoachReply, setCustomCoachReply] = useState("");
+  const [customChoiceCalories, setCustomChoiceCalories] = useState<{
+    coach: string;
+    user: string;
+  } | null>(null);
+  const [askingCustomTarget, setAskingCustomTarget] = useState(false);
+  const [coachRecommendedTargets, setCoachRecommendedTargets] = useState<
+    Array<{ key: string; value: string; unit?: string }>
+  >([]);
   const safeStep = Number.isFinite(step) ? Math.min(Math.max(step, 1), STEPS) : 1;
 
   const s1 = useForm<Step1>({
@@ -348,12 +368,148 @@ export function OnboardingWizard() {
       });
       s2.setValue("macroContext", data.macroContext ?? {}, { shouldValidate: false });
       s2.setValue("targets", data.targets ?? [], { shouldValidate: true });
+      setCoachRecommendedTargets(data.targets ?? []);
+      setCustomTargetPrompt("");
+      setCustomCoachReply("");
+      setCustomChoiceCalories(null);
       setShowTargets(true);
       toast.success("Coach recommendation generated. You can edit targets before saving.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to generate targets.");
     } finally {
       setGeneratingTargets(false);
+    }
+  }
+
+  function getCurrentCaloriesFromTargets(): number | null {
+    const caloriesTarget = s2
+      .getValues("targets")
+      .find((t) => normalizeTargetKey(t.key) === "calories");
+    if (!caloriesTarget) return null;
+    return parseTargetNumber(caloriesTarget.value);
+  }
+
+  function applyScaledTargetsForCustomCalories(customCalories: number) {
+    const currentTargets = s2.getValues("targets");
+    const currentCalories = getCurrentCaloriesFromTargets();
+    if (!currentCalories || currentCalories <= 0) return;
+    const ratio = customCalories / currentCalories;
+
+    const rowFor = (macroKey: string) =>
+      currentTargets.find((t) => normalizeTargetKey(t.key) === macroKey);
+
+    const proteinG = (() => {
+      const r = rowFor("protein");
+      const n = r ? parseTargetNumber(r.value) : null;
+      return n != null && n > 0 ? n : null;
+    })();
+    const carbsG = (() => {
+      const r = rowFor("carbs");
+      const n = r ? parseTargetNumber(r.value) : null;
+      return n != null && n >= 0 ? n : null;
+    })();
+    const fatG = (() => {
+      const r = rowFor("fat");
+      const n = r ? parseTargetNumber(r.value) : null;
+      return n != null && n >= 0 ? n : null;
+    })();
+
+    let keepProteinGrams = false;
+    if (proteinG != null) {
+      const proteinPctOfCal = (proteinG * 4) / customCalories;
+      keepProteinGrams = proteinPctOfCal >= 0.15 && proteinPctOfCal <= 0.38;
+    }
+
+    const nextTargets = currentTargets.map((t) => {
+      const key = normalizeTargetKey(t.key);
+      if (!CORE_TARGET_KEYS.has(key)) return t;
+      if (key === "calories") {
+        return { ...t, value: String(Math.round(customCalories)) };
+      }
+      if (key === "protein") {
+        if (proteinG == null) return t;
+        if (keepProteinGrams) return { ...t, value: String(Math.round(proteinG)) };
+        return { ...t, value: String(Math.max(0, Math.round(proteinG * ratio))) };
+      }
+      if ((key === "carbs" || key === "fat") && keepProteinGrams && proteinG != null) {
+        const remainingKcal = Math.max(0, customCalories - proteinG * 4);
+        const oldCarbKcal = (carbsG ?? 0) * 4;
+        const oldFatKcal = (fatG ?? 0) * 9;
+        const denom = oldCarbKcal + oldFatKcal;
+        if (denom <= 0) {
+          const current = parseTargetNumber(t.value);
+          if (current == null) return t;
+          return { ...t, value: String(Math.max(0, Math.round(current * ratio))) };
+        }
+        if (key === "carbs") {
+          const newCarbKcal = remainingKcal * (oldCarbKcal / denom);
+          return { ...t, value: String(Math.max(0, Math.round(newCarbKcal / 4))) };
+        }
+        const newFatKcal = remainingKcal * (oldFatKcal / denom);
+        return { ...t, value: String(Math.max(0, Math.round(newFatKcal / 9))) };
+      }
+      const current = parseTargetNumber(t.value);
+      if (current == null) return t;
+      return { ...t, value: String(Math.max(0, Math.round(current * ratio))) };
+    });
+    s2.setValue("targets", nextTargets, { shouldValidate: true });
+  }
+
+  async function askCoachAboutCustomTarget() {
+    const prompt = customTargetPrompt.trim();
+    if (!prompt) {
+      toast.error("Enter your target idea first.");
+      return;
+    }
+    const targetMatch = prompt.match(/(\d+(?:\.\d+)?)/);
+    const userCalories = targetMatch ? Number.parseFloat(targetMatch[1]) : NaN;
+    if (!Number.isFinite(userCalories) || userCalories <= 0) {
+      toast.error("Include your target calories in the message (example: 1800).");
+      return;
+    }
+
+    const payload = s2.getValues();
+    setAskingCustomTarget(true);
+    try {
+      const res = await fetch("/api/macro-targets", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "evaluate_custom_target",
+          currentWeight: payload.currentWeight,
+          currentWeightUnit: payload.currentWeightUnit,
+          goalWeight: payload.goalWeight,
+          goalWeightUnit: payload.goalWeightUnit,
+          age: payload.age,
+          height: payload.height,
+          biologicalSex: payload.biologicalSex,
+          activityLevel: payload.activityLevel,
+          primaryGoal: payload.primaryGoal,
+          recommendationTargets: payload.targets,
+          coachSummary: payload.coachSummary ?? "",
+          userTargetMessage: prompt,
+          userTargetCalories: userCalories,
+        }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        message?: string;
+        recommendedCalories?: string;
+        userCalories?: string;
+      };
+      if (!res.ok || data.error || !data.message) {
+        toast.error(data.error ?? "Unable to evaluate your custom target.");
+        return;
+      }
+      setCustomCoachReply(data.message);
+      setCustomChoiceCalories({
+        coach: data.recommendedCalories ?? "",
+        user: data.userCalories ?? String(Math.round(userCalories)),
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to ask coach.");
+    } finally {
+      setAskingCustomTarget(false);
     }
   }
 
@@ -912,6 +1068,77 @@ export function OnboardingWizard() {
                 Add target row
               </Button>
             </div>
+            {showTargets ? (
+              <div className="space-y-3 rounded-2xl border border-slate-200/45 bg-slate-700/80 p-4">
+                <p className="text-sm font-semibold text-white">
+                  Have a different target in mind?
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <textarea
+                    className="min-h-[72px] flex-1 rounded-md border border-slate-300/60 bg-slate-700/90 px-3 py-2 text-sm text-white placeholder:text-slate-200"
+                    placeholder="e.g. I want to do 1800 calories for a 2-week cut..."
+                    value={customTargetPrompt}
+                    onChange={(e) => setCustomTargetPrompt(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    className="shrink-0"
+                    onClick={askCoachAboutCustomTarget}
+                    disabled={askingCustomTarget}
+                  >
+                    {askingCustomTarget ? "Asking..." : "Ask Coach"}
+                  </Button>
+                </div>
+
+                {customCoachReply ? (
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-blue-300/40 bg-blue-500/15 p-3 text-sm text-white">
+                      {customCoachReply}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full"
+                        onClick={() => {
+                          if (coachRecommendedTargets.length) {
+                            s2.setValue("targets", coachRecommendedTargets, {
+                              shouldValidate: true,
+                            });
+                          }
+                          setCustomCoachReply("");
+                          toast.success("Keeping coach recommendation.");
+                        }}
+                      >
+                        Go with Coach
+                        {customChoiceCalories?.coach
+                          ? ` (${customChoiceCalories.coach} cal)`
+                          : ""}
+                      </Button>
+                      <Button
+                        type="button"
+                        className="w-full"
+                        onClick={() => {
+                          const userCal = Number.parseFloat(customChoiceCalories?.user ?? "");
+                          if (!Number.isFinite(userCal) || userCal <= 0) {
+                            toast.error("Custom calories are invalid.");
+                            return;
+                          }
+                          applyScaledTargetsForCustomCalories(userCal);
+                          setCustomCoachReply("");
+                          toast.success("Using your target and scaled macro targets.");
+                        }}
+                      >
+                        Use My Target
+                        {customChoiceCalories?.user
+                          ? ` (${customChoiceCalories.user} cal)`
+                          : ""}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {s2.formState.errors.targets?.message ? (
               <p className="text-sm text-destructive">
                 {String(s2.formState.errors.targets?.message)}

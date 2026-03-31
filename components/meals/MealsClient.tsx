@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AddRecipeForm } from "@/components/meals/AddRecipeForm";
@@ -18,7 +18,7 @@ import {
   TodayFoodLogTab,
   type FoodLogRow,
 } from "@/components/meals/TodayFoodLogTab";
-import type { MacroTargetRow } from "@/lib/dashboard/preferences";
+import { formatMacroLabel, type MacroTargetRow } from "@/lib/dashboard/preferences";
 import { getUtcDayBounds } from "@/lib/dashboard/utc-day";
 import { getUtcWeekMondayDateString } from "@/lib/meals/week";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -31,6 +31,15 @@ type Props = {
   macroTargets: MacroTargetRow[];
 };
 
+function normalizeMacroKey(key: string): string {
+  return key.trim().toLowerCase();
+}
+
+function parseNumber(value: string | number): number {
+  const n = Number.parseFloat(String(value).replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function MealsClient({ userId, macroTargets }: Props) {
   const [tab, setTab] = useState<TabId>("today");
   const [logs, setLogs] = useState<FoodLogRow[]>([]);
@@ -40,6 +49,29 @@ export function MealsClient({ userId, macroTargets }: Props) {
   const [weekLabel, setWeekLabel] = useState("");
   const [initialLoad, setInitialLoad] = useState(true);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+
+  const macroSummaryRows = useMemo(() => {
+    const targetMap = new Map(
+      macroTargets.map((t) => [normalizeMacroKey(t.key), t.targetNumber])
+    );
+    const totals: Record<string, number> = {};
+    for (const log of logs) {
+      for (const m of log.food_log_macros ?? []) {
+        const key = normalizeMacroKey(m.key ?? "");
+        if (!key) continue;
+        totals[key] = (totals[key] ?? 0) + parseNumber(m.value ?? "");
+      }
+    }
+    return (["calories", "protein", "carbs", "fat"] as const)
+      .filter((k) => targetMap.has(k))
+      .slice(0, 4)
+      .map((key) => {
+        const target = targetMap.get(key) ?? 0;
+        const current = totals[key] ?? 0;
+        const widthPct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+        return { key, label: formatMacroLabel(key), target, current, widthPct };
+      });
+  }, [macroTargets, logs]);
 
   const loadLogs = useCallback(async () => {
     const supabase = createBrowserSupabaseClient();
@@ -182,6 +214,41 @@ export function MealsClient({ userId, macroTargets }: Props) {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
       <SubpageHeader title="MEALS" subtitle="Log food, meal plan, and recipes." />
+
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        {macroSummaryRows.length === 0 ? (
+          <p className="text-xs text-[var(--text3)]">
+            Complete onboarding to set your macro targets
+          </p>
+        ) : (
+          <div style={{ maxHeight: 120, overflow: "hidden" }}>
+            {macroSummaryRows.map((row) => (
+              <div
+                key={row.key}
+                className="macro-bars-row"
+                style={{ marginBottom: 4, gap: 6 }}
+              >
+                <div className="macro-bar-label" style={{ fontSize: 10, width: 54 }}>
+                  {row.label}
+                </div>
+                <div className="macro-bar-track" style={{ height: 5 }}>
+                  <div
+                    className="macro-bar-fill"
+                    style={{
+                      width: `${row.widthPct}%`,
+                      background:
+                        row.current >= row.target ? "var(--accent2)" : "var(--accent)",
+                    }}
+                  />
+                </div>
+                <div className="macro-bar-value" style={{ fontSize: 10, width: 68 }}>
+                  {Math.round(row.current)} / {Math.round(row.target)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div
         className="flex gap-1 rounded-2xl border border-border bg-card p-1"
