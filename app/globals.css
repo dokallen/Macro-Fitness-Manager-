@@ -1094,6 +1094,42 @@ body {
   cursor: pointer;
 }
 
+/* Ghost/placeholder text - clearly distinct from real input */
+::placeholder {
+  color: var(--text3) !important;
+  opacity: 0.5 !important;
+  font-style: italic;
+  font-weight: 300;
+}
+
+::-webkit-input-placeholder {
+  color: var(--text3) !important;
+  opacity: 0.5 !important;
+  font-style: italic;
+  font-weight: 300;
+}
+
+::-moz-placeholder {
+  color: var(--text3) !important;
+  opacity: 0.5 !important;
+  font-style: italic;
+  font-weight: 300;
+}
+
+:-ms-input-placeholder {
+  color: var(--text3) !important;
+  opacity: 0.5 !important;
+  font-style: italic;
+  font-weight: 300;
+}
+
+.placeholder\:text-muted-foreground::placeholder {
+  color: var(--text3) !important;
+  opacity: 0.5 !important;
+  font-style: italic;
+  font-weight: 300;
+}
+
 /* COACH PANEL */
 .coach-panel-base {
   position: fixed;
