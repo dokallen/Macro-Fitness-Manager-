@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { CoachFabPanel } from "@/components/home/CoachFabPanel";
+import { SideDrawerProvider } from "@/components/layout/SideDrawer";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const NAV = [
@@ -46,6 +47,7 @@ export default function AppGroupLayout({
   const mainHeight = `calc(100dvh - ${NAV_RESERVE_PX}px)`;
 
   return (
+    <SideDrawerProvider>
     <div
       className="flex flex-1 flex-col bg-[var(--bg)] text-[var(--text)]"
       style={{
@@ -98,5 +100,6 @@ export default function AppGroupLayout({
       </nav>
       {userId ? <CoachFabPanel /> : null}
     </div>
+    </SideDrawerProvider>
   );
 }

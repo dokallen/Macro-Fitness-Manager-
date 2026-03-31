@@ -29,6 +29,14 @@ export function CoachFabPanel() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const onOpen = () => {
+      setOpen(true);
+    };
+    window.addEventListener("mf-open-coach-fab", onOpen);
+    return () => window.removeEventListener("mf-open-coach-fab", onOpen);
+  }, []);
+
   const coach = getCoach();
 
   if (!userId) return null;

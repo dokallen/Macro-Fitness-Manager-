@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { HomeSpinDial } from "@/components/home/HomeSpinDial";
+import { useSideDrawer } from "@/components/layout/SideDrawer";
 import { fetchTodayMacroTotals } from "@/lib/dashboard/food-macros";
 import type { MacroTargetRow } from "@/lib/dashboard/preferences";
 import { formatMacroLabel } from "@/lib/dashboard/preferences";
@@ -79,7 +80,7 @@ export function HomeDashboardClient({
   macroTargets: MacroTargetRow[];
   userId: string;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { openDrawer } = useSideDrawer();
   const [macroTotals, setMacroTotals] = useState<Record<string, number>>({});
 
   const refreshMacroTotals = useCallback(async () => {
@@ -223,8 +224,7 @@ export function HomeDashboardClient({
               type="button"
               className="flex size-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-sm text-[var(--text)] sm:size-9"
               aria-label="Open menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen(true)}
+              onClick={() => openDrawer()}
             >
               ☰
             </button>
@@ -414,48 +414,6 @@ export function HomeDashboardClient({
         </div>
       </div>
 
-      {menuOpen ? (
-        <>
-          <button
-            type="button"
-            className="drawer-overlay open"
-            aria-label="Close menu"
-            onClick={() => setMenuOpen(false)}
-          />
-          <nav
-            className="side-drawer open flex flex-col gap-1 p-4 pt-[max(1rem,env(safe-area-inset-top))] font-body shadow-xl"
-            aria-label="Menu"
-          >
-            <p className="mb-2 font-display text-xl tracking-[2px] text-[var(--text)]">
-              MENU
-            </p>
-            {(
-              [
-                { href: "/cardio", label: "Cardio" },
-                { href: "/coach", label: "Coach" },
-                { href: "/meals", label: "Meals" },
-                { href: "/onboarding", label: "Onboarding" },
-              ] as const
-            ).map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className="rounded-lg px-3 py-3 text-[var(--text)] no-underline hover:bg-[var(--surface2)]"
-                onClick={() => setMenuOpen(false)}
-              >
-                {l.label}
-              </Link>
-            ))}
-            <button
-              type="button"
-              className="mt-4 rounded-lg px-3 py-3 text-left text-[var(--accent)]"
-              onClick={() => setMenuOpen(false)}
-            >
-              Close
-            </button>
-          </nav>
-        </>
-      ) : null}
     </div>
   );
 }
