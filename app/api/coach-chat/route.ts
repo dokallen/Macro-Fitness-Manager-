@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 
 const MAX_MESSAGE_CHARS = 12000;
 
+const PANTRY_SCAN_SYSTEM = `You are a pantry scanning assistant. The user has uploaded a photo of their pantry, fridge, or shelves. Identify every visible food item, ingredient, or grocery product you can see. Return ONLY a JSON array of strings, no markdown, no explanation, no preamble. Example: ["chicken breast", "eggs", "milk", "broccoli", "olive oil"]. Be specific but concise with item names.`;
+
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -31,6 +33,95 @@ export async function POST(req: Request) {
 
   const bodyObj =
     typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+
+  if (bodyObj?.pantryScan === true) {
+    const rawImg =
+      typeof bodyObj.imageBase64 === "string" ? bodyObj.imageBase64.trim() : "";
+    if (!rawImg) {
+      return jsonError("imageBase64 is required for pantry scan.", 400);
+    }
+
+    try {
+      const supabase = createServerSupabaseClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        return jsonError("Unauthorized", 401);
+      }
+
+      const dataUrl = rawImg.match(/^data:(image\/[\w+.+-]+);base64,([\s\S]+)$/i);
+      const mediaType =
+        (typeof bodyObj.mediaType === "string" && bodyObj.mediaType.includes("/")
+          ? bodyObj.mediaType
+          : null) ||
+        dataUrl?.[1] ||
+        "image/jpeg";
+      const b64 = (dataUrl?.[2] ?? rawImg.replace(/^data:[^;]+;base64,/i, "")).replace(
+        /\s/g,
+        ""
+      );
+
+      const maxTok =
+        typeof bodyObj.max_tokens === "number" && bodyObj.max_tokens > 0
+          ? Math.min(4096, Math.floor(bodyObj.max_tokens))
+          : 1000;
+
+      const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: maxTok,
+          temperature: 0.2,
+          system: PANTRY_SCAN_SYSTEM,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: mediaType,
+                    data: b64,
+                  },
+                },
+                {
+                  type: "text",
+                  text: "What food items can you see in this photo?",
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (!anthropicRes.ok) {
+        const txt = (await anthropicRes.text()).slice(0, 1500);
+        return jsonError(`Claude API error (${anthropicRes.status}): ${txt}`, 502);
+      }
+
+      const raw = (await anthropicRes.json()) as {
+        content?: Array<{ type: string; text?: string }>;
+      };
+      const text =
+        raw.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
+      if (!text) {
+        return jsonError("Empty response from vision model.", 502);
+      }
+
+      return NextResponse.json({ pantryScanReply: text });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Pantry scan failed.";
+      return jsonError(message, 500);
+    }
+  }
 
   const content =
     bodyObj &&

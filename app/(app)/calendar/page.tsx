@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
+import Link from "next/link";
 
-import { ProgressClient } from "@/components/progress/ProgressClient";
-import { ProgressPhotosClient } from "@/components/progress/ProgressPhotosClient";
+import { CalendarClient } from "@/components/calendar/CalendarClient";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function ButtonAsLink({ href, children }: { href: string; children: string }) {
@@ -16,13 +15,13 @@ function ButtonAsLink({ href, children }: { href: string; children: string }) {
   );
 }
 
-export default async function ProgressPage() {
+export default async function CalendarPage() {
   const isGuest = cookies().get("macrofit_guest")?.value === "1";
   if (isGuest) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-[var(--bg)] p-6">
         <p className="max-w-md text-center font-sans text-sm text-muted-foreground">
-          Sign in to log progress and view your trends.
+          Sign in to use your calendar.
         </p>
         <ButtonAsLink href="/signup">Create Account</ButtonAsLink>
       </div>
@@ -38,10 +37,5 @@ export default async function ProgressPage() {
     return null;
   }
 
-  return (
-    <div className="flex min-h-dvh flex-col bg-[var(--bg)]">
-      <ProgressClient userId={user.id} />
-      <ProgressPhotosClient />
-    </div>
-  );
+  return <CalendarClient userId={user.id} />;
 }
