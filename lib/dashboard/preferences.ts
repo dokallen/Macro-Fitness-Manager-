@@ -5,6 +5,12 @@ export const NON_MACRO_PREFERENCE_KEYS = new Set([
   "recommended_workout_frequency",
   "weekly_plan_suggestion",
   "progress_metric_keys",
+  "body_metric_keys",
+  "body_weighin_notes",
+  "chosen_coach_id",
+  "program_start",
+  "mf_coach_rules",
+  "water_goal_oz",
 ]);
 
 export type MacroTargetRow = {

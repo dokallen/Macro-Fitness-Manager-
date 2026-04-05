@@ -35,6 +35,7 @@ const MENU_ITEMS: {
   { emoji: "💊", label: "Supplements", href: "/supplements" },
   { emoji: "📓", label: "Fitness Journal", href: "/journal" },
   { emoji: "🥘", label: "Pantry", href: "/pantry" },
+  { emoji: "🍽", label: "Go-To Recipes", href: "/goto-recipes" },
   { emoji: "📅", label: "Calendar", href: "/calendar" },
   { emoji: "🎯", label: "Challenges", href: "/challenges" },
   { emoji: "💬", label: "Coach", action: "coach" },

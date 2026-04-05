@@ -31,6 +31,14 @@ const MEAL_SUGGESTION_SYSTEM = `You are a nutrition coach. Based on the user's r
 
 const METRIC_WEEK_INSIGHT_SYSTEM = `You are a fitness coach. The user is comparing body metrics this week vs last week (averages). Reply with exactly one short sentence about the most notable change. Use specific numbers from the payload. Stay encouraging. No markdown.`;
 
+const SCAN_RECIPE_SYSTEM = `Extract this recipe from the image. Return ONLY valid JSON: {name: string, servings: number, ingredients: [{amount: string, unit: string, name: string}], steps: string[], prepTime: number, cookTime: number, notes: string}. Use empty string for missing string fields, 0 for missing numbers, empty array if unknown. No markdown.`;
+
+const BUILD_RECIPE_FROM_DESCRIPTION_SYSTEM = `The user described a recipe in plain language. Extract the recipe and calculate macros per serving. Return ONLY valid JSON: {name: string, servings: number, ingredients: [{amount: string, unit: string, name: string}], steps: string[], macrosPerServing: {cal: number, pro: number, fat: number, carbs: number}, prepTime: number, cookTime: number, notes: string}. No markdown.`;
+
+const GOTO_RECIPE_COMPARE_SYSTEM = `You are a nutrition coach comparing two recipes for a user. Analyze both recipes and give: 1) Which fits better for their current macro targets and why (2 sentences), 2) Portion sizing recommendation for each, 3) Best timing for each (e.g. pre-workout, post-workout, rest day). Be specific with numbers. Keep it under 100 words total.`;
+
+const GOTO_RECIPE_MACRO_FIT_SYSTEM = `You compare one recipe's per-serving macros to the user's daily macro targets (JSON input). Return ONLY valid JSON: {"verdict":"fits"|"close"|"no_fit","sentence":string}. Verdict: fits if it can fit cleanly as a typical main meal; close if workable with a smaller portion or day balancing; no_fit if dominant macros make it a poor match. One concise sentence. No markdown.`;
+
 function workoutScreenshotSystem(lbsLabel: string) {
   return `Analyze this workout screenshot. IGNORE all calorie numbers shown in the app — those are inaccurate. Look for: workout duration, exercise names, and any heart rate data. Using MET method for the workout type detected, calculate calories burned for a person weighing ${lbsLabel}. Reply in 2-3 sentences: duration detected, calculated calories using MET, brief note.`;
 }
@@ -491,6 +499,61 @@ export async function POST(req: Request) {
           userBlocks: [{ type: "text", text: userText.slice(0, 4000) }],
           max_tokens: 120,
           temperature: 0.55,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
+      if (coachTask === "scan_recipe") {
+        if (!rawImg) return jsonError("imageBase64 is required.", 400);
+        const { mediaType, b64 } = parseImagePayload(rawImg);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: SCAN_RECIPE_SYSTEM,
+          userBlocks: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: b64 },
+            },
+            { type: "text", text: "Return only the JSON object for this recipe." },
+          ],
+          max_tokens: maxTok,
+          temperature: 0.15,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
+      if (coachTask === "build_recipe_from_description") {
+        if (!userText) return jsonError("userText is required.", 400);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: BUILD_RECIPE_FROM_DESCRIPTION_SYSTEM,
+          userBlocks: [{ type: "text", text: userText.slice(0, MAX_MESSAGE_CHARS) }],
+          max_tokens: maxTok,
+          temperature: 0.25,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
+      if (coachTask === "goto_recipe_compare") {
+        if (!userText) return jsonError("userText is required.", 400);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: GOTO_RECIPE_COMPARE_SYSTEM,
+          userBlocks: [{ type: "text", text: userText.slice(0, 8000) }],
+          max_tokens: 400,
+          temperature: 0.45,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
+      if (coachTask === "goto_recipe_macro_fit") {
+        if (!userText) return jsonError("userText is required.", 400);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: GOTO_RECIPE_MACRO_FIT_SYSTEM,
+          userBlocks: [{ type: "text", text: userText.slice(0, 4000) }],
+          max_tokens: 200,
+          temperature: 0.35,
         });
         return NextResponse.json({ coachTaskReply: text });
       }
