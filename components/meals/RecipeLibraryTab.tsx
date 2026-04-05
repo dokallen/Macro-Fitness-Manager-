@@ -21,9 +21,10 @@ export type RecipeRow = {
 
 type Props = {
   recipes: RecipeRow[];
+  onCookMode?: (recipe: RecipeRow) => void;
 };
 
-export function RecipeLibraryTab({ recipes }: Props) {
+export function RecipeLibraryTab({ recipes, onCookMode }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const selected = recipes.find((r) => r.id === openId) ?? null;
 
@@ -83,21 +84,35 @@ export function RecipeLibraryTab({ recipes }: Props) {
             className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-card p-5 shadow-xl sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
               <h2
                 id="recipe-detail-title"
                 className="text-lg font-semibold text-foreground"
               >
                 {selected.name}
               </h2>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setOpenId(null)}
-              >
-                Close
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {onCookMode ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      onCookMode(selected);
+                      setOpenId(null);
+                    }}
+                  >
+                    Cook Mode
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setOpenId(null)}
+                >
+                  Close
+                </Button>
+              </div>
             </div>
 
             <section className="mt-4">

@@ -967,9 +967,24 @@ body {
   left: 0;
   right: 0;
   background: linear-gradient(135deg, #0d1e33, #111827);
-  border-top: 1px solid #3b82f644;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 27%, transparent);
   padding: 10px 16px;
   z-index: 120;
+  display: none;
+}
+.rest-timer-bar.open {
+  display: block;
+}
+.coach-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.coach-chip-row::-webkit-scrollbar {
   display: none;
 }
 

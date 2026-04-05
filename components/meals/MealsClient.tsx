@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AddRecipeForm } from "@/components/meals/AddRecipeForm";
-import { LogMealForm } from "@/components/meals/LogMealForm";
+import { LogMealForm, type LabelPrefill } from "@/components/meals/LogMealForm";
 import {
   MealPlanTab,
   type MealPlanEntryRow,
@@ -18,11 +18,25 @@ import {
   TodayFoodLogTab,
   type FoodLogRow,
 } from "@/components/meals/TodayFoodLogTab";
-import { formatMacroLabel, type MacroTargetRow } from "@/lib/dashboard/preferences";
+import {
+  formatMacroLabel,
+  type MacroTargetRow,
+} from "@/lib/dashboard/preferences";
 import { getUtcDayBounds } from "@/lib/dashboard/utc-day";
 import { getUtcWeekMondayDateString } from "@/lib/meals/week";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+
+type WebSpeechCtor = new () => {
+  lang: string;
+  interimResults: boolean;
+  onresult:
+    | ((ev: { results: ArrayLike<{ 0?: { transcript?: string } }> }) => void)
+    | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+};
 
 type TabId = "today" | "plan" | "library";
 
@@ -62,6 +76,284 @@ const LS_CUSTOM_HABITS = "mf_customHabits";
 const LS_WATER_LOG = "mf_waterLog";
 const LS_WATER_GOAL = "mf_waterGoal";
 const LS_FOOD_LOG_FLAG = "mf_foodLog";
+
+type CookStep = { text: string; timerSec: number | null };
+
+function parseTimerFromInstruction(text: string): number | null {
+  const m = text.match(
+    /(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b/i
+  );
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const u = m[2].toLowerCase();
+  if (/hour|hr/.test(u)) return Math.round(n * 3600);
+  if (/min/.test(u)) return Math.round(n * 60);
+  return Math.round(n);
+}
+
+function buildCookSteps(instructions: string[]): CookStep[] {
+  return instructions.map((text) => ({
+    text,
+    timerSec: parseTimerFromInstruction(text),
+  }));
+}
+
+function AnalyzerNameVoice({ onTranscript }: { onTranscript: (t: string) => void }) {
+  const [ok, setOk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as {
+      SpeechRecognition?: WebSpeechCtor;
+      webkitSpeechRecognition?: WebSpeechCtor;
+    };
+    setOk(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
+  }, []);
+  if (!ok) return null;
+  return (
+    <button
+      type="button"
+      className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] px-3 py-2 text-lg"
+      disabled={busy}
+      aria-label="Voice recipe name"
+      onClick={() => {
+        const w = window as unknown as {
+          SpeechRecognition?: WebSpeechCtor;
+          webkitSpeechRecognition?: WebSpeechCtor;
+        };
+        const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+        if (!Ctor) return;
+        try {
+          setBusy(true);
+          const r = new Ctor();
+          r.lang = "en-US";
+          r.interimResults = false;
+          r.onresult = (ev: { results: ArrayLike<{ 0?: { transcript?: string } }> }) => {
+            const t = Array.from(ev.results)
+              .map((x) => x[0]?.transcript ?? "")
+              .join(" ")
+              .trim();
+            if (t) onTranscript(t);
+          };
+          r.onerror = () => {
+            setBusy(false);
+            toast.error("Voice not available. Try typing instead.");
+          };
+          r.onend = () => setBusy(false);
+          r.start();
+        } catch {
+          setBusy(false);
+          toast.error("Voice not available. Try typing instead.");
+        }
+      }}
+    >
+      🎤
+    </button>
+  );
+}
+
+function mapLabelJsonToPrefill(
+  macroTargets: MacroTargetRow[],
+  raw: Record<string, unknown>
+): LabelPrefill {
+  const name = String(raw.name ?? "").trim() || "Scanned item";
+  const servingSize = String(raw.servingSize ?? "").trim();
+  const nums = {
+    cal: Number(raw.cal),
+    pro: Number(raw.pro),
+    fat: Number(raw.fat),
+    carbs: Number(raw.carbs),
+    sodium: Number(raw.sodium),
+    fiber: Number(raw.fiber),
+    sugar: Number(raw.sugar),
+  };
+  const macroValues: Record<string, string> = {};
+  for (const t of macroTargets) {
+    const k = normalizeMacroKey(t.key);
+    let v: number | undefined;
+    if (k === "calories" || k === "calorie") v = nums.cal;
+    else if (k === "protein") v = nums.pro;
+    else if (k === "fat") v = nums.fat;
+    else if (k === "carbs" || k === "carbohydrates") v = nums.carbs;
+    else if (k === "sodium") v = nums.sodium;
+    else if (k === "fiber") v = nums.fiber;
+    else if (k === "sugar") v = nums.sugar;
+    if (v !== undefined && Number.isFinite(v)) {
+      macroValues[t.key] = String(v);
+    }
+  }
+  return {
+    foodName: name,
+    quantity: "",
+    unit: servingSize,
+    macroValues,
+  };
+}
+
+function CookModeOverlay({
+  open,
+  steps,
+  onExit,
+}: {
+  open: boolean;
+  steps: CookStep[];
+  onExit: () => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [timerLeft, setTimerLeft] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const wakeRef = useRef<WakeLockSentinel | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      void wakeRef.current?.release().catch(() => {});
+      wakeRef.current = null;
+      setIdx(0);
+      setTimerLeft(0);
+      setTimerRunning(false);
+      return;
+    }
+    if (typeof navigator !== "undefined" && navigator.wakeLock?.request) {
+      void navigator.wakeLock
+        .request("screen")
+        .then((w) => {
+          wakeRef.current = w;
+        })
+        .catch(() => {});
+    }
+    return () => {
+      void wakeRef.current?.release().catch(() => {});
+      wakeRef.current = null;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !steps.length) return;
+    const sec = steps[idx]?.timerSec ?? 0;
+    setTimerLeft(sec);
+    setTimerRunning(false);
+  }, [open, idx, steps]);
+
+  useEffect(() => {
+    if (!timerRunning || timerLeft <= 0) return;
+    const id = window.setInterval(() => {
+      setTimerLeft((s) => {
+        if (s <= 1) {
+          setTimerRunning(false);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [timerRunning, timerLeft]);
+
+  if (!open || !steps.length) return null;
+
+  const step = steps[idx]!;
+  const pct = ((idx + 1) / steps.length) * 100;
+  const timerTotal = step.timerSec ?? 0;
+  const timerPct =
+    timerTotal > 0 ? Math.min(100, ((timerTotal - timerLeft) / timerTotal) * 100) : 0;
+  const mm = Math.floor(timerLeft / 60);
+  const ss = timerLeft % 60;
+  const timeLabel = `${mm}:${String(ss).padStart(2, "0")}`;
+
+  return (
+    <div className={`cook-overlay-base${open ? " open" : ""}`}>
+      <header className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-3">
+        <button
+          type="button"
+          className="text-sm text-[var(--text)]"
+          onClick={onExit}
+        >
+          ✕ Exit
+        </button>
+        <span className="text-sm text-[var(--text2)]">
+          Step {idx + 1} of {steps.length}
+        </span>
+      </header>
+      <div className="px-4 pt-2">
+        <div className="prog-bar">
+          <div className="prog-fill" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-8 text-center">
+        <p
+          className="mb-4 font-[family-name:var(--fd)] text-5xl tabular-nums"
+          style={{ color: "var(--accent)" }}
+        >
+          {idx + 1}
+        </p>
+        <p className="max-w-md text-lg leading-relaxed text-[var(--text)]">
+          {step.text}
+        </p>
+        {timerTotal > 0 ? (
+          <div className="mt-8 w-full max-w-sm">
+            <p
+              className="mb-2 font-[family-name:var(--fd)] text-3xl tabular-nums"
+              style={{ color: "var(--accent3)" }}
+            >
+              {timeLabel}
+            </p>
+            <div className="mb-3 flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm text-white"
+                onClick={() => setTimerRunning((r) => !r)}
+              >
+                {timerRunning ? "⏸ Pause" : "▶ Start"}
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-[var(--surface2)] px-3 py-2 text-sm text-[var(--text)]"
+                onClick={() => {
+                  setTimerLeft(timerTotal);
+                  setTimerRunning(false);
+                }}
+              >
+                ↺ Reset
+              </button>
+            </div>
+            <div className="prog-bar">
+              <div className="prog-fill" style={{ width: `${timerPct}%` }} />
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <footer className="flex shrink-0 gap-3 border-t border-[var(--border)] p-4">
+        <button
+          type="button"
+          className="flex-1 rounded-xl bg-[var(--surface2)] py-3 text-sm font-medium text-[var(--text)]"
+          disabled={idx === 0}
+          onClick={() => setIdx((i) => Math.max(0, i - 1))}
+        >
+          ◀ Prev
+        </button>
+        {idx >= steps.length - 1 ? (
+          <button
+            type="button"
+            className="flex-1 rounded-xl py-3 text-sm font-medium text-white"
+            style={{ background: "var(--accent2)" }}
+            onClick={onExit}
+          >
+            ✅ Done
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="flex-1 rounded-xl py-3 text-sm font-medium text-white"
+            style={{ background: "var(--accent)" }}
+            onClick={() => setIdx((i) => Math.min(steps.length - 1, i + 1))}
+          >
+            Next ▶
+          </button>
+        )}
+      </footer>
+    </div>
+  );
+}
 
 type CustomHabit = { id: string; emoji: string; name: string };
 
@@ -428,6 +720,35 @@ export function MealsClient({ userId, macroTargets }: Props) {
   const [initialLoad, setInitialLoad] = useState(true);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
 
+  const [cookOpen, setCookOpen] = useState(false);
+  const [cookSteps, setCookSteps] = useState<CookStep[]>([]);
+
+  const [labelScanBusy, setLabelScanBusy] = useState(false);
+  const labelInputRef = useRef<HTMLInputElement>(null);
+  const [labelPrefill, setLabelPrefill] = useState<LabelPrefill | null>(null);
+  const [labelPrefillNonce, setLabelPrefillNonce] = useState(0);
+
+  const [voiceFoodOk, setVoiceFoodOk] = useState(false);
+  const [foodVoiceBusy, setFoodVoiceBusy] = useState(false);
+  const [voiceFoodNonce, setVoiceFoodNonce] = useState(0);
+  const [voiceFoodText, setVoiceFoodText] = useState("");
+
+  const [analyzerOpen, setAnalyzerOpen] = useState(false);
+  const [anRecipeName, setAnRecipeName] = useState("");
+  const [anServings, setAnServings] = useState("1");
+  const [anIngredients, setAnIngredients] = useState<
+    { amount: string; unit: string; name: string }[]
+  >([{ amount: "", unit: "", name: "" }]);
+  const [anCalcBusy, setAnCalcBusy] = useState(false);
+  const [anScanBusy, setAnScanBusy] = useState(false);
+  const anImgRef = useRef<HTMLInputElement>(null);
+  const [anResult, setAnResult] = useState<{
+    macrosPerServing: { cal: number; pro: number; fat: number; carbs: number };
+    verdict: string;
+    verdictNote: string;
+    adjustments: { change: string; reason: string }[];
+  } | null>(null);
+
   const macroSummaryRows = useMemo(() => {
     const targetMap = new Map(
       macroTargets.map((t) => [normalizeMacroKey(t.key), t.targetNumber])
@@ -578,6 +899,315 @@ export function MealsClient({ userId, macroTargets }: Props) {
     };
   }, [userId, loadLogs]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as {
+      SpeechRecognition?: WebSpeechCtor;
+      webkitSpeechRecognition?: WebSpeechCtor;
+    };
+    setVoiceFoodOk(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
+  }, []);
+
+  function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result ?? ""));
+      fr.onerror = () => rej(new Error("read"));
+      fr.readAsDataURL(file);
+    });
+  }
+
+  const startFoodVoice = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as {
+      SpeechRecognition?: WebSpeechCtor;
+      webkitSpeechRecognition?: WebSpeechCtor;
+    };
+    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Ctor) return;
+    try {
+      setFoodVoiceBusy(true);
+      const r = new Ctor();
+      r.lang = "en-US";
+      r.interimResults = false;
+      r.onresult = (ev: { results: ArrayLike<{ 0?: { transcript?: string } }> }) => {
+        const t = Array.from(ev.results)
+          .map((x) => x[0]?.transcript ?? "")
+          .join(" ")
+          .trim();
+        if (t) {
+          setVoiceFoodText(t);
+          setVoiceFoodNonce((n) => n + 1);
+        }
+      };
+      r.onerror = () => {
+        setFoodVoiceBusy(false);
+        toast.error("Voice not available. Try typing instead.");
+      };
+      r.onend = () => setFoodVoiceBusy(false);
+      r.start();
+    } catch {
+      setFoodVoiceBusy(false);
+      toast.error("Voice not available. Try typing instead.");
+    }
+  }, []);
+
+  async function onLabelScanFile(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    setLabelScanBusy(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const res = await fetch("/api/coach-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coachTask: "food_label",
+          imageBase64: dataUrl,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        coachTaskReply?: string;
+      };
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not read label.");
+        return;
+      }
+      const raw = data.coachTaskReply?.trim() ?? "";
+      const json = JSON.parse(
+        raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim()
+      ) as Record<string, unknown>;
+      const prefill = mapLabelJsonToPrefill(macroTargets, json);
+      setLabelPrefill(prefill);
+      setLabelPrefillNonce((n) => n + 1);
+      toast.success("Label scanned — review and tap Add");
+    } catch {
+      toast.error("Could not read label. Try better lighting.");
+    } finally {
+      setLabelScanBusy(false);
+    }
+  }
+
+  function macroKeyForAliases(aliases: string[]): string | null {
+    for (const a of aliases) {
+      const na = normalizeMacroKey(a);
+      const hit = macroTargets.find((t) => normalizeMacroKey(t.key) === na);
+      if (hit) return hit.key;
+    }
+    const sub = macroTargets.find((t) => {
+      const k = normalizeMacroKey(t.key);
+      return aliases.some((a) => k.includes(normalizeMacroKey(a)) || normalizeMacroKey(a).includes(k));
+    });
+    return sub?.key ?? null;
+  }
+
+  async function runRecipeMacroCalc() {
+    const name = anRecipeName.trim();
+    if (!name) {
+      toast.error("Enter a recipe name.");
+      return;
+    }
+    const ings = anIngredients.filter((x) => x.name.trim());
+    if (ings.length === 0) {
+      toast.error("Add at least one ingredient.");
+      return;
+    }
+    const serv = Number(anServings);
+    if (!Number.isFinite(serv) || serv <= 0) {
+      toast.error("Servings must be a positive number.");
+      return;
+    }
+    setAnCalcBusy(true);
+    setAnResult(null);
+    try {
+      const targets: Record<string, number> = {};
+      for (const t of macroTargets) {
+        targets[t.key] = t.targetNumber;
+      }
+      const userText = JSON.stringify({
+        recipeName: name,
+        servings: serv,
+        ingredients: ings,
+        userDailyMacroTargets: targets,
+      });
+      const res = await fetch("/api/coach-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coachTask: "recipe_macros", userText }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        coachTaskReply?: string;
+      };
+      if (!res.ok) {
+        toast.error(data.error ?? "Calculation failed.");
+        return;
+      }
+      const raw = (data.coachTaskReply ?? "")
+        .trim()
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/i, "");
+      const j = JSON.parse(raw) as {
+        macrosPerServing?: { cal: number; pro: number; fat: number; carbs: number };
+        verdict?: string;
+        verdictNote?: string;
+        adjustments?: { change: string; reason: string }[];
+      };
+      const m = j.macrosPerServing;
+      if (!m || typeof m !== "object") {
+        toast.error("Invalid macro response.");
+        return;
+      }
+      setAnResult({
+        macrosPerServing: {
+          cal: Number(m.cal) || 0,
+          pro: Number(m.pro) || 0,
+          fat: Number(m.fat) || 0,
+          carbs: Number(m.carbs) || 0,
+        },
+        verdict: String(j.verdict ?? ""),
+        verdictNote: String(j.verdictNote ?? ""),
+        adjustments: Array.isArray(j.adjustments) ? j.adjustments : [],
+      });
+    } catch {
+      toast.error("Could not calculate macros.");
+    } finally {
+      setAnCalcBusy(false);
+    }
+  }
+
+  async function onRecipeScanFile(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    setAnScanBusy(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const res = await fetch("/api/coach-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coachTask: "recipe_ingredients",
+          imageBase64: dataUrl,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        coachTaskReply?: string;
+      };
+      if (!res.ok) {
+        toast.error(data.error ?? "Scan failed.");
+        return;
+      }
+      const raw = data.coachTaskReply?.trim() ?? "";
+      const arr = JSON.parse(
+        raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim()
+      ) as { amount?: string; unit?: string; name?: string }[];
+      if (!Array.isArray(arr) || arr.length === 0) {
+        toast.error("No ingredients detected.");
+        return;
+      }
+      setAnIngredients(
+        arr.map((x) => ({
+          amount: String(x.amount ?? "").trim(),
+          unit: String(x.unit ?? "").trim(),
+          name: String(x.name ?? "").trim(),
+        }))
+      );
+    } catch {
+      toast.error("Could not scan recipe image.");
+    } finally {
+      setAnScanBusy(false);
+    }
+  }
+
+  async function saveAnalyzedRecipeToLibrary() {
+    if (!anResult) return;
+    const name = anRecipeName.trim();
+    if (!name) return;
+    const supabase = createBrowserSupabaseClient();
+    const { data: rec, error: recErr } = await supabase
+      .from("recipes")
+      .insert({
+        user_id: userId,
+        name,
+        instructions: [`Analyzed — ${anServings} servings`],
+      })
+      .select("id")
+      .single();
+    if (recErr || !rec) {
+      toast.error(recErr?.message ?? "Save failed.");
+      return;
+    }
+    const m = anResult.macrosPerServing;
+    const pairs: { val: number; aliases: string[]; unit: string }[] = [
+      { val: m.cal, aliases: ["calories", "calorie", "cal"], unit: "" },
+      { val: m.pro, aliases: ["protein", "pro"], unit: "g" },
+      { val: m.fat, aliases: ["fat"], unit: "g" },
+      { val: m.carbs, aliases: ["carbs", "carbohydrates"], unit: "g" },
+    ];
+    const rows: { recipe_id: string; key: string; value: number; unit: string }[] =
+      [];
+    for (const p of pairs) {
+      if (!Number.isFinite(p.val)) continue;
+      const key = macroKeyForAliases(p.aliases);
+      if (!key) continue;
+      rows.push({ recipe_id: rec.id, key: key, value: p.val, unit: p.unit });
+    }
+    if (rows.length > 0) {
+      const { error: mErr } = await supabase.from("recipe_macros").insert(rows);
+      if (mErr) {
+        toast.error(mErr.message);
+        return;
+      }
+    }
+    toast.success("Saved to recipe library.");
+    void loadRecipes();
+    setAnalyzerOpen(false);
+  }
+
+  async function logAnalyzedAsFood() {
+    if (!anResult) return;
+    const name = anRecipeName.trim() || "Recipe";
+    const supabase = createBrowserSupabaseClient();
+    const { data: log, error: logErr } = await supabase
+      .from("food_logs")
+      .insert({
+        user_id: userId,
+        meal_number: 1,
+        food_name: `${name} (1 serving)`,
+        quantity: 1,
+        unit: "serving",
+      })
+      .select("id")
+      .single();
+    if (logErr || !log) {
+      toast.error(logErr?.message ?? "Log failed.");
+      return;
+    }
+    const m = anResult.macrosPerServing;
+    const pairs: { val: number; aliases: string[] }[] = [
+      { val: m.cal, aliases: ["calories", "calorie", "cal"] },
+      { val: m.pro, aliases: ["protein", "pro"] },
+      { val: m.fat, aliases: ["fat"] },
+      { val: m.carbs, aliases: ["carbs", "carbohydrates"] },
+    ];
+    const ins: { food_log_id: string; key: string; value: number }[] = [];
+    for (const p of pairs) {
+      if (!Number.isFinite(p.val)) continue;
+      const key = macroKeyForAliases(p.aliases);
+      if (!key) continue;
+      ins.push({ food_log_id: log.id, key, value: p.val });
+    }
+    if (ins.length > 0) {
+      const { error: fErr } = await supabase.from("food_log_macros").insert(ins);
+      if (fErr) {
+        toast.error(fErr.message);
+        return;
+      }
+    }
+    toast.success("Logged as food.");
+    void loadLogs();
+  }
+
   async function handleDeleteLog(id: string) {
     if (!confirm("Delete this log entry?")) return;
     setDeleteBusyId(id);
@@ -677,10 +1307,63 @@ export function MealsClient({ userId, macroTargets }: Props) {
             onDelete={handleDeleteLog}
             busyId={deleteBusyId}
           />
+          <input
+            ref={labelInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void onLabelScanFile(f);
+            }}
+          />
           <LogMealForm
             userId={userId}
             macroTargets={macroTargets}
             onLogged={() => void loadLogs()}
+            labelPrefill={labelPrefill}
+            labelPrefillNonce={labelPrefillNonce}
+            voiceFoodNameNonce={voiceFoodNonce}
+            voiceFoodName={voiceFoodText}
+            labelScanSlot={
+              <button
+                type="button"
+                className="upload-area w-full text-left"
+                disabled={labelScanBusy}
+                onClick={() => labelInputRef.current?.click()}
+              >
+                {labelScanBusy ? (
+                  <span className="text-sm text-[var(--text2)]">🧠 Reading label…</span>
+                ) : (
+                  <>
+                    <span className="block text-center text-2xl" aria-hidden>
+                      📸
+                    </span>
+                    <span className="mt-1 block text-center text-sm font-medium text-[var(--text)]">
+                      Scan Label
+                    </span>
+                    <span className="mt-0.5 block text-center text-xs text-[var(--text3)]">
+                      Nutrition facts photo
+                    </span>
+                  </>
+                )}
+              </button>
+            }
+            foodNameEndSlot={
+              voiceFoodOk ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] px-3 py-2 text-lg"
+                  aria-label="Voice food name"
+                  disabled={foodVoiceBusy}
+                  onClick={startFoodVoice}
+                >
+                  🎤
+                </button>
+              ) : null
+            }
           />
         </div>
       ) : null}
@@ -697,10 +1380,230 @@ export function MealsClient({ userId, macroTargets }: Props) {
 
       {tab === "library" ? (
         <div className="space-y-6" role="tabpanel">
-          <RecipeLibraryTab recipes={recipes} />
+          <button
+            type="button"
+            className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface2)] py-3 text-sm font-medium text-[var(--text)]"
+            onClick={() => {
+              setAnalyzerOpen(true);
+              setAnResult(null);
+            }}
+          >
+            ➕ Analyze a Recipe
+          </button>
+          <RecipeLibraryTab
+            recipes={recipes}
+            onCookMode={(r) => {
+              setCookSteps(buildCookSteps(r.instructions));
+              setCookOpen(true);
+            }}
+          />
           <AddRecipeForm userId={userId} onAdded={() => void loadRecipes()} />
         </div>
       ) : null}
+
+      <CookModeOverlay
+        open={cookOpen}
+        steps={cookSteps}
+        onExit={() => setCookOpen(false)}
+      />
+
+      <input
+        ref={anImgRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) void onRecipeScanFile(f);
+        }}
+      />
+
+      <button
+        type="button"
+        className={`sheet-overlay${analyzerOpen ? " open" : ""}`}
+        aria-label="Close analyzer"
+        onClick={() => setAnalyzerOpen(false)}
+      />
+      <div className={`bottom-sheet-base${analyzerOpen ? " open" : ""}`}>
+        <div className="max-h-[85vh] overflow-y-auto p-4 pb-10">
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <h2 className="font-[family-name:var(--fd)] text-sm uppercase tracking-wide text-[var(--text)]">
+              ANALYZE RECIPE
+            </h2>
+            <button
+              type="button"
+              className="text-sm text-[var(--accent)]"
+              onClick={() => setAnalyzerOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="mb-3 flex gap-2">
+            <input
+              className="inf min-w-0 flex-1"
+              placeholder="Recipe name"
+              value={anRecipeName}
+              onChange={(e) => setAnRecipeName(e.target.value)}
+            />
+            <AnalyzerNameVoice onTranscript={(t) => setAnRecipeName(t)} />
+          </div>
+          <label className="mb-1 block text-xs text-[var(--text3)]">Servings</label>
+          <input
+            className="inf mb-4 w-24"
+            inputMode="decimal"
+            value={anServings}
+            onChange={(e) => setAnServings(e.target.value)}
+          />
+          <p className="mb-2 text-xs font-medium text-[var(--text2)]">Ingredients</p>
+          {anIngredients.map((row, i) => (
+            <div key={i} className="mb-2 flex flex-wrap gap-2">
+              <input
+                className="inf w-16"
+                placeholder="Amt"
+                value={row.amount}
+                onChange={(e) =>
+                  setAnIngredients((rows) =>
+                    rows.map((r, j) =>
+                      j === i ? { ...r, amount: e.target.value } : r
+                    )
+                  )
+                }
+              />
+              <input
+                className="inf w-20"
+                placeholder="Unit"
+                value={row.unit}
+                onChange={(e) =>
+                  setAnIngredients((rows) =>
+                    rows.map((r, j) =>
+                      j === i ? { ...r, unit: e.target.value } : r
+                    )
+                  )
+                }
+              />
+              <input
+                className="inf min-w-0 flex-1"
+                placeholder="Ingredient"
+                value={row.name}
+                onChange={(e) =>
+                  setAnIngredients((rows) =>
+                    rows.map((r, j) =>
+                      j === i ? { ...r, name: e.target.value } : r
+                    )
+                  )
+                }
+              />
+              <button
+                type="button"
+                className="text-[var(--text3)]"
+                aria-label="Remove"
+                onClick={() =>
+                  setAnIngredients((rows) => rows.filter((_, j) => j !== i))
+                }
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)]"
+              onClick={() =>
+                setAnIngredients((rows) => [
+                  ...rows,
+                  { amount: "", unit: "", name: "" },
+                ])
+              }
+            >
+              + Add Ingredient
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)]"
+              disabled={anScanBusy}
+              onClick={() => anImgRef.current?.click()}
+            >
+              {anScanBusy ? "…" : "📸 Scan"}
+            </button>
+          </div>
+          <button
+            type="button"
+            className="mb-4 w-full rounded-xl py-3 font-semibold text-white disabled:opacity-50"
+            style={{ background: "var(--accent2)" }}
+            disabled={anCalcBusy}
+            onClick={() => void runRecipeMacroCalc()}
+          >
+            {anCalcBusy ? "🧠 Coach is calculating…" : "🧠 Calculate Macros"}
+          </button>
+          {anResult ? (
+            <div
+              className="rounded-xl border border-[var(--border)] p-3"
+              style={{
+                borderColor:
+                  anResult.verdict === "fits"
+                    ? "#10b98188"
+                    : anResult.verdict === "adjust"
+                      ? "#f59e0b88"
+                      : "#ef444488",
+              }}
+            >
+              <p className="text-sm font-medium text-[var(--text)]">
+                {anResult.verdictNote}
+              </p>
+              <div className="recipe-macros mt-3">
+                {(
+                  [
+                    { aliases: ["calories", "calorie", "cal"] as const, v: anResult.macrosPerServing.cal },
+                    { aliases: ["protein", "pro"] as const, v: anResult.macrosPerServing.pro },
+                    { aliases: ["fat"] as const, v: anResult.macrosPerServing.fat },
+                    { aliases: ["carbs", "carbohydrates"] as const, v: anResult.macrosPerServing.carbs },
+                  ] as const
+                ).map(({ aliases, v }) => {
+                  const mk = macroKeyForAliases([...aliases]);
+                  return (
+                    <div key={aliases[0]} className="recipe-macro-val">
+                      <div className="recipe-macro-num">{Math.round(v)}</div>
+                      <div className="recipe-macro-lbl">
+                        {formatMacroLabel(mk ?? aliases[0])}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {anResult.adjustments.length > 0 ? (
+                <ul className="mt-3 list-disc pl-5 text-xs text-[var(--text2)]">
+                  {anResult.adjustments.map((a, i) => (
+                    <li key={i}>
+                      {a.change} — {a.reason}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  type="button"
+                  className="w-full rounded-xl py-3 font-semibold text-white"
+                  style={{ background: "var(--accent2)" }}
+                  onClick={() => void saveAnalyzedRecipeToLibrary()}
+                >
+                  Save to Recipe Library
+                </button>
+                <button
+                  type="button"
+                  className="w-full rounded-xl py-3 font-semibold text-[var(--text)]"
+                  style={{ background: "var(--surface2)" }}
+                  onClick={() => void logAnalyzedAsFood()}
+                >
+                  Log as Food
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
 
       <HabitsWaterTracker />
     </div>

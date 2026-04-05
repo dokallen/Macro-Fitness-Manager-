@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 import { CoachChooser, getCoach } from "@/components/coach/CoachChooser";
 import { CoachClient } from "@/components/coach/CoachClient";
@@ -9,6 +10,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 const supabase = createBrowserSupabaseClient();
 
 export function CoachFabPanel() {
+  const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [showChooser, setShowChooser] = useState(false);
@@ -127,7 +129,7 @@ export function CoachFabPanel() {
               }}
             />
           ) : (
-            <CoachClient userId={userId} />
+            <CoachClient userId={userId} embedded currentPath={pathname} />
           )}
         </div>
       </div>
