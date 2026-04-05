@@ -34,6 +34,7 @@ const MENU_ITEMS: {
 }[] = [
   { emoji: "💊", label: "Supplements", href: "/supplements" },
   { emoji: "📓", label: "Fitness Journal", href: "/journal" },
+  { emoji: "🎯", label: "Challenges", href: "/challenges" },
   { emoji: "💬", label: "Coach", action: "coach" },
   { emoji: "🏆", label: "Achievements", href: "/badges" },
   { emoji: "⚙️", label: "Settings & Targets", href: "/settings" },
