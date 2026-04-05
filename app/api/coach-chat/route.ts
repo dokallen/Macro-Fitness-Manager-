@@ -21,6 +21,16 @@ const WARMUP_SYSTEM = `You are a fitness coach. Generate a 5-minute dynamic warm
 
 const ONE_RM_OCR_SYSTEM = `The user uploaded a photo of training notes (whiteboard, log, app screenshot). Extract the most prominent weight value in pounds (or convert kg to lbs if clearly labeled) and rep count for a single set. Return ONLY valid JSON: {"weight": number, "reps": number}. Use 0 if a value cannot be determined.`;
 
+const DETECT_BODY_METRICS_SYSTEM = `The user has uploaded a screenshot or photo from a scale, fitness app, or health device. Detect every visible health metric and its value. Return ONLY valid JSON array: [{name: string, value: string, unit: string}]. Examples of metrics: weight, body fat percentage, muscle mass, visceral fat, BMR, skeletal muscle percentage, metabolic age, body water percentage, bone mass, protein percentage. Include every metric visible. No markdown.`;
+
+const BODY_COMP_ANALYSIS_SYSTEM = `You are a fitness coach analyzing body composition trends. The user just logged a weigh-in. Compare current vs previous metrics and give 2-3 sentences of insight. Focus on what's most notable — muscle retention, fat loss progress, concerning trends. Be specific with numbers. Stay encouraging but honest. End with one actionable tip for this week.`;
+
+const NUTRITION_CHECK_SYSTEM = `You are a real-time nutrition coach. The user just logged a meal. Review their current daily totals vs targets and give ONE sentence of forward-looking feedback. Focus on what they should eat next or what to be mindful of for the rest of the day. Be specific with numbers remaining. Never repeat what they just ate. Keep it under 20 words.`;
+
+const MEAL_SUGGESTION_SYSTEM = `You are a nutrition coach. Based on the user's remaining macro targets for today, suggest 2-3 specific meal ideas that would fit well. Format as a simple list. Each suggestion should include approximate calories and protein. Be practical and realistic. Under 60 words total.`;
+
+const METRIC_WEEK_INSIGHT_SYSTEM = `You are a fitness coach. The user is comparing body metrics this week vs last week (averages). Reply with exactly one short sentence about the most notable change. Use specific numbers from the payload. Stay encouraging. No markdown.`;
+
 function workoutScreenshotSystem(lbsLabel: string) {
   return `Analyze this workout screenshot. IGNORE all calorie numbers shown in the app — those are inaccurate. Look for: workout duration, exercise names, and any heart rate data. Using MET method for the workout type detected, calculate calories burned for a person weighing ${lbsLabel}. Reply in 2-3 sentences: duration detected, calculated calories using MET, brief note.`;
 }
@@ -411,6 +421,76 @@ export async function POST(req: Request) {
           userBlocks: [{ type: "text", text: userText.slice(0, MAX_MESSAGE_CHARS) }],
           max_tokens: 500,
           temperature: 0.7,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
+      if (coachTask === "detect_body_metrics") {
+        if (!rawImg) return jsonError("imageBase64 is required.", 400);
+        const { mediaType, b64 } = parseImagePayload(rawImg);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: DETECT_BODY_METRICS_SYSTEM,
+          userBlocks: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: b64 },
+            },
+            {
+              type: "text",
+              text: "Return only the JSON array of visible metrics and values.",
+            },
+          ],
+          max_tokens: maxTok,
+          temperature: 0.1,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
+      if (coachTask === "body_comp_analysis") {
+        if (!userText) return jsonError("userText is required.", 400);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: BODY_COMP_ANALYSIS_SYSTEM,
+          userBlocks: [{ type: "text", text: userText.slice(0, MAX_MESSAGE_CHARS) }],
+          max_tokens: 500,
+          temperature: 0.65,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
+      if (coachTask === "nutrition_check") {
+        if (!userText) return jsonError("userText is required.", 400);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: NUTRITION_CHECK_SYSTEM,
+          userBlocks: [{ type: "text", text: userText.slice(0, 2000) }],
+          max_tokens: 120,
+          temperature: 0.5,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
+      if (coachTask === "meal_suggestion") {
+        if (!userText) return jsonError("userText is required.", 400);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: MEAL_SUGGESTION_SYSTEM,
+          userBlocks: [{ type: "text", text: userText.slice(0, 4000) }],
+          max_tokens: 220,
+          temperature: 0.55,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
+      if (coachTask === "metric_week_insight") {
+        if (!userText) return jsonError("userText is required.", 400);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: METRIC_WEEK_INSIGHT_SYSTEM,
+          userBlocks: [{ type: "text", text: userText.slice(0, 4000) }],
+          max_tokens: 120,
+          temperature: 0.55,
         });
         return NextResponse.json({ coachTaskReply: text });
       }

@@ -70,12 +70,141 @@ function todayYmdLocal(): string {
   return `${y}-${m}-${day}`;
 }
 
+function ymdUtc(d = new Date()): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function yesterdayUtcYmd(todayYmd: string): string {
+  const [y, mo, d] = todayYmd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return ymdUtc(dt);
+}
+
+function utcBoundsForYmd(ymd: string): { start: string; end: string } {
+  const [y, mo, d] = ymd.split("-").map(Number);
+  const start = new Date(Date.UTC(y, mo - 1, d, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(y, mo - 1, d, 23, 59, 59, 999));
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function totalsFromLogs(logs: FoodLogRow[]): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const log of logs) {
+    for (const m of log.food_log_macros ?? []) {
+      const key = normalizeMacroKey(m.key ?? "");
+      if (!key) continue;
+      totals[key] = (totals[key] ?? 0) + parseNumber(m.value ?? "");
+    }
+  }
+  return totals;
+}
+
+function withinAllMacroTargets(
+  totals: Record<string, number>,
+  targets: MacroTargetRow[]
+): boolean {
+  if (targets.length === 0) return false;
+  for (const t of targets) {
+    const k = normalizeMacroKey(t.key);
+    const target = t.targetNumber;
+    if (!Number.isFinite(target) || target <= 0) continue;
+    const c = totals[k] ?? 0;
+    if (Math.abs(c - target) / target > 0.1) return false;
+  }
+  return true;
+}
+
+function readMacroStreak(): { streak: number; lastQualifiedYmd: string | null } {
+  if (typeof window === "undefined") return { streak: 0, lastQualifiedYmd: null };
+  try {
+    const raw = localStorage.getItem(LS_MACRO_STREAK);
+    if (!raw) return { streak: 0, lastQualifiedYmd: null };
+    const p = JSON.parse(raw) as {
+      streak?: number;
+      lastQualifiedYmd?: string | null;
+    };
+    return {
+      streak: typeof p.streak === "number" ? p.streak : 0,
+      lastQualifiedYmd:
+        typeof p.lastQualifiedYmd === "string" ? p.lastQualifiedYmd : null,
+    };
+  } catch {
+    return { streak: 0, lastQualifiedYmd: null };
+  }
+}
+
+function writeMacroStreak(s: { streak: number; lastQualifiedYmd: string | null }) {
+  try {
+    localStorage.setItem(LS_MACRO_STREAK, JSON.stringify(s));
+  } catch {
+    /* ignore */
+  }
+}
+
+function bumpMacroStreakIfQualified(todayYmd: string, qualified: boolean) {
+  if (!qualified) return;
+  const yest = yesterdayUtcYmd(todayYmd);
+  const s = readMacroStreak();
+  if (s.lastQualifiedYmd === todayYmd) return;
+  let nextStreak = 1;
+  if (s.lastQualifiedYmd === yest) nextStreak = Math.max(0, s.streak) + 1;
+  writeMacroStreak({ streak: nextStreak, lastQualifiedYmd: todayYmd });
+}
+
+async function fetchTotalsForUtcYmd(
+  userId: string,
+  ymd: string
+): Promise<Record<string, number>> {
+  const { start, end } = utcBoundsForYmd(ymd);
+  const supabase = createBrowserSupabaseClient();
+  const { data, error } = await supabase
+    .from("food_logs")
+    .select("food_log_macros(key, value)")
+    .eq("user_id", userId)
+    .gte("logged_at", start)
+    .lte("logged_at", end);
+  if (error || !data) return {};
+  const totals: Record<string, number> = {};
+  for (const row of data) {
+    const macros =
+      (row as { food_log_macros?: { key: string; value: number }[] | null })
+        .food_log_macros ?? [];
+    for (const m of macros) {
+      const key = normalizeMacroKey(m.key ?? "");
+      if (!key) continue;
+      totals[key] = (totals[key] ?? 0) + parseNumber(m.value ?? "");
+    }
+  }
+  return totals;
+}
+
+function validateMacroStreakAfterDayChange(
+  userId: string,
+  macroTargets: MacroTargetRow[]
+) {
+  const today = ymdUtc();
+  const yest = yesterdayUtcYmd(today);
+  void (async () => {
+    const s = readMacroStreak();
+    if (!s.lastQualifiedYmd || s.lastQualifiedYmd >= yest) return;
+    const yTotals = await fetchTotalsForUtcYmd(userId, yest);
+    if (!withinAllMacroTargets(yTotals, macroTargets)) {
+      writeMacroStreak({ streak: 0, lastQualifiedYmd: null });
+    }
+  })();
+}
+
 const LS_HABIT_DATA = "mf_habitData";
 const LS_HABIT_STREAKS = "mf_habitStreaks";
 const LS_CUSTOM_HABITS = "mf_customHabits";
 const LS_WATER_LOG = "mf_waterLog";
 const LS_WATER_GOAL = "mf_waterGoal";
 const LS_FOOD_LOG_FLAG = "mf_foodLog";
+const LS_MACRO_STREAK = "mf_macroStreak";
 
 type CookStep = { text: string; timerSec: number | null };
 
@@ -733,6 +862,15 @@ export function MealsClient({ userId, macroTargets }: Props) {
   const [voiceFoodNonce, setVoiceFoodNonce] = useState(0);
   const [voiceFoodText, setVoiceFoodText] = useState("");
 
+  const [coachTip, setCoachTip] = useState("");
+  const [coachTipPinned, setCoachTipPinned] = useState(false);
+  const tipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mealSuggestions, setMealSuggestions] = useState<string[]>([]);
+  const [mealSuggestBusy, setMealSuggestBusy] = useState(false);
+  const [mealSuggestNonce, setMealSuggestNonce] = useState(0);
+  const [streakCount, setStreakCount] = useState(0);
+  const lastUtcYmdRef = useRef(ymdUtc());
+
   const [analyzerOpen, setAnalyzerOpen] = useState(false);
   const [anRecipeName, setAnRecipeName] = useState("");
   const [anServings, setAnServings] = useState("1");
@@ -772,7 +910,46 @@ export function MealsClient({ userId, macroTargets }: Props) {
       });
   }, [macroTargets, logs]);
 
-  const loadLogs = useCallback(async () => {
+  const remainingSummary = useMemo(() => {
+    const targetMap = new Map(
+      macroTargets.map((t) => [normalizeMacroKey(t.key), t.targetNumber])
+    );
+    const totals = totalsFromLogs(logs);
+    const calT = targetMap.get("calories");
+    const proT = targetMap.get("protein");
+    const fatT = targetMap.get("fat");
+    const calC = totals.calories ?? 0;
+    const proC = totals.protein ?? 0;
+    const fatC = totals.fat ?? 0;
+    return {
+      calRem: calT !== undefined ? calT - calC : null,
+      proRem: proT !== undefined ? proT - proC : null,
+      fatRem: fatT !== undefined ? fatT - fatC : null,
+      over:
+        (calT !== undefined && calC > calT) ||
+        (proT !== undefined && proC > proT) ||
+        (fatT !== undefined && fatC > fatT),
+    };
+  }, [logs, macroTargets]);
+
+  const coachTipPinnedRef = useRef(false);
+
+  const clearCoachTipTimer = useCallback(() => {
+    if (tipTimerRef.current) {
+      clearTimeout(tipTimerRef.current);
+      tipTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleCoachTipDismiss = useCallback(() => {
+    coachTipPinnedRef.current = false;
+    clearCoachTipTimer();
+    tipTimerRef.current = setTimeout(() => {
+      if (!coachTipPinnedRef.current) setCoachTip("");
+    }, 8000);
+  }, [clearCoachTipTimer]);
+
+  const loadLogs = useCallback(async (): Promise<FoodLogRow[]> => {
     const supabase = createBrowserSupabaseClient();
     const { start, end } = getUtcDayBounds();
     const { data, error } = await supabase
@@ -787,7 +964,7 @@ export function MealsClient({ userId, macroTargets }: Props) {
 
     if (error) {
       console.error(error);
-      return;
+      return [];
     }
     const list = (data ?? []) as FoodLogRow[];
     setLogs(list);
@@ -804,7 +981,54 @@ export function MealsClient({ userId, macroTargets }: Props) {
     } catch {
       /* ignore */
     }
-  }, [userId]);
+
+    const todayU = ymdUtc();
+    validateMacroStreakAfterDayChange(userId, macroTargets);
+    const dayTotals = totalsFromLogs(list);
+    if (withinAllMacroTargets(dayTotals, macroTargets)) {
+      bumpMacroStreakIfQualified(todayU, true);
+    }
+    setStreakCount(readMacroStreak().streak);
+
+    return list;
+  }, [macroTargets, userId]);
+
+  const handlePostMealLogged = useCallback(async () => {
+    const list = await loadLogs();
+    if (list.length === 0) return;
+    const latest = list[0];
+    const mealJustLogged = latest.food_name?.trim() ?? "";
+    const todayTotals = totalsFromLogs(list);
+    const hour = new Date().getHours();
+    const timeOfDay =
+      hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    try {
+      const res = await fetch("/api/coach-chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          coachTask: "nutrition_check",
+          userText: JSON.stringify({
+            todayTotals,
+            macroTargets,
+            timeOfDay,
+            mealJustLogged,
+          }),
+        }),
+      });
+      const data = (await res.json()) as { coachTaskReply?: string };
+      if (!res.ok) return;
+      const tip = (data.coachTaskReply ?? "").trim();
+      if (!tip) return;
+      coachTipPinnedRef.current = false;
+      setCoachTipPinned(false);
+      clearCoachTipTimer();
+      setCoachTip(tip);
+      scheduleCoachTipDismiss();
+    } catch {
+      /* ignore */
+    }
+  }, [loadLogs, macroTargets, clearCoachTipTimer, scheduleCoachTipDismiss]);
 
   const loadRecipes = useCallback(async () => {
     const supabase = createBrowserSupabaseClient();
@@ -875,6 +1099,73 @@ export function MealsClient({ userId, macroTargets }: Props) {
   useEffect(() => {
     void refreshAll();
   }, [refreshAll]);
+
+  useEffect(() => {
+    setStreakCount(readMacroStreak().streak);
+  }, []);
+
+  useEffect(() => () => clearCoachTipTimer(), [clearCoachTipTimer]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = ymdUtc();
+      if (now !== lastUtcYmdRef.current) {
+        lastUtcYmdRef.current = now;
+        validateMacroStreakAfterDayChange(userId, macroTargets);
+        void loadLogs();
+      }
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [loadLogs, macroTargets, userId]);
+
+  useEffect(() => {
+    if (macroTargets.length === 0 || logs.length === 0) {
+      setMealSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    setMealSuggestBusy(true);
+    void (async () => {
+      try {
+        const todayTotals = totalsFromLogs(logs);
+        const hour = new Date().getHours();
+        const timeOfDay =
+          hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+        const recentMeals = logs
+          .slice(0, 3)
+          .map((l) => l.food_name)
+          .filter(Boolean);
+        const res = await fetch("/api/coach-chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            coachTask: "meal_suggestion",
+            userText: JSON.stringify({
+              todayTotals,
+              macroTargets,
+              timeOfDay,
+              recentMeals,
+            }),
+          }),
+        });
+        const data = (await res.json()) as { coachTaskReply?: string };
+        if (cancelled) return;
+        const text = (data.coachTaskReply ?? "").trim();
+        const lines = text
+          .split(/\n+/)
+          .map((l) => l.replace(/^\s*[-*•\d.)]+\s*/, "").trim())
+          .filter(Boolean);
+        setMealSuggestions(lines.length ? lines : text ? [text] : []);
+      } catch {
+        if (!cancelled) setMealSuggestions([]);
+      } finally {
+        if (!cancelled) setMealSuggestBusy(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [logs, macroTargets, mealSuggestNonce]);
 
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
@@ -1270,7 +1561,92 @@ export function MealsClient({ userId, macroTargets }: Props) {
             ))}
           </div>
         )}
+        {macroSummaryRows.length > 0 ? (
+          <p
+            className={`mt-2 text-xs ${remainingSummary.over ? "text-[var(--red)]" : "text-[var(--text2)]"}`}
+          >
+            {remainingSummary.calRem != null
+              ? `${Math.round(remainingSummary.calRem)} cal remaining`
+              : ""}
+            {remainingSummary.proRem != null
+              ? `${remainingSummary.calRem != null ? " · " : ""}${Math.round(remainingSummary.proRem)}g protein left`
+              : ""}
+            {remainingSummary.fatRem != null
+              ? `${remainingSummary.calRem != null || remainingSummary.proRem != null ? " · " : ""}${Math.round(remainingSummary.fatRem)}g fat left`
+              : ""}
+          </p>
+        ) : null}
       </div>
+
+      {coachTip ? (
+        <div
+          key={coachTip}
+          role="note"
+          className="animate-in fade-in-0 slide-in-from-top-2 rounded-xl border border-[var(--border)] bg-[var(--surface2)] p-3 text-sm text-[var(--text)] duration-300"
+          onClick={() => {
+            coachTipPinnedRef.current = true;
+            setCoachTipPinned(true);
+            clearCoachTipTimer();
+          }}
+        >
+          <span className="mr-1" aria-hidden>
+            🧠
+          </span>
+          {coachTip}
+          {coachTipPinned ? (
+            <span className="ml-2 text-[10px] text-[var(--text3)]">(pinned)</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {streakCount > 0 ? (
+        <div
+          className="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white"
+          style={{ background: "var(--accent2)" }}
+        >
+          🎯 {streakCount} day macro streak
+        </div>
+      ) : null}
+
+      {macroTargets.length > 0 && logs.length > 0 ? (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-[family-name:var(--fd)] text-sm uppercase tracking-wide text-[var(--text)]">
+              NEXT MEAL IDEAS
+            </h2>
+            <button
+              type="button"
+              className="text-lg text-[var(--accent)]"
+              aria-label="Refresh suggestions"
+              disabled={mealSuggestBusy}
+              onClick={() => setMealSuggestNonce((n) => n + 1)}
+            >
+              ↻
+            </button>
+          </div>
+          {mealSuggestBusy && mealSuggestions.length === 0 ? (
+            <p className="mt-2 text-xs text-[var(--text3)]">Loading ideas…</p>
+          ) : null}
+          <ul className="mt-3 space-y-3 text-sm text-[var(--text2)]">
+            {mealSuggestions.map((line, i) => (
+              <li key={`${i}-${line.slice(0, 24)}`} className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <span className="min-w-0 flex-1">{line}</span>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface2)] px-3 py-1 text-xs font-medium text-[var(--text)]"
+                  onClick={() => {
+                    const name = line.replace(/\s*\([^)]*\)\s*$/g, "").split(/[–—-]/)[0]?.trim() || line;
+                    setVoiceFoodText(name);
+                    setVoiceFoodNonce((n) => n + 1);
+                  }}
+                >
+                  + Log This
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div
         className="flex gap-1 rounded-2xl border border-border bg-card p-1"
@@ -1322,7 +1698,7 @@ export function MealsClient({ userId, macroTargets }: Props) {
           <LogMealForm
             userId={userId}
             macroTargets={macroTargets}
-            onLogged={() => void loadLogs()}
+            onLogged={() => void handlePostMealLogged()}
             labelPrefill={labelPrefill}
             labelPrefillNonce={labelPrefillNonce}
             voiceFoodNameNonce={voiceFoodNonce}
