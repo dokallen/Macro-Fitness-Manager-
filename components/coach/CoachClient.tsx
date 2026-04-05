@@ -5,11 +5,17 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { ConversationSidebar } from "@/components/coach/ConversationSidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createBrowserSupabaseClient();
+
+function fromCoachConversationsTable() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- coach_conversations not in generated Database type
+  return (supabase as any).from("coach_conversations");
+}
 
 type SpeechRecognitionCtor = new () => {
   lang: string;
@@ -29,6 +35,13 @@ export type CoachMessageRow = {
   created_at: string;
 };
 
+type StoredConvMsg = {
+  role: string;
+  content: string;
+  timestamp: string;
+  coachId?: string;
+};
+
 function formatTime(iso: string) {
   try {
     return new Date(iso).toLocaleTimeString(undefined, {
@@ -38,6 +51,29 @@ function formatTime(iso: string) {
   } catch {
     return "";
   }
+}
+
+function parseStoredMessages(
+  convId: string,
+  raw: unknown
+): CoachMessageRow[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CoachMessageRow[] = [];
+  let i = 0;
+  for (const x of raw) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as StoredConvMsg;
+    const role = o.role === "user" ? "user" : "coach";
+    const ts = String(o.timestamp ?? new Date().toISOString());
+    out.push({
+      id: `${convId}-${i}-${ts}`,
+      role,
+      content: String(o.content ?? ""),
+      created_at: ts,
+    });
+    i += 1;
+  }
+  return out;
 }
 
 function TypingIndicator() {
@@ -93,15 +129,31 @@ type Props = {
   /** Compact FAB panel: no full-page header, chips + multimodal input */
   embedded?: boolean;
   currentPath?: string;
+  /** Controlled sidebar (FAB). If omitted, CoachClient manages internally when not embedded. */
+  sidebarOpen?: boolean;
+  onSidebarOpenChange?: (open: boolean) => void;
+  /** Optional: notify parent when active conversation id changes */
+  onConversationIdChange?: (id: string | null) => void;
 };
 
 export function CoachClient({
   userId,
   embedded = false,
   currentPath: currentPathProp,
+  sidebarOpen: sidebarOpenControlled,
+  onSidebarOpenChange,
+  onConversationIdChange,
 }: Props) {
   const pathname = usePathname() ?? "/";
   const currentPath = currentPathProp ?? pathname;
+
+  const [internalSidebar, setInternalSidebar] = useState(false);
+  const showSidebar =
+    sidebarOpenControlled !== undefined ? sidebarOpenControlled : internalSidebar;
+  const setShowSidebar = onSidebarOpenChange ?? setInternalSidebar;
+
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [listRefreshNonce, setListRefreshNonce] = useState(0);
 
   const [messages, setMessages] = useState<CoachMessageRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,31 +172,70 @@ export function CoachClient({
     draftRef.current = draft;
   }, [draft]);
 
+  useEffect(() => {
+    onConversationIdChange?.(conversationId);
+  }, [conversationId, onConversationIdChange]);
+
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  const loadMessages = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("coach_messages")
-      .select("id, role, content, created_at")
+  const loadLatestConversation = useCallback(async () => {
+    const { data, error } = await fromCoachConversationsTable()
+      .select("id, messages, updated_at")
       .eq("user_id", userId)
-      .order("created_at", { ascending: true });
+      .order("updated_at", { ascending: false })
+      .limit(1);
 
     if (error) {
       console.error(error);
-      toast.error(error.message);
+      if (
+        /relation|does not exist|schema cache/i.test(error.message ?? "") ||
+        error.code === "42P01"
+      ) {
+        toast.error(
+          "Coach conversations table missing. Add coach_conversations in Supabase (see audit SQL)."
+        );
+      } else {
+        toast.error(error.message);
+      }
+      setConversationId(null);
+      setMessages([]);
       setLoading(false);
       return;
     }
 
-    setMessages((data ?? []) as CoachMessageRow[]);
+    const row = data?.[0];
+    if (row) {
+      setConversationId(row.id);
+      setMessages(parseStoredMessages(row.id, row.messages));
+    } else {
+      setConversationId(null);
+      setMessages([]);
+    }
     setLoading(false);
   }, [userId]);
 
+  const loadConversationById = useCallback(async (id: string) => {
+    const { data, error } = await fromCoachConversationsTable()
+      .select("id, messages")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (error || !data) {
+      toast.error(error?.message ?? "Could not load conversation.");
+      return;
+    }
+    setConversationId(data.id);
+    setMessages(parseStoredMessages(data.id, data.messages));
+    setListRefreshNonce((n) => n + 1);
+    window.setTimeout(() => scrollToBottom(), 120);
+  }, [scrollToBottom, userId]);
+
   useEffect(() => {
-    void loadMessages();
-  }, [loadMessages]);
+    void loadLatestConversation();
+  }, [loadLatestConversation]);
 
   useEffect(() => {
     scrollToBottom();
@@ -158,6 +249,15 @@ export function CoachClient({
     };
     setVoiceOk(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
   }, []);
+
+  const startNewConversation = useCallback(() => {
+    setConversationId(null);
+    setMessages([]);
+    setDraft("");
+    setPendingImage(null);
+    setShowSidebar(false);
+    setListRefreshNonce((n) => n + 1);
+  }, [setShowSidebar]);
 
   const submitContent = useCallback(
     async (text: string, explicitImage?: string | null) => {
@@ -186,12 +286,14 @@ export function CoachClient({
             content: contentForApi,
             ...(img ? { imageBase64: img } : {}),
             ...(coachId ? { coachId } : {}),
+            ...(conversationId ? { conversationId } : {}),
           }),
         });
 
         const payload = (await res.json().catch(() => ({}))) as {
           error?: string;
           messages?: CoachMessageRow[];
+          conversationId?: string;
         };
 
         if (!res.ok) {
@@ -201,18 +303,22 @@ export function CoachClient({
 
         setPendingImage(null);
         setDraft("");
+        if (typeof payload.conversationId === "string") {
+          setConversationId(payload.conversationId);
+        }
         if (Array.isArray(payload.messages)) {
           setMessages(payload.messages);
         } else {
-          await loadMessages();
+          await loadLatestConversation();
         }
+        setListRefreshNonce((n) => n + 1);
       } catch {
         toast.error("Network error. Try again.");
       } finally {
         setSending(false);
       }
     },
-    [sending, loadMessages, pendingImage]
+    [conversationId, loadLatestConversation, pendingImage, sending]
   );
 
   async function onSubmit(e: React.FormEvent) {
@@ -305,9 +411,27 @@ export function CoachClient({
   const chips = coachChipsForPath(currentPath);
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col bg-[var(--bg)]">
+    <div className="relative mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col bg-[var(--bg)]">
+      <ConversationSidebar
+        open={showSidebar}
+        userId={userId}
+        activeConversationId={conversationId}
+        onClose={() => setShowSidebar(false)}
+        onNew={startNewConversation}
+        onSelectConversation={(id) => void loadConversationById(id)}
+        listRefreshNonce={listRefreshNonce}
+      />
+
       {!embedded ? (
         <header className="sticky top-0 z-20 flex shrink-0 items-start gap-3 border-b border-[var(--border)] bg-[var(--bg)] px-4 py-3">
+          <button
+            type="button"
+            className="mt-0.5 min-h-[44px] min-w-[44px] font-body text-lg text-[var(--accent)]"
+            aria-label="Open conversations"
+            onClick={() => setShowSidebar(true)}
+          >
+            ☰
+          </button>
           <Link
             href="/"
             className="mt-0.5 min-h-[44px] min-w-[44px] font-body text-sm text-[var(--accent)]"

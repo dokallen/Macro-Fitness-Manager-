@@ -47,6 +47,84 @@ function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
+const GEN_CONV_TITLE_SYSTEM = `Generate a short 3-5 word title for a conversation that starts with this message. Return ONLY the title, no quotes, no punctuation.`;
+
+type ConvMsg = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  coachId: string;
+};
+
+/** `coach_conversations` exists in Supabase but is not in generated `Database` types yet. */
+function fromCoachConversations(
+  supabase: ReturnType<typeof createServerSupabaseClient>
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table missing from Database type
+  return (supabase as any).from("coach_conversations");
+}
+
+function parseConvMessages(raw: unknown): ConvMsg[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ConvMsg[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as Record<string, unknown>;
+    const r = String(o.role ?? "");
+    const role: "user" | "assistant" = r === "user" ? "user" : "assistant";
+    out.push({
+      role,
+      content: String(o.content ?? ""),
+      timestamp: String(o.timestamp ?? new Date().toISOString()),
+      coachId: String(o.coachId ?? o.coach_id ?? "drdata"),
+    });
+  }
+  return out;
+}
+
+function toUiMessages(
+  convId: string,
+  msgs: ConvMsg[]
+): { id: string; role: string; content: string; created_at: string }[] {
+  return msgs.map((m, i) => ({
+    id: `${convId}-${i}-${m.timestamp}`,
+    role: m.role === "user" ? "user" : "coach",
+    content: m.content,
+    created_at: m.timestamp,
+  }));
+}
+
+async function compressMessagesIfNeeded(
+  apiKey: string,
+  msgs: ConvMsg[]
+): Promise<ConvMsg[]> {
+  let messages = [...msgs];
+  while (messages.length > 100) {
+    const chunk = messages.slice(0, 20);
+    const rest = messages.slice(20);
+    const blob = chunk
+      .map((m) => `${m.role}: ${m.content}`)
+      .join("\n\n")
+      .slice(0, 12000);
+    const summaryText = await callAnthropicVisionOrText({
+      apiKey,
+      system:
+        "Condense the following chat turns into a concise summary (max 900 characters). Preserve goals, numbers, and coach guidance. Plain text only.",
+      userBlocks: [{ type: "text", text: blob }],
+      max_tokens: 400,
+      temperature: 0.2,
+    });
+    const summaryMsg: ConvMsg = {
+      role: "assistant",
+      content: `[Conversation summary] ${summaryText.trim()}`,
+      timestamp: new Date().toISOString(),
+      coachId: chunk[0]?.coachId ?? "system",
+    };
+    messages = [summaryMsg, ...rest];
+  }
+  return messages;
+}
+
 function parseImagePayload(rawImg: string): { mediaType: string; b64: string } {
   const dataUrl = rawImg.match(/^data:(image\/[\w+.+-]+);base64,([\s\S]+)$/i);
   const mediaType =
@@ -558,6 +636,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ coachTaskReply: text });
       }
 
+      if (coachTask === "generate_conversation_title") {
+        if (!userText) return jsonError("userText is required.", 400);
+        const text = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: GEN_CONV_TITLE_SYSTEM,
+          userBlocks: [{ type: "text", text: userText.slice(0, 500) }],
+          max_tokens: 20,
+          temperature: 0,
+        });
+        return NextResponse.json({ coachTaskReply: text });
+      }
+
       return jsonError(`Unknown coachTask: ${coachTask}`, 400);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Coach task failed.";
@@ -600,19 +690,11 @@ export async function POST(req: Request) {
       return jsonError("Unauthorized", 401);
     }
 
-    const { data: insertedUser, error: userInsErr } = await supabase
-      .from("coach_messages")
-      .insert({
-        user_id: user.id,
-        role: "user",
-        content,
-      })
-      .select("id")
-      .single();
-
-    if (userInsErr || !insertedUser) {
-      return jsonError(userInsErr?.message ?? "Failed to save message.", 500);
-    }
+    const convIdRaw =
+      bodyObj && typeof bodyObj.conversationId === "string"
+        ? bodyObj.conversationId.trim()
+        : "";
+    const existingConvId = convIdRaw.length > 0 ? convIdRaw : null;
 
     const { data: prefs, error: prefErr } = await supabase
       .from("user_preferences")
@@ -620,7 +702,6 @@ export async function POST(req: Request) {
       .eq("user_id", user.id);
 
     if (prefErr) {
-      await supabase.from("coach_messages").delete().eq("id", insertedUser.id);
       return jsonError(prefErr.message, 500);
     }
 
@@ -640,18 +721,32 @@ export async function POST(req: Request) {
 
     const system = buildCoachSystemPromptFromPreferences(prefs ?? [], coachId);
 
-    const { data: history, error: histErr } = await supabase
-      .from("coach_messages")
-      .select("id, role, content, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true });
+    let rowId: string | null = existingConvId;
+    let messagesArr: ConvMsg[] = [];
 
-    if (histErr) {
-      await supabase.from("coach_messages").delete().eq("id", insertedUser.id);
-      return jsonError(histErr.message, 500);
+    if (existingConvId) {
+      const { data: row, error: rowErr } = await fromCoachConversations(supabase)
+        .select("id, messages")
+        .eq("id", existingConvId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (rowErr || !row) {
+        return jsonError(rowErr?.message ?? "Conversation not found.", 404);
+      }
+      messagesArr = parseConvMessages(row.messages);
     }
 
-    const rows = history ?? [];
+    const nowIso = new Date().toISOString();
+    const userMsg: ConvMsg = {
+      role: "user",
+      content,
+      timestamp: nowIso,
+      coachId,
+    };
+    messagesArr = [...messagesArr, userMsg];
+    messagesArr = await compressMessagesIfNeeded(apiKey!, messagesArr);
+
     let reply: string;
 
     if (rawChatImg) {
@@ -660,12 +755,11 @@ export async function POST(req: Request) {
         role: "user" | "assistant";
         content: string | AnthropicBlock[];
       }[] = [];
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const isLastUser =
-          i === rows.length - 1 && row.role === "user";
-        if (row.role === "user") {
-          if (isLastUser) {
+      for (let i = 0; i < messagesArr.length; i++) {
+        const m = messagesArr[i]!;
+        const isLast = i === messagesArr.length - 1;
+        if (m.role === "user") {
+          if (isLast) {
             claudePayload.push({
               role: "user",
               content: [
@@ -673,14 +767,14 @@ export async function POST(req: Request) {
                   type: "image",
                   source: { type: "base64", media_type: mediaType, data: b64 },
                 },
-                { type: "text", text: row.content },
+                { type: "text", text: m.content },
               ],
             });
           } else {
-            claudePayload.push({ role: "user", content: row.content });
+            claudePayload.push({ role: "user", content: m.content });
           }
-        } else if (row.role === "coach") {
-          claudePayload.push({ role: "assistant", content: row.content });
+        } else {
+          claudePayload.push({ role: "assistant", content: m.content });
         }
       }
 
@@ -713,7 +807,6 @@ export async function POST(req: Request) {
           raw.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
         if (!reply) throw new Error("Empty reply from Claude");
       } catch (e) {
-        await supabase.from("coach_messages").delete().eq("id", insertedUser.id);
         const message =
           e instanceof Error ? e.message : "Failed to reach Claude.";
         if (/not configured/i.test(message)) {
@@ -732,19 +825,14 @@ export async function POST(req: Request) {
       }
     } else {
       const claudeMessages: { role: "user" | "assistant"; content: string }[] =
-        [];
-      for (const row of rows) {
-        if (row.role === "user") {
-          claudeMessages.push({ role: "user", content: row.content });
-        } else if (row.role === "coach") {
-          claudeMessages.push({ role: "assistant", content: row.content });
-        }
-      }
+        messagesArr.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
 
       try {
         reply = await callCoachClaudeChat({ system, messages: claudeMessages });
       } catch (e) {
-        await supabase.from("coach_messages").delete().eq("id", insertedUser.id);
         const message =
           e instanceof Error ? e.message : "Failed to reach Claude.";
         if (/not configured/i.test(message)) {
@@ -763,27 +851,83 @@ export async function POST(req: Request) {
       }
     }
 
-    const { error: coachInsErr } = await supabase.from("coach_messages").insert({
-      user_id: user.id,
-      role: "coach",
+    const asstMsg: ConvMsg = {
+      role: "assistant",
       content: reply,
+      timestamp: new Date().toISOString(),
+      coachId,
+    };
+    messagesArr = [...messagesArr, asstMsg];
+    messagesArr = await compressMessagesIfNeeded(apiKey!, messagesArr);
+
+    const updatedAt = new Date().toISOString();
+    const sliceTitle = content.slice(0, 50);
+
+    if (rowId) {
+      const { error: upErr } = await fromCoachConversations(supabase)
+        .update({
+          messages: messagesArr,
+          updated_at: updatedAt,
+          coach_id: coachId,
+        })
+        .eq("id", rowId)
+        .eq("user_id", user.id);
+
+      if (upErr) {
+        return jsonError(upErr.message, 500);
+      }
+    } else {
+      const { data: ins, error: insErr } = await fromCoachConversations(supabase)
+        .insert({
+          user_id: user.id,
+          title: sliceTitle,
+          messages: messagesArr,
+          coach_id: coachId,
+          updated_at: updatedAt,
+        })
+        .select("id")
+        .single();
+
+      if (insErr || !ins) {
+        return jsonError(
+          insErr?.message ??
+            "Could not save conversation. Ensure coach_conversations exists in Supabase.",
+          500
+        );
+      }
+      rowId = ins.id as string;
+    }
+
+    const userTurns = messagesArr.filter((m) => m.role === "user").length;
+    const asstTurns = messagesArr.filter((m) => m.role === "assistant").length;
+    if (userTurns === 1 && asstTurns === 1 && rowId) {
+      try {
+        const titleText = await callAnthropicVisionOrText({
+          apiKey: apiKey!,
+          system: GEN_CONV_TITLE_SYSTEM,
+          userBlocks: [{ type: "text", text: content.slice(0, 500) }],
+          max_tokens: 20,
+          temperature: 0,
+        });
+        const t = titleText
+          .trim()
+          .replace(/^["'\s]+|["'\s]+$/g, "")
+          .slice(0, 80);
+        if (t) {
+          await fromCoachConversations(supabase)
+            .update({ title: t, updated_at: new Date().toISOString() })
+            .eq("id", rowId)
+            .eq("user_id", user.id);
+        }
+      } catch {
+        /* keep slice title */
+      }
+    }
+
+    return NextResponse.json({
+      messages: toUiMessages(rowId!, messagesArr),
+      conversationId: rowId,
     });
-
-    if (coachInsErr) {
-      return jsonError(coachInsErr.message, 500);
-    }
-
-    const { data: updated, error: finalErr } = await supabase
-      .from("coach_messages")
-      .select("id, role, content, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true });
-
-    if (finalErr) {
-      return jsonError(finalErr.message, 500);
-    }
-
-    return NextResponse.json({ messages: updated ?? [] });
   } catch (e) {
     const message =
       e instanceof Error ? e.message : "Failed to process coach chat.";

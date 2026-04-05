@@ -12,6 +12,7 @@ const supabase = createBrowserSupabaseClient();
 export function CoachFabPanel() {
   const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
+  const [convSidebarOpen, setConvSidebarOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [showChooser, setShowChooser] = useState(false);
   const [, setCoachRevision] = useState(0);
@@ -65,6 +66,7 @@ export function CoachFabPanel() {
         onClick={() => {
           setOpen(false);
           setShowChooser(false);
+          setConvSidebarOpen(false);
         }}
       />
       <div
@@ -83,6 +85,24 @@ export function CoachFabPanel() {
             {coach.name.toUpperCase()} {coach.icon}
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {!showChooser ? (
+              <button
+                type="button"
+                onClick={() => setConvSidebarOpen((s) => !s)}
+                style={{
+                  fontFamily: "var(--fb)",
+                  color: "#fff",
+                  background: "rgba(255,255,255,0.15)",
+                  border: "1px solid rgba(255,255,255,0.35)",
+                  borderRadius: 8,
+                  padding: "6px 10px",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                History
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setShowChooser((s) => !s)}
@@ -104,6 +124,7 @@ export function CoachFabPanel() {
               onClick={() => {
                 setOpen(false);
                 setShowChooser(false);
+                setConvSidebarOpen(false);
               }}
               style={{
                 fontFamily: "var(--fb)",
@@ -119,17 +140,25 @@ export function CoachFabPanel() {
           </div>
         </div>
         <div
-          className="min-h-0 flex-1 overflow-y-auto px-3"
+          className="relative min-h-0 flex-1 overflow-hidden px-0"
           style={{ maxHeight: "calc(70vh - 52px)" }}
         >
           {showChooser ? (
-            <CoachChooser
-              onCoachChange={() => {
-                bumpCoach();
-              }}
-            />
+            <div className="h-full overflow-y-auto px-3">
+              <CoachChooser
+                onCoachChange={() => {
+                  bumpCoach();
+                }}
+              />
+            </div>
           ) : (
-            <CoachClient userId={userId} embedded currentPath={pathname} />
+            <CoachClient
+              userId={userId}
+              embedded
+              currentPath={pathname}
+              sidebarOpen={convSidebarOpen}
+              onSidebarOpenChange={setConvSidebarOpen}
+            />
           )}
         </div>
       </div>
