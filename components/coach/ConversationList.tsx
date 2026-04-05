@@ -8,11 +8,6 @@ import { cn } from "@/lib/utils";
 
 const supabase = createBrowserSupabaseClient();
 
-function fromCoachConversationsTable() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- coach_conversations not in generated Database type
-  return (supabase as any).from("coach_conversations");
-}
-
 export type ConversationSummary = {
   id: string;
   title: string;
@@ -77,7 +72,8 @@ export function ConversationList({
 
   const fetchList = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await fromCoachConversationsTable()
+    const { data, error } = await supabase
+      .from("coach_conversations")
       .select("id, title, updated_at, coach_id")
       .eq("user_id", userId)
       .order("updated_at", { ascending: false })
@@ -105,8 +101,7 @@ export function ConversationList({
         {
           event: "*",
           schema: "public",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-          table: "coach_conversations" as any,
+          table: "coach_conversations",
           filter: `user_id=eq.${userId}`,
         },
         () => {

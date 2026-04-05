@@ -8,11 +8,6 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createBrowserSupabaseClient();
 
-function fromCoachConversationsTable() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- coach_conversations not in generated Database type
-  return (supabase as any).from("coach_conversations");
-}
-
 type Props = {
   open: boolean;
   userId: string;
@@ -112,7 +107,8 @@ export function ConversationSidebar({
                   const tid = deleteTarget;
                   if (!tid) return;
                   const wasActive = tid === activeConversationId;
-                  const { error } = await fromCoachConversationsTable()
+                  const { error } = await supabase
+                    .from("coach_conversations")
                     .delete()
                     .eq("id", tid)
                     .eq("user_id", userId);

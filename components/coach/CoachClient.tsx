@@ -12,11 +12,6 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createBrowserSupabaseClient();
 
-function fromCoachConversationsTable() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- coach_conversations not in generated Database type
-  return (supabase as any).from("coach_conversations");
-}
-
 type SpeechRecognitionCtor = new () => {
   lang: string;
   interimResults: boolean;
@@ -181,7 +176,8 @@ export function CoachClient({
   }, []);
 
   const loadLatestConversation = useCallback(async () => {
-    const { data, error } = await fromCoachConversationsTable()
+    const { data, error } = await supabase
+      .from("coach_conversations")
       .select("id, messages, updated_at")
       .eq("user_id", userId)
       .order("updated_at", { ascending: false })
@@ -217,7 +213,8 @@ export function CoachClient({
   }, [userId]);
 
   const loadConversationById = useCallback(async (id: string) => {
-    const { data, error } = await fromCoachConversationsTable()
+    const { data, error } = await supabase
+      .from("coach_conversations")
       .select("id, messages")
       .eq("id", id)
       .eq("user_id", userId)

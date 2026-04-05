@@ -56,14 +56,6 @@ type ConvMsg = {
   coachId: string;
 };
 
-/** `coach_conversations` exists in Supabase but is not in generated `Database` types yet. */
-function fromCoachConversations(
-  supabase: ReturnType<typeof createServerSupabaseClient>
-) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table missing from Database type
-  return (supabase as any).from("coach_conversations");
-}
-
 function parseConvMessages(raw: unknown): ConvMsg[] {
   if (!Array.isArray(raw)) return [];
   const out: ConvMsg[] = [];
@@ -725,7 +717,8 @@ export async function POST(req: Request) {
     let messagesArr: ConvMsg[] = [];
 
     if (existingConvId) {
-      const { data: row, error: rowErr } = await fromCoachConversations(supabase)
+      const { data: row, error: rowErr } = await supabase
+        .from("coach_conversations")
         .select("id, messages")
         .eq("id", existingConvId)
         .eq("user_id", user.id)
@@ -864,7 +857,8 @@ export async function POST(req: Request) {
     const sliceTitle = content.slice(0, 50);
 
     if (rowId) {
-      const { error: upErr } = await fromCoachConversations(supabase)
+      const { error: upErr } = await supabase
+        .from("coach_conversations")
         .update({
           messages: messagesArr,
           updated_at: updatedAt,
@@ -877,7 +871,8 @@ export async function POST(req: Request) {
         return jsonError(upErr.message, 500);
       }
     } else {
-      const { data: ins, error: insErr } = await fromCoachConversations(supabase)
+      const { data: ins, error: insErr } = await supabase
+        .from("coach_conversations")
         .insert({
           user_id: user.id,
           title: sliceTitle,
@@ -914,7 +909,8 @@ export async function POST(req: Request) {
           .replace(/^["'\s]+|["'\s]+$/g, "")
           .slice(0, 80);
         if (t) {
-          await fromCoachConversations(supabase)
+          await supabase
+            .from("coach_conversations")
             .update({ title: t, updated_at: new Date().toISOString() })
             .eq("id", rowId)
             .eq("user_id", user.id);
