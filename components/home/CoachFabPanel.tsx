@@ -61,7 +61,7 @@ export function CoachFabPanel() {
 
       <button
         type="button"
-        className={`sheet-overlay${open ? " open" : ""}`}
+        className={`coach-overlay${open ? " open" : ""}`}
         aria-label="Close coach"
         onClick={() => {
           setOpen(false);
@@ -77,6 +77,7 @@ export function CoachFabPanel() {
         style={{
           paddingBottom: "env(safe-area-inset-bottom)",
           pointerEvents: open ? "auto" : "none",
+          zIndex: 310,
         }}
         aria-hidden={!open}
       >
