@@ -1,9 +1,11 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import {
   startTransition,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { toast } from "sonner";
@@ -15,6 +17,78 @@ import { Label } from "@/components/ui/label";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createBrowserSupabaseClient();
+
+const LS_CARDIO_QUICK_TYPES = "mf_cardioQuickTypes";
+/** Session-only pills removed from the bar (still in history). */
+const LS_CARDIO_QUICK_DISMISSED = "mf_cardioQuickTypesDismissed";
+
+const ADD_QUICK_TYPE_BTN_STYLE: CSSProperties = {
+  background: "var(--accent2)",
+  border: "none",
+  borderRadius: 8,
+  color: "#fff",
+  fontFamily: "var(--fb)",
+  fontSize: 13,
+  fontWeight: 600,
+  padding: "6px 12px",
+  cursor: "pointer",
+};
+
+function readLsStringArray(key: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const p = JSON.parse(raw) as unknown;
+    if (!Array.isArray(p)) return [];
+    return Array.from(
+      new Set(
+        p
+          .filter((x): x is string => typeof x === "string")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeLsStringArray(key: string, arr: string[]) {
+  localStorage.setItem(key, JSON.stringify(arr));
+}
+
+function orderedTypesFromSessions(list: { type?: unknown }[]): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const s of list) {
+    const raw = s.type;
+    const t = typeof raw === "string" ? raw.trim() : "";
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    ordered.push(t);
+  }
+  return ordered;
+}
+
+function mergeQuickTypesWithLs(sessionOrdered: string[]): string[] {
+  if (typeof window === "undefined") return sessionOrdered;
+  const fromLs = readLsStringArray(LS_CARDIO_QUICK_TYPES);
+  const dismissed = new Set(readLsStringArray(LS_CARDIO_QUICK_DISMISSED));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of fromLs) {
+    if (dismissed.has(t) || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  for (const t of sessionOrdered) {
+    if (dismissed.has(t) || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+}
 
 type CardioMetric = {
   id: string;
@@ -90,6 +164,10 @@ export function CardioClient({ userId }: { userId: string }) {
   );
 
   const [quickTypeList, setQuickTypeList] = useState<string[]>([]);
+  const [liveQuickAddInput, setLiveQuickAddInput] = useState("");
+  const [manualQuickAddInput, setManualQuickAddInput] = useState("");
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressNextPillClickRef = useRef(false);
 
   const load = useCallback(async () => {
     const [fullRes, typesOnlyRes] = await Promise.all([
@@ -134,13 +212,81 @@ export function CardioClient({ userId }: { userId: string }) {
     console.log("[CardioClient] quickTypeList (deduped from full session rows)", ordered);
 
     setSessions(list);
-    setQuickTypeList(ordered);
+    setQuickTypeList(mergeQuickTypesWithLs(ordered));
     setInitialLoading(false);
   }, [userId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const refreshMergedQuickTypes = useCallback(() => {
+    setQuickTypeList(
+      mergeQuickTypesWithLs(orderedTypesFromSessions(sessions))
+    );
+  }, [sessions]);
+
+  const removeQuickTypePill = useCallback(
+    (t: string) => {
+      const cur = readLsStringArray(LS_CARDIO_QUICK_TYPES);
+      writeLsStringArray(
+        LS_CARDIO_QUICK_TYPES,
+        cur.filter((x) => x !== t)
+      );
+      const dis = readLsStringArray(LS_CARDIO_QUICK_DISMISSED);
+      if (!dis.includes(t)) {
+        writeLsStringArray(LS_CARDIO_QUICK_DISMISSED, [...dis, t]);
+      }
+      refreshMergedQuickTypes();
+    },
+    [refreshMergedQuickTypes]
+  );
+
+  const addQuickTypeName = useCallback(
+    (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        toast.error("Enter a cardio type name.");
+        return;
+      }
+      const dis = readLsStringArray(LS_CARDIO_QUICK_DISMISSED).filter(
+        (x) => x !== trimmed
+      );
+      writeLsStringArray(LS_CARDIO_QUICK_DISMISSED, dis);
+      const cur = readLsStringArray(LS_CARDIO_QUICK_TYPES);
+      if (!cur.includes(trimmed)) {
+        writeLsStringArray(LS_CARDIO_QUICK_TYPES, [...cur, trimmed]);
+      }
+      refreshMergedQuickTypes();
+    },
+    [refreshMergedQuickTypes]
+  );
+
+  const beginLongPressRemove = useCallback(
+    (t: string) => {
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTimerRef.current = null;
+        suppressNextPillClickRef.current = true;
+        removeQuickTypePill(t);
+      }, 600);
+    },
+    [removeQuickTypePill]
+  );
+
+  const endLongPressRemove = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (liveStartAt === null) {
@@ -362,6 +508,123 @@ export function CardioClient({ userId }: { userId: string }) {
 
   const manualLocked = liveStartAt !== null || pendingLive !== null;
 
+  function renderQuickTypePicker(
+    idPrefix: "live" | "manual",
+    selectedValue: string,
+    interactionDisabled: boolean
+  ) {
+    const inputId =
+      idPrefix === "live" ? "live-cardio-quick-add" : "manual-cardio-quick-add";
+    const value =
+      idPrefix === "live" ? liveQuickAddInput : manualQuickAddInput;
+    const setValue =
+      idPrefix === "live" ? setLiveQuickAddInput : setManualQuickAddInput;
+
+    function submitAdd() {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        toast.error("Enter a cardio type name.");
+        return;
+      }
+      addQuickTypeName(trimmed);
+      setValue("");
+    }
+
+    return (
+      <>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          {quickTypeList.map((t) => (
+            <span
+              key={t}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              <button
+                type="button"
+                className={
+                  selectedValue.trim() === t ? "sc-tab active" : "sc-tab"
+                }
+                onClick={() => {
+                  if (suppressNextPillClickRef.current) {
+                    suppressNextPillClickRef.current = false;
+                    return;
+                  }
+                  if (interactionDisabled) return;
+                  applyQuickType(t);
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+                onPointerDown={() => beginLongPressRemove(t)}
+                onPointerUp={endLongPressRemove}
+                onPointerLeave={endLongPressRemove}
+                onPointerCancel={endLongPressRemove}
+              >
+                {t}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  removeQuickTypePill(t);
+                }}
+                aria-label={`Remove ${t} from quick types`}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--text3)",
+                  cursor: "pointer",
+                  fontSize: 16,
+                  lineHeight: 1,
+                  padding: "0 4px",
+                }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="mb-2 flex flex-wrap items-stretch gap-2">
+          <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+            <input
+              id={inputId}
+              className="inf"
+              style={{ width: "100%" }}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitAdd();
+                }
+              }}
+              placeholder="Add quick type…"
+              disabled={interactionDisabled}
+              autoComplete="off"
+            />
+          </div>
+          <button
+            type="button"
+            style={ADD_QUICK_TYPE_BTN_STYLE}
+            disabled={interactionDisabled}
+            onClick={submitAdd}
+          >
+            + Add
+          </button>
+        </div>
+        {quickTypeList.length === 0 ? (
+          <p
+            style={{
+              fontSize: 11,
+              color: "var(--text3)",
+              fontStyle: "italic",
+            }}
+          >
+            Add your cardio types above for quick access
+          </p>
+        ) : null}
+      </>
+    );
+  }
+
   if (initialLoading) {
     return (
       <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
@@ -386,20 +649,11 @@ export function CardioClient({ userId }: { userId: string }) {
 
         <div className="mt-3 space-y-1">
           <Label htmlFor="live-cardio-type">Type</Label>
-          {quickTypeList.length > 0 ? (
-            <div className="mb-2 flex flex-wrap gap-2">
-              {quickTypeList.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => applyQuickType(t)}
-                  className="shrink-0 rounded-full border border-border bg-surface-2 px-3 py-1.5 text-sm font-sans font-medium text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          {renderQuickTypePicker(
+            "live",
+            liveType,
+            liveStartAt !== null
+          )}
           <Input
             id="live-cardio-type"
             value={liveType}
@@ -557,20 +811,9 @@ export function CardioClient({ userId }: { userId: string }) {
         <form onSubmit={onSubmitManual} className="mt-3 space-y-3">
           <div className="space-y-1">
             <Label htmlFor="cardio-type">Type</Label>
-            {quickTypeList.length > 0 && !manualLocked ? (
-              <div className="mb-2 flex flex-wrap gap-2">
-                {quickTypeList.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => applyQuickType(t)}
-                    className="shrink-0 rounded-full border border-border bg-surface-2 px-3 py-1.5 text-sm font-sans font-medium text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            {!manualLocked
+              ? renderQuickTypePicker("manual", formType, false)
+              : null}
             <Input
               id="cardio-type"
               value={formType}
