@@ -10,6 +10,7 @@ import {
   parseBodyMetricKeysPref,
   type BodyMetricDef,
 } from "@/components/progress/MetricSetupClient";
+import { getProgramWeekNumberFromPreferencesRows } from "@/lib/program-week";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 type WebSpeechCtor = new () => {
@@ -308,7 +309,7 @@ export function BodyCompositionClient({ userId, initialMetrics }: Props) {
     current: Record<string, number>;
     previous: Record<string, number>;
     goal: string;
-    programWeek: string;
+    programWeek: number;
   }) {
     setCoachBusy(true);
     try {
@@ -384,11 +385,12 @@ export function BodyCompositionClient({ userId, initialMetrics }: Props) {
       .eq("user_id", userId);
     const goalRow = (prefs ?? []).find((p) => p.key === "goal");
     const goal = goalRow?.value?.trim() ?? "";
+    const programWeek = getProgramWeekNumberFromPreferencesRows(prefs ?? []);
     void runCoachAnalysis({
       current,
       previous,
       goal,
-      programWeek: "not_stored",
+      programWeek,
     });
   }
 

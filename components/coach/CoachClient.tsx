@@ -8,6 +8,11 @@ import { toast } from "sonner";
 import { ConversationSidebar } from "@/components/coach/ConversationSidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { MacroTargetRow } from "@/lib/dashboard/preferences";
+import {
+  extractMacroTargets,
+  formatMacroLabel,
+} from "@/lib/dashboard/preferences";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createBrowserSupabaseClient();
@@ -46,6 +51,50 @@ function formatTime(iso: string) {
   } catch {
     return "";
   }
+}
+
+const COACH_FOOD_LOG_PHRASES = [
+  "you could eat",
+  "try having",
+  "log this",
+  "add this",
+  "eat this",
+] as const;
+
+function coachMessageSuggestsLoggableFood(content: string): boolean {
+  const lower = content.toLowerCase();
+  for (const p of COACH_FOOD_LOG_PHRASES) {
+    if (lower.includes(p)) return true;
+  }
+  if (/\d+\s*(?:cal|kcal|cals|calories)\b/i.test(content)) return true;
+  if (/\d+\s*g?\s*(?:protein|pro)\b/i.test(content)) return true;
+  return false;
+}
+
+function extractCoachFoodSuggestion(content: string): {
+  foodName: string;
+  macros: Record<string, string>;
+} {
+  const macros: Record<string, string> = {};
+  const calM = content.match(/(\d+)\s*(?:cal|kcal|cals|calories)\b/i);
+  if (calM) macros.calories = calM[1];
+  const proM = content.match(/(\d+)\s*g?\s*(?:protein|pro)\b/i);
+  if (proM) macros.protein = proM[1];
+  const fatM = content.match(/(\d+)\s*g?\s*(?:fat)\b/i);
+  if (fatM) macros.fat = fatM[1];
+  const carbM = content.match(
+    /(\d+)\s*g?\s*(?:carbs?|carbohydrates)\b/i
+  );
+  if (carbM) macros.carbs = carbM[1];
+  const idx = content.search(/\d+\s*(?:cal|kcal|cals|calories)\b/i);
+  const slice = idx > 0 ? content.slice(0, idx) : content.slice(0, 120);
+  const foodName =
+    slice
+      .replace(/\n+/g, " ")
+      .replace(/["'`]+/g, "")
+      .trim()
+      .slice(0, 80) || "Coach suggestion";
+  return { foodName, macros };
 }
 
 function parseStoredMessages(
@@ -163,6 +212,14 @@ export function CoachClient({
   const imgInputRef = useRef<HTMLInputElement>(null);
   const recogRef = useRef<{ stop: () => void } | null>(null);
 
+  const [macroTargets, setMacroTargets] = useState<MacroTargetRow[]>([]);
+  const [quickLogOpen, setQuickLogOpen] = useState(false);
+  const [quickLogFood, setQuickLogFood] = useState("");
+  const [quickLogFields, setQuickLogFields] = useState<Record<string, string>>(
+    {}
+  );
+  const [quickLogBusy, setQuickLogBusy] = useState(false);
+
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
@@ -233,6 +290,21 @@ export function CoachClient({
   useEffect(() => {
     void loadLatestConversation();
   }, [loadLatestConversation]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("user_preferences")
+        .select("key, value")
+        .eq("user_id", userId);
+      if (cancelled || error) return;
+      setMacroTargets(extractMacroTargets(data ?? []));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -395,6 +467,78 @@ export function CoachClient({
     };
   }, []);
 
+  function normalizeMacroKeyForLog(key: string) {
+    return key.trim().toLowerCase();
+  }
+
+  function openQuickLogFromCoachMessage(body: string) {
+    const { foodName, macros } = extractCoachFoodSuggestion(body);
+    const fieldInit: Record<string, string> = {};
+    for (const t of macroTargets) {
+      const k = normalizeMacroKeyForLog(t.key);
+      let v = "";
+      if (k.includes("calor") || k === "calories") v = macros.calories ?? "";
+      else if (k.includes("protein") || k === "protein")
+        v = macros.protein ?? "";
+      else if (k.includes("fat")) v = macros.fat ?? "";
+      else if (k.includes("carb")) v = macros.carbs ?? "";
+      fieldInit[t.key] = v;
+    }
+    setQuickLogFood(foodName);
+    setQuickLogFields(fieldInit);
+    setQuickLogOpen(true);
+  }
+
+  async function submitQuickLogFromCoach() {
+    const name = quickLogFood.trim();
+    if (!name) {
+      toast.error("Enter a food name.");
+      return;
+    }
+    setQuickLogBusy(true);
+    try {
+      const { data: log, error: logErr } = await supabase
+        .from("food_logs")
+        .insert({
+          user_id: userId,
+          meal_number: 1,
+          food_name: name,
+          quantity: null,
+          unit: "",
+        })
+        .select("id")
+        .single();
+      if (logErr || !log) {
+        toast.error(logErr?.message ?? "Could not save food log.");
+        return;
+      }
+      const rows: { food_log_id: string; key: string; value: number }[] = [];
+      for (const t of macroTargets) {
+        const raw = quickLogFields[t.key]?.trim() ?? "";
+        if (!raw) continue;
+        const v = Number(raw);
+        if (!Number.isFinite(v)) {
+          toast.error(`${formatMacroLabel(t.key)} must be a number.`);
+          return;
+        }
+        rows.push({ food_log_id: log.id, key: t.key, value: v });
+      }
+      if (rows.length > 0) {
+        const { error: mErr } = await supabase
+          .from("food_log_macros")
+          .insert(rows);
+        if (mErr) {
+          toast.error(mErr.message);
+          return;
+        }
+      }
+      toast.success(`✅ ${name} logged`);
+      setQuickLogOpen(false);
+    } finally {
+      setQuickLogBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center bg-background px-4 py-8">
@@ -461,6 +605,8 @@ export function CoachClient({
 
         {messages.map((m) => {
           const isUser = m.role === "user";
+          const showFoodLog =
+            !isUser && coachMessageSuggestsLoggableFood(m.content);
           return (
             <div
               key={m.id}
@@ -481,6 +627,15 @@ export function CoachClient({
                 >
                   {formatTime(m.created_at)}
                 </p>
+                {showFoodLog ? (
+                  <button
+                    type="button"
+                    className="mt-2 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs font-semibold text-foreground"
+                    onClick={() => openQuickLogFromCoachMessage(m.content)}
+                  >
+                    + Log to Food Log
+                  </button>
+                ) : null}
               </div>
             </div>
           );
@@ -488,6 +643,82 @@ export function CoachClient({
 
         {sending ? <TypingIndicator /> : null}
         <div ref={bottomRef} className="h-px shrink-0" aria-hidden />
+      </div>
+
+      <button
+        type="button"
+        className={`sheet-overlay${quickLogOpen ? " open" : ""}`}
+        aria-label="Close food log sheet"
+        onClick={() => setQuickLogOpen(false)}
+      />
+      <div className={`bottom-sheet-base${quickLogOpen ? " open" : ""}`}>
+        <div className="max-h-[80vh] space-y-3 overflow-y-auto p-4 pb-8">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-display text-sm uppercase tracking-wide text-[var(--text)]">
+              Log to food log
+            </h2>
+            <button
+              type="button"
+              className="text-xs text-[var(--accent)]"
+              onClick={() => setQuickLogOpen(false)}
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-[var(--text3)]" htmlFor="coach-qlog-name">
+              Food name
+            </label>
+            <input
+              id="coach-qlog-name"
+              className="inf"
+              value={quickLogFood}
+              onChange={(e) => setQuickLogFood(e.target.value)}
+            />
+          </div>
+          {macroTargets.map((t) => (
+            <div key={t.key} className="space-y-1">
+              <label className="text-xs text-[var(--text3)]" htmlFor={`cq-${t.key}`}>
+                {formatMacroLabel(t.key)}
+              </label>
+              <input
+                id={`cq-${t.key}`}
+                className="inf"
+                inputMode="decimal"
+                value={quickLogFields[t.key] ?? ""}
+                onChange={(e) =>
+                  setQuickLogFields((prev) => ({
+                    ...prev,
+                    [t.key]: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          ))}
+          {macroTargets.length === 0 ? (
+            <p className="text-xs text-[var(--text3)]">
+              Set macro targets in onboarding to log numbers here.
+            </p>
+          ) : null}
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              className="cbtn no flex-1"
+              disabled={quickLogBusy}
+              onClick={() => setQuickLogOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="cbtn green flex-1"
+              disabled={quickLogBusy}
+              onClick={() => void submitQuickLogFromCoach()}
+            >
+              {quickLogBusy ? "Saving…" : "Log It"}
+            </button>
+          </div>
+        </div>
       </div>
 
       <form

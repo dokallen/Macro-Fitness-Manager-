@@ -16,11 +16,23 @@ type Props = {
   weekLabel: string;
   entries: MealPlanEntryRow[];
   hasPlan: boolean;
+  favoriteRecipeIds: Set<string>;
+  dislikedRecipeNames: Set<string>;
+  onToggleFavorite: (entry: MealPlanEntryRow) => void;
+  onDislikeMeal: (entry: MealPlanEntryRow) => void;
 };
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export function MealPlanTab({ weekLabel, entries, hasPlan }: Props) {
+export function MealPlanTab({
+  weekLabel,
+  entries,
+  hasPlan,
+  favoriteRecipeIds,
+  dislikedRecipeNames,
+  onToggleFavorite,
+  onDislikeMeal,
+}: Props) {
   if (!hasPlan) {
     return (
       <div className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/10 px-4 py-8 text-center">
@@ -63,23 +75,63 @@ export function MealPlanTab({ weekLabel, entries, hasPlan }: Props) {
                 {label}
               </h3>
               <ul className="mt-2 space-y-2">
-                {rows.map((row) => (
-                  <li
-                    key={row.id}
-                    className="rounded-lg border border-border/80 bg-background/50 px-3 py-2 text-sm"
-                  >
-                    <span className="text-muted-foreground">
-                      Meal {row.meal_number}:{" "}
-                    </span>
-                    {row.recipes ? (
-                      <span className="font-medium text-foreground">
-                        {row.recipes.name}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">No recipe</span>
-                    )}
-                  </li>
-                ))}
+                {rows.map((row) => {
+                  const rid = row.recipe_id ?? "";
+                  const rname = row.recipes?.name?.trim() ?? "";
+                  const fav = rid ? favoriteRecipeIds.has(rid) : false;
+                  const dis = rname
+                    ? dislikedRecipeNames.has(rname.toLowerCase())
+                    : false;
+                  return (
+                    <li
+                      key={row.id}
+                      className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-background/50 px-3 py-2 text-sm"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="text-muted-foreground">
+                          Meal {row.meal_number}:{" "}
+                        </span>
+                        {row.recipes ? (
+                          <span className="font-medium text-foreground">
+                            {row.recipes.name}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">No recipe</span>
+                        )}
+                        {dis ? (
+                          <span className="ml-2 text-xs text-[var(--text3)]">
+                            (disliked)
+                          </span>
+                        ) : null}
+                      </div>
+                      {row.recipe_id ? (
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-md border border-[var(--border)] bg-[var(--surface2)] px-2 py-1 text-base leading-none"
+                          style={{
+                            color: fav ? "#e11d48" : "var(--text3)",
+                          }}
+                          aria-label={
+                            fav ? "Remove from favorites" : "Add to favorites"
+                          }
+                          onClick={() => onToggleFavorite(row)}
+                        >
+                          {fav ? "❤️" : "🤍"}
+                        </button>
+                      ) : null}
+                      {row.recipes?.name ? (
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-md border border-[var(--border)] bg-[var(--surface2)] px-2 py-1 text-base leading-none"
+                          aria-label="Dislike and remove from plan"
+                          onClick={() => onDislikeMeal(row)}
+                        >
+                          👎
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           );

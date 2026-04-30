@@ -11,6 +11,10 @@ export const NON_MACRO_PREFERENCE_KEYS = new Set([
   "program_start",
   "mf_coach_rules",
   "water_goal_oz",
+  "meal_plan_favorites",
+  "meal_plan_dislikes",
+  "meal_plan_rotation_day",
+  "meal_plan_needs_rotation",
 ]);
 
 export type MacroTargetRow = {

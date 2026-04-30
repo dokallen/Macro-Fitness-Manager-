@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { buildCoachSystemPromptFromPreferences } from "@/lib/coach-chat-context";
+import {
+  buildCoachSystemPromptFromPreferences,
+  getProgramWeekNumberFromPreferencesRows,
+} from "@/lib/coach-chat-context";
 import { callCoachClaudeChat } from "@/lib/coach-chat";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -527,10 +530,25 @@ export async function POST(req: Request) {
 
       if (coachTask === "body_comp_analysis") {
         if (!userText) return jsonError("userText is required.", 400);
+        const { data: bodyCompPrefs } = await supabase
+          .from("user_preferences")
+          .select("key, value")
+          .eq("user_id", user.id);
+        const programWeek = getProgramWeekNumberFromPreferencesRows(
+          bodyCompPrefs ?? []
+        );
+        let analysisText = userText.slice(0, MAX_MESSAGE_CHARS);
+        try {
+          const o = JSON.parse(analysisText) as Record<string, unknown>;
+          o.programWeek = programWeek;
+          analysisText = JSON.stringify(o);
+        } catch {
+          analysisText = `${analysisText}\nprogramWeek: ${programWeek}`;
+        }
         const text = await callAnthropicVisionOrText({
           apiKey: apiKey!,
           system: BODY_COMP_ANALYSIS_SYSTEM,
-          userBlocks: [{ type: "text", text: userText.slice(0, MAX_MESSAGE_CHARS) }],
+          userBlocks: [{ type: "text", text: analysisText }],
           max_tokens: 500,
           temperature: 0.65,
         });

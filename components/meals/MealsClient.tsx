@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AddRecipeForm } from "@/components/meals/AddRecipeForm";
 import { LogMealForm, type LabelPrefill } from "@/components/meals/LogMealForm";
+import { MealPlanRotationClient } from "@/components/meals/MealPlanRotationClient";
 import {
   MealPlanTab,
   type MealPlanEntryRow,
@@ -38,12 +40,78 @@ type WebSpeechCtor = new () => {
   start: () => void;
 };
 
-type TabId = "today" | "plan" | "library";
+type TabId = "today" | "plan" | "library" | "history";
 
 type Props = {
   userId: string;
   macroTargets: MacroTargetRow[];
+  initialMealPlanRotationDay?: string;
+  initialMealPlanNeedsRotation?: string;
 };
+
+const PREF_MEAL_PLAN_FAVORITES = "meal_plan_favorites";
+const PREF_MEAL_PLAN_DISLIKES = "meal_plan_dislikes";
+const PREF_MEAL_PLAN_ROTATION_DAY = "meal_plan_rotation_day";
+const PREF_MEAL_PLAN_NEEDS_ROTATION = "meal_plan_needs_rotation";
+
+type MealFavoriteRow = { recipe_id: string; name: string };
+
+type ArchivedMealPlanRow = {
+  id: string;
+  week_start: string;
+  week_number: number | null;
+  plan_end_date: string | null;
+  plan_json: { entries?: MealPlanEntryRow[] } | null;
+  created_at: string;
+};
+
+const UTC_DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+function utcTodayDayName(): string {
+  return UTC_DAY_NAMES[new Date().getUTCDay()] ?? "Sunday";
+}
+
+function parseMealFavoritesJson(raw: string | undefined): MealFavoriteRow[] {
+  if (!raw?.trim()) return [];
+  try {
+    const p = JSON.parse(raw) as unknown;
+    if (!Array.isArray(p)) return [];
+    const out: MealFavoriteRow[] = [];
+    for (const x of p) {
+      if (!x || typeof x !== "object") continue;
+      const o = x as Record<string, unknown>;
+      const id = String(o.recipe_id ?? "").trim();
+      const name = String(o.name ?? "").trim();
+      if (!id || !name) continue;
+      out.push({ recipe_id: id, name });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function parseMealDislikesJson(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  try {
+    const p = JSON.parse(raw) as unknown;
+    if (!Array.isArray(p)) return [];
+    return p
+      .filter((x): x is string => typeof x === "string")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 function normalizeMacroKey(key: string): string {
   return key.trim().toLowerCase();
@@ -839,13 +907,34 @@ function HabitsWaterTracker() {
   );
 }
 
-export function MealsClient({ userId, macroTargets }: Props) {
+export function MealsClient({
+  userId,
+  macroTargets,
+  initialMealPlanRotationDay = "",
+  initialMealPlanNeedsRotation = "",
+}: Props) {
+  const router = useRouter();
   const [tab, setTab] = useState<TabId>("today");
   const [logs, setLogs] = useState<FoodLogRow[]>([]);
   const [recipes, setRecipes] = useState<RecipeRow[]>([]);
   const [planEntries, setPlanEntries] = useState<MealPlanEntryRow[]>([]);
   const [hasMealPlan, setHasMealPlan] = useState(false);
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [weekLabel, setWeekLabel] = useState("");
+  const [mealPlanRotationDay, setMealPlanRotationDay] = useState(
+    initialMealPlanRotationDay
+  );
+  const [mealPlanNeedsRotation, setMealPlanNeedsRotation] = useState(
+    initialMealPlanNeedsRotation.trim().toLowerCase() === "true"
+  );
+  const [archivedPlans, setArchivedPlans] = useState<ArchivedMealPlanRow[]>(
+    []
+  );
+  const [expandedArchiveId, setExpandedArchiveId] = useState<string | null>(
+    null
+  );
+  const [mealFavorites, setMealFavorites] = useState<MealFavoriteRow[]>([]);
+  const [mealDislikes, setMealDislikes] = useState<string[]>([]);
   const [initialLoad, setInitialLoad] = useState(true);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
 
@@ -1057,22 +1146,26 @@ export function MealsClient({ userId, macroTargets }: Props) {
       .select("id, week_start")
       .eq("user_id", userId)
       .eq("week_start", monday)
+      .eq("status", "active")
       .maybeSingle();
 
     if (pErr) {
       console.error(pErr);
       setHasMealPlan(false);
+      setActivePlanId(null);
       setPlanEntries([]);
       return;
     }
 
     if (!plan) {
       setHasMealPlan(false);
+      setActivePlanId(null);
       setPlanEntries([]);
       return;
     }
 
     setHasMealPlan(true);
+    setActivePlanId(plan.id);
     const { data: entries, error: eErr } = await supabase
       .from("meal_plan_entries")
       .select(
@@ -1091,10 +1184,87 @@ export function MealsClient({ userId, macroTargets }: Props) {
     setPlanEntries((entries ?? []) as MealPlanEntryRow[]);
   }, [userId]);
 
+  const loadArchivedMealPlans = useCallback(async () => {
+    const supabase = createBrowserSupabaseClient();
+    const { data, error } = await supabase
+      .from("meal_plans")
+      .select("id, week_start, week_number, plan_end_date, plan_json, created_at")
+      .eq("user_id", userId)
+      .eq("status", "archived")
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error(error);
+      setArchivedPlans([]);
+      return;
+    }
+    setArchivedPlans((data ?? []) as ArchivedMealPlanRow[]);
+  }, [userId]);
+
+  const loadMealPlanPrefs = useCallback(async () => {
+    const supabase = createBrowserSupabaseClient();
+    const { data, error } = await supabase
+      .from("user_preferences")
+      .select("key, value")
+      .eq("user_id", userId)
+      .in("key", [
+        PREF_MEAL_PLAN_FAVORITES,
+        PREF_MEAL_PLAN_DISLIKES,
+        PREF_MEAL_PLAN_ROTATION_DAY,
+        PREF_MEAL_PLAN_NEEDS_ROTATION,
+      ]);
+    if (error) {
+      console.error(error);
+      return;
+    }
+    const map = Object.fromEntries(
+      (data ?? []).map((r) => [r.key, r.value] as const)
+    );
+    setMealFavorites(parseMealFavoritesJson(map[PREF_MEAL_PLAN_FAVORITES]));
+    setMealDislikes(parseMealDislikesJson(map[PREF_MEAL_PLAN_DISLIKES]));
+    setMealPlanRotationDay(map[PREF_MEAL_PLAN_ROTATION_DAY]?.trim() ?? "");
+    setMealPlanNeedsRotation(
+      map[PREF_MEAL_PLAN_NEEDS_ROTATION]?.trim().toLowerCase() === "true"
+    );
+  }, [userId]);
+
+  const upsertUserPref = useCallback(
+    async (key: string, value: string) => {
+      const supabase = createBrowserSupabaseClient();
+      const { error } = await supabase.from("user_preferences").upsert(
+        {
+          user_id: userId,
+          key,
+          value,
+          updated_by: "user",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,key" }
+      );
+      if (error) {
+        toast.error(error.message);
+        return false;
+      }
+      return true;
+    },
+    [userId]
+  );
+
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadLogs(), loadRecipes(), loadMealPlan()]);
+    await Promise.all([
+      loadLogs(),
+      loadRecipes(),
+      loadMealPlan(),
+      loadArchivedMealPlans(),
+      loadMealPlanPrefs(),
+    ]);
     setInitialLoad(false);
-  }, [loadLogs, loadRecipes, loadMealPlan]);
+  }, [
+    loadLogs,
+    loadRecipes,
+    loadMealPlan,
+    loadArchivedMealPlans,
+    loadMealPlanPrefs,
+  ]);
 
   useEffect(() => {
     void refreshAll();
@@ -1518,15 +1688,188 @@ export function MealsClient({ userId, macroTargets }: Props) {
     void loadLogs();
   }
 
+  const favoriteRecipeIds = useMemo(
+    () => new Set(mealFavorites.map((f) => f.recipe_id)),
+    [mealFavorites]
+  );
+  const dislikedRecipeNames = useMemo(
+    () => new Set(mealDislikes),
+    [mealDislikes]
+  );
+
+  const archiveCurrentWeekPlanIfNeeded = useCallback(async () => {
+    if (!activePlanId || planEntries.length === 0) return;
+    const supabase = createBrowserSupabaseClient();
+    const monday = getUtcWeekMondayDateString();
+    const { count } = await supabase
+      .from("meal_plans")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "archived");
+    const weekNum = (count ?? 0) + 1;
+    const [y, mo, d] = monday.split("-").map(Number);
+    const end = new Date(Date.UTC(y, mo - 1, d));
+    end.setUTCDate(end.getUTCDate() + 6);
+    const planEnd = end.toISOString().slice(0, 10);
+    const { error } = await supabase.from("meal_plans").insert({
+      user_id: userId,
+      week_start: monday,
+      rotation_frequency: "",
+      status: "archived",
+      plan_json: { entries: planEntries },
+      week_number: weekNum,
+      plan_end_date: planEnd,
+    });
+    if (error) {
+      console.error(error);
+      toast.error(error.message);
+    }
+  }, [activePlanId, planEntries, userId]);
+
+  const toggleFavoriteForEntry = useCallback(
+    async (entry: MealPlanEntryRow) => {
+      const rid = entry.recipe_id?.trim();
+      const name = entry.recipes?.name?.trim();
+      if (!rid || !name) return;
+      const next = [...mealFavorites];
+      const i = next.findIndex((x) => x.recipe_id === rid);
+      if (i >= 0) next.splice(i, 1);
+      else next.push({ recipe_id: rid, name });
+      const ok = await upsertUserPref(
+        PREF_MEAL_PLAN_FAVORITES,
+        JSON.stringify(next)
+      );
+      if (ok) {
+        setMealFavorites(next);
+        toast.success(i >= 0 ? "Removed from favorites" : "Saved favorite");
+      }
+    },
+    [mealFavorites, upsertUserPref]
+  );
+
+  const dislikeMealEntry = useCallback(
+    async (entry: MealPlanEntryRow) => {
+      const name = entry.recipes?.name?.trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      const nextDis = Array.from(new Set([...mealDislikes, key]));
+      const ok = await upsertUserPref(
+        PREF_MEAL_PLAN_DISLIKES,
+        JSON.stringify(nextDis)
+      );
+      if (!ok) return;
+      const supabase = createBrowserSupabaseClient();
+      const { error } = await supabase
+        .from("meal_plan_entries")
+        .delete()
+        .eq("id", entry.id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setMealDislikes(nextDis);
+      toast.success("Removed from plan and saved to dislikes.");
+      void loadMealPlan();
+    },
+    [mealDislikes, loadMealPlan, upsertUserPref]
+  );
+
+  const restoreArchivedPlan = useCallback(
+    async (arch: ArchivedMealPlanRow) => {
+      const entries = arch.plan_json?.entries ?? [];
+      if (entries.length === 0) {
+        toast.error("No meals stored for this week.");
+        return;
+      }
+      const supabase = createBrowserSupabaseClient();
+      const monday = getUtcWeekMondayDateString();
+      let planId = activePlanId;
+      if (!planId) {
+        const ins = await supabase
+          .from("meal_plans")
+          .insert({
+            user_id: userId,
+            week_start: monday,
+            rotation_frequency: "",
+            status: "active",
+          })
+          .select("id")
+          .single();
+        if (ins.error || !ins.data?.id) {
+          toast.error(ins.error?.message ?? "Could not create meal plan.");
+          return;
+        }
+        planId = ins.data.id as string;
+      }
+      await supabase.from("meal_plan_entries").delete().eq("meal_plan_id", planId);
+      const rows = entries
+        .filter((e) => e.recipe_id)
+        .map((e) => ({
+          meal_plan_id: planId,
+          day: e.day,
+          meal_number: e.meal_number,
+          recipe_id: e.recipe_id,
+        }));
+      if (rows.length > 0) {
+        const { error } = await supabase.from("meal_plan_entries").insert(rows);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+      }
+      await upsertUserPref(PREF_MEAL_PLAN_NEEDS_ROTATION, "false");
+      setMealPlanNeedsRotation(false);
+      toast.success("This week is now your active meal plan.");
+      void loadMealPlan();
+      void loadArchivedMealPlans();
+    },
+    [activePlanId, loadArchivedMealPlans, loadMealPlan, upsertUserPref, userId]
+  );
+
+  const showRotationCard =
+    mealPlanNeedsRotation ||
+    (!!mealPlanRotationDay.trim() &&
+      utcTodayDayName().toLowerCase() ===
+        mealPlanRotationDay.trim().toLowerCase());
+
   const tabs: { id: TabId; label: string }[] = [
     { id: "today", label: "Today’s log" },
     { id: "plan", label: "Meal plan" },
+    { id: "history", label: "History" },
     { id: "library", label: "Recipes" },
   ];
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 bg-[var(--bg)] px-4 pb-10 pt-4 sm:max-w-2xl sm:px-6">
       <SubpageHeader title="MEALS" subtitle="Log food, meal plan, and recipes." />
+
+      <MealPlanRotationClient
+        showRotationCard={showRotationCard}
+        rotationDay={mealPlanRotationDay}
+        onRotationDayChange={async (d) => {
+          setMealPlanRotationDay(d);
+          await upsertUserPref(PREF_MEAL_PLAN_ROTATION_DAY, d);
+        }}
+        onDismissFlag={async () => {
+          setMealPlanNeedsRotation(false);
+          await upsertUserPref(PREF_MEAL_PLAN_NEEDS_ROTATION, "false");
+        }}
+        onGenerateForMe={async () => {
+          await archiveCurrentWeekPlanIfNeeded();
+          setMealPlanNeedsRotation(false);
+          await upsertUserPref(PREF_MEAL_PLAN_NEEDS_ROTATION, "false");
+          toast.success(
+            "This week is archived. Coach chat opens next so you can generate a fresh plan."
+          );
+          router.push("/coach?mealPlan=generate");
+        }}
+        onLetMeBuild={() => {
+          void upsertUserPref(PREF_MEAL_PLAN_NEEDS_ROTATION, "false");
+          setMealPlanNeedsRotation(false);
+          router.push("/coach?mealPlan=build");
+        }}
+        onUsePastWeek={() => setTab("history")}
+      />
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
         {macroSummaryRows.length === 0 ? (
@@ -1750,7 +2093,70 @@ export function MealsClient({ userId, macroTargets }: Props) {
             weekLabel={weekLabel}
             entries={planEntries}
             hasPlan={hasMealPlan}
+            favoriteRecipeIds={favoriteRecipeIds}
+            dislikedRecipeNames={dislikedRecipeNames}
+            onToggleFavorite={toggleFavoriteForEntry}
+            onDislikeMeal={dislikeMealEntry}
           />
+        </div>
+      ) : null}
+
+      {tab === "history" ? (
+        <div className="space-y-3" role="tabpanel">
+          {archivedPlans.length === 0 ? (
+            <p className="text-sm text-[var(--text3)]">
+              No archived weeks yet. When you rotate or regenerate a plan, the
+              previous week is saved here.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {archivedPlans.map((ap) => {
+                const expanded = expandedArchiveId === ap.id;
+                const start = ap.week_start;
+                const end = ap.plan_end_date ?? start;
+                const label = `Week ${ap.week_number ?? "—"} · ${start} – ${end}`;
+                const snap = ap.plan_json?.entries ?? [];
+                return (
+                  <li
+                    key={ap.id}
+                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3"
+                  >
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium text-[var(--text)]"
+                      onClick={() =>
+                        setExpandedArchiveId(expanded ? null : ap.id)
+                      }
+                    >
+                      <span>{label}</span>
+                      <span className="text-[var(--text3)]">
+                        {expanded ? "▲" : "▼"}
+                      </span>
+                    </button>
+                    {expanded ? (
+                      <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
+                        <ul className="space-y-1 text-xs text-[var(--text2)]">
+                          {snap.map((e) => (
+                            <li key={`${ap.id}-${e.id}`}>
+                              Day {e.day} · Meal {e.meal_number}:{" "}
+                              {e.recipes?.name ?? "—"}
+                            </li>
+                          ))}
+                        </ul>
+                        <button
+                          type="button"
+                          className="cbtn green w-full"
+                          onClick={() => void restoreArchivedPlan(ap)}
+                        >
+                          Use This Week
+                        </button>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       ) : null}
 

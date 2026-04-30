@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { HomeDashboardClient } from "@/components/home/HomeDashboardClient";
 import type { HomeDashboardStats } from "@/components/home/HomeDashboardClient";
 import { extractMacroTargets } from "@/lib/dashboard/preferences";
+import { parseTrainingDaysPerWeek } from "@/lib/dashboard/workout-schedule";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function getIsoWeek(d: Date): number {
@@ -99,11 +100,67 @@ function firstFiniteFromKeys(
   return null;
 }
 
-function buildHomeStats(prefMap: Record<string, string>): HomeDashboardStats {
+/** Local-calendar Monday 00:00 week bucket key (YYYY-MM-DD). */
+function mondayWeekKeyLocal(d: Date): string {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dow = x.getDay();
+  const offsetFromMonday = dow === 0 ? -6 : 1 - dow;
+  x.setDate(x.getDate() + offsetFromMonday);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Consecutive Monday–Sunday weeks (local) with at least `minSessionsPerWeek`
+ * workouts. Current week can be incomplete and is skipped if under target.
+ */
+function computeConsecutiveWorkoutWeekStreak(
+  loggedAtIsoStrings: string[],
+  minSessionsPerWeek: number
+): number {
+  const weekCounts = new Map<string, number>();
+  for (const iso of loggedAtIsoStrings) {
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) continue;
+    const k = mondayWeekKeyLocal(d);
+    weekCounts.set(k, (weekCounts.get(k) ?? 0) + 1);
+  }
+  let streak = 0;
+  for (let w = 0; w < 104; w++) {
+    const probe = new Date();
+    probe.setHours(0, 0, 0, 0);
+    const dow = probe.getDay();
+    const offset = dow === 0 ? -6 : 1 - dow;
+    probe.setDate(probe.getDate() + offset - 7 * w);
+    const key = mondayWeekKeyLocal(probe);
+    const c = weekCounts.get(key) ?? 0;
+    if (w === 0 && c < minSessionsPerWeek) continue;
+    if (c >= minSessionsPerWeek) streak += 1;
+    else break;
+  }
+  return streak;
+}
+
+function buildHomeStats(
+  prefMap: Record<string, string>,
+  workoutLoggedAtList: string[]
+): HomeDashboardStats {
   const programStart = prefMap.program_start?.trim() || null;
   const currentWeightLbs = firstFiniteFromKeys(prefMap, CURRENT_LBS_KEYS);
   const goalWeight = firstFiniteFromKeys(prefMap, GOAL_LBS_KEYS);
   const startWeight = firstFiniteFromKeys(prefMap, START_LBS_KEYS);
+  const freqRaw = prefMap.recommended_workout_frequency?.trim() ?? "";
+  const minSessionsPerWeek = freqRaw
+    ? parseTrainingDaysPerWeek(freqRaw)
+    : 1;
+  const wkStreak = computeConsecutiveWorkoutWeekStreak(
+    workoutLoggedAtList,
+    minSessionsPerWeek
+  );
+  const workoutStreak =
+    wkStreak >= 2 ? `${wkStreak} 🔥` : String(wkStreak);
   return {
     weekNumber: getIsoWeek(new Date()),
     programStart,
@@ -113,7 +170,7 @@ function buildHomeStats(prefMap: Record<string, string>): HomeDashboardStats {
     startWeight,
     weightLog: [],
     lbsToGoal: computeLbsToGoal(prefMap),
-    workoutStreak: "—",
+    workoutStreak,
     macroStreak: "—",
   };
 }
@@ -156,12 +213,20 @@ export default async function HomePage() {
     .select("key, value")
     .eq("user_id", user.id);
 
+  const { data: workoutRows } = await supabase
+    .from("workout_sessions")
+    .select("logged_at")
+    .eq("user_id", user.id);
+
   const prefMap = Object.fromEntries(
     (prefRows ?? []).map((p) => [p.key, p.value] as const)
   );
 
   const macroTargets = extractMacroTargets(prefRows ?? []);
-  const stats = buildHomeStats(prefMap);
+  const workoutLoggedAtList = (workoutRows ?? [])
+    .map((r) => String((r as { logged_at?: string }).logged_at ?? ""))
+    .filter(Boolean);
+  const stats = buildHomeStats(prefMap, workoutLoggedAtList);
 
   return (
     <div className="mx-auto h-[100dvh] max-h-[100dvh] w-full max-w-lg overflow-hidden sm:max-w-md">

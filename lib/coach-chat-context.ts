@@ -4,6 +4,10 @@ import {
   NON_MACRO_PREFERENCE_KEYS,
   extractMacroTargets,
 } from "@/lib/dashboard/preferences";
+export {
+  getProgramWeekNumberFromPreferencesRows,
+  USER_PREFERENCE_KEY_PROGRAM_START,
+} from "@/lib/program-week";
 
 /** Server-side coach roster (must stay in sync with `components/coach/CoachChooser.tsx`). */
 const COACHES_FOR_PROMPT: {

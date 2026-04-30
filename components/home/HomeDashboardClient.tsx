@@ -240,7 +240,7 @@ export function HomeDashboardClient({
           [
             { label: "CURRENT WEIGHT", value: stats.currentWeight },
             { label: "LBS TO GOAL", value: stats.lbsToGoal },
-            { label: "WORKOUT STREAK", value: stats.workoutStreak },
+            { label: "WK STREAK", value: stats.workoutStreak },
             { label: "MACRO STREAK", value: stats.macroStreak },
           ] as const
         ).map((s) => (

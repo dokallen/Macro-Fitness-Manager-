@@ -45,7 +45,20 @@ export default async function MealsPage() {
 
   const macroTargets = extractMacroTargets(prefs ?? []);
 
+  const prefMap = Object.fromEntries(
+    (prefs ?? []).map((p) => [p.key, p.value] as const)
+  );
+  const initialMealPlanRotationDay =
+    prefMap.meal_plan_rotation_day?.trim() ?? "";
+  const initialMealPlanNeedsRotation =
+    prefMap.meal_plan_needs_rotation?.trim() ?? "";
+
   return (
-    <MealsClient userId={user.id} macroTargets={macroTargets} />
+    <MealsClient
+      userId={user.id}
+      macroTargets={macroTargets}
+      initialMealPlanRotationDay={initialMealPlanRotationDay}
+      initialMealPlanNeedsRotation={initialMealPlanNeedsRotation}
+    />
   );
 }

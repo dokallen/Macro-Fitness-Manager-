@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -253,22 +253,34 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          plan_end_date: string | null
+          plan_json: unknown | null
           rotation_frequency: string
+          status: string
           user_id: string
+          week_number: number | null
           week_start: string
         }
         Insert: {
           created_at?: string
           id?: string
+          plan_end_date?: string | null
+          plan_json?: unknown | null
           rotation_frequency?: string
+          status?: string
           user_id: string
+          week_number?: number | null
           week_start: string
         }
         Update: {
           created_at?: string
           id?: string
+          plan_end_date?: string | null
+          plan_json?: unknown | null
           rotation_frequency?: string
+          status?: string
           user_id?: string
+          week_number?: number | null
           week_start?: string
         }
         Relationships: [
