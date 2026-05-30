@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { CoachFabPanel } from "@/components/home/CoachFabPanel";
 import { SideDrawerProvider } from "@/components/layout/SideDrawer";
+import { PushNotificationClient } from "@/components/notifications/PushNotificationClient";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const NAV = [
@@ -74,6 +75,7 @@ export default function AppGroupLayout({
           }`}
           style={pathname === "/" ? { touchAction: "none" } : undefined}
         >
+          {userId ? <PushNotificationClient userId={userId} /> : null}
           {children}
         </div>
       </main>

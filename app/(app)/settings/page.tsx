@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 
 import { SubpageHeader } from "@/components/layout/SubpageHeader";
+import { SettingsClient } from "@/components/settings/SettingsClient";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function ButtonAsLink({ href, children }: { href: string; children: string }) {
@@ -52,6 +53,7 @@ export default async function SettingsPage() {
         >
           Open onboarding →
         </Link>
+        <SettingsClient userId={user.id} />
       </div>
     </div>
   );

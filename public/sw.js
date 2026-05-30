@@ -84,3 +84,5 @@ self.addEventListener("fetch", (event) => {
     })()
   );
 });
+
+importScripts("/sw-push.js");

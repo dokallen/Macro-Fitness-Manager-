@@ -4,6 +4,30 @@
     {
       "path": "/api/meal-plan-rotate",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/push-notify?type=morning_motivation",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/push-notify?type=workout_reminder",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/push-notify?type=midday_checkin",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/push-notify?type=evening_recap",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/push-notify?type=streak_celebration",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/push-notify?type=meal_plan_rotation",
+      "schedule": "0 8 * * *"
     }
   ]
 }
