@@ -7,19 +7,19 @@
     },
     {
       "path": "/api/push-notify?type=morning_motivation",
-      "schedule": "0 * * * *"
+      "schedule": "0 11 * * *"
     },
     {
       "path": "/api/push-notify?type=workout_reminder",
-      "schedule": "0 * * * *"
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/push-notify?type=midday_checkin",
-      "schedule": "0 * * * *"
+      "schedule": "0 17 * * *"
     },
     {
       "path": "/api/push-notify?type=evening_recap",
-      "schedule": "0 * * * *"
+      "schedule": "0 22 * * *"
     },
     {
       "path": "/api/push-notify?type=streak_celebration",
@@ -27,7 +27,7 @@
     },
     {
       "path": "/api/push-notify?type=meal_plan_rotation",
-      "schedule": "0 8 * * *"
+      "schedule": "0 13 * * *"
     }
   ]
 }
