@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+
 export const dynamic = "force-dynamic";
 
 function jsonError(message: string, status: number) {
@@ -307,6 +309,14 @@ ${Math.round(input.userTargetCalories)}`;
 }
 
 export async function POST(req: Request) {
+  const supabase = createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
     if (!apiKey) {

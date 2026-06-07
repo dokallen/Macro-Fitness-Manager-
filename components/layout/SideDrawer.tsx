@@ -40,6 +40,7 @@ const MENU_ITEMS: {
   { emoji: "🎯", label: "Challenges", href: "/challenges" },
   { emoji: "💬", label: "Coach", action: "coach" },
   { emoji: "🏆", label: "Achievements", href: "/badges" },
+  { emoji: "⚖️", label: "Scale", href: "/progress" },
   { emoji: "⚙️", label: "Settings & Targets", href: "/settings" },
   { emoji: "💾", label: "Backup & Restore", href: "/backup" },
 ];

@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { type LoginInput, loginSchema } from "@/lib/validations";
 
-const GUEST_STORAGE_KEY = "macrofit_guest_mode";
+const GUEST_STORAGE_KEY = "mf_guest_mode";
 const GUEST_COOKIE = "macrofit_guest";
 
 export default function LoginPage() {

@@ -14,7 +14,7 @@ const NAV = [
   { href: "/workout", label: "Workout", emoji: "🏋🏾" },
   { href: "/meals", label: "Today", emoji: "📅" },
   { href: "/progress", label: "Log", emoji: "📊" },
-  { href: "/progress", label: "Scale", emoji: "⚖️" },
+  { href: "/cardio", label: "Cardio", emoji: "🏃🏾" },
 ] as const;
 
 const NAV_RESERVE_PX = 68;

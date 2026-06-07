@@ -15,6 +15,17 @@ export const NON_MACRO_PREFERENCE_KEYS = new Set([
   "meal_plan_dislikes",
   "meal_plan_rotation_day",
   "meal_plan_needs_rotation",
+  "notification_morning_time",
+  "notification_workout_reminder",
+  "notification_midday_time",
+  "notification_evening_time",
+  "notification_streaks",
+  "notification_meal_rotation",
+  "notification_morning_enabled",
+  "notification_workout_enabled",
+  "notification_midday_enabled",
+  "notification_evening_enabled",
+  "push_subscription",
 ]);
 
 export type MacroTargetRow = {

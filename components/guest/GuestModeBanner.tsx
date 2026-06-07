@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 
-const GUEST_STORAGE_KEY = "macrofit_guest_mode";
+const GUEST_STORAGE_KEY = "mf_guest_mode";
 const GUEST_COOKIE = "macrofit_guest";
 
 export function GuestModeBanner() {

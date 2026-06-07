@@ -464,7 +464,7 @@ export function OnboardingWizard() {
     const targetMatch = prompt.match(/(\d+(?:\.\d+)?)/);
     const userCalories = targetMatch ? Number.parseFloat(targetMatch[1]) : NaN;
     if (!Number.isFinite(userCalories) || userCalories <= 0) {
-      toast.error("Include your target calories in the message (example: 1800).");
+      toast.error("Include your target calories in the message (e.g. a specific number).");
       return;
     }
 
@@ -1076,7 +1076,7 @@ export function OnboardingWizard() {
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <textarea
                     className="min-h-[72px] flex-1 rounded-md border border-slate-300/60 bg-slate-700/90 px-3 py-2 text-sm text-white placeholder:text-slate-200"
-                    placeholder="e.g. I want to do 1800 calories for a 2-week cut..."
+                    placeholder="e.g. I want to try a different calorie target for a few weeks..."
                     value={customTargetPrompt}
                     onChange={(e) => setCustomTargetPrompt(e.target.value)}
                   />
