@@ -2,7 +2,7 @@ import "server-only";
 
 export type ClaudeChatTurn = { role: "user" | "assistant"; content: string };
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 export async function callCoachClaudeChat(params: {
   system: string;

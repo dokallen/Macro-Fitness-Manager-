@@ -20,7 +20,7 @@
 | Daily check-in inputs by rule type | OK — boolean / number / text |
 | `workout_splits` insert after delete | OK |
 | SideDrawer Challenges link only | OK |
-| Model `claude-sonnet-4-20250514` | OK via `callCoachClaudeChat` |
+| Model `claude-sonnet-4-6` | OK via `callCoachClaudeChat` |
 | localStorage `mf_` prefix | OK |
 | `npm run build` | OK |
 

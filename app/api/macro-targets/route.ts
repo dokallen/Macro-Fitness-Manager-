@@ -280,7 +280,7 @@ ${Math.round(input.userTargetCalories)}`;
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 260,
       temperature: 0.35,
       system,
@@ -365,7 +365,7 @@ Respond with ONLY the JSON object in the exact format specified in your instruct
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 900,
         temperature: 0,
         system: SYSTEM_PROMPT,

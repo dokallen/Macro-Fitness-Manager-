@@ -9,7 +9,7 @@
 |------|--------|
 | Git branch `v2` before changes | OK |
 | Onboarding Step 2: accept Coach recommendation unchanged (generate → edit → Next → persist) | OK — custom block is additive after targets appear |
-| Custom macro flow calls Claude `claude-sonnet-4-20250514` via `POST /api/macro-targets` `mode: evaluate_custom_target` | OK |
+| Custom macro flow calls Claude `claude-sonnet-4-6` via `POST /api/macro-targets` `mode: evaluate_custom_target` | OK |
 | System prompt matches spec (coach calories X vs user Y, 2–3 sentences + choice question) | OK (`app/api/macro-targets/route.ts`) |
 | Payload includes profile + `recommendationTargets` + `coachSummary` + user message + `userTargetCalories` | OK |
 | “Go with Coach” restores snapshot `coachRecommendedTargets` | OK |

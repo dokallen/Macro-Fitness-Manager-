@@ -154,7 +154,7 @@ async function callAnthropicVisionOrText(params: {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: params.max_tokens,
       temperature: params.temperature,
       system: params.system,
@@ -239,7 +239,7 @@ export async function POST(req: Request) {
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: maxTok,
           temperature: 0.2,
           system: PANTRY_SCAN_SYSTEM,
@@ -798,7 +798,7 @@ export async function POST(req: Request) {
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
+            model: "claude-sonnet-4-6",
             max_tokens: 4096,
             temperature: 0.7,
             system,

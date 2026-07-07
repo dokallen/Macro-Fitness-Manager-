@@ -10,7 +10,7 @@ Work was performed on **`v2`** (confirmed via `git branch` before implementation
 - `components/coach/CoachClient.tsx` — Loads `coach_messages` (ascending `created_at`), scrollable bubbles (user right / coach left), typing indicator, `POST /api/coach-chat` on send.
 - `app/api/coach-chat/route.ts` — Inserts user row, loads preferences + full history, calls Claude, inserts coach row, returns updated message list.
 - `lib/coach-chat-context.ts` — `buildCoachSystemPromptFromPreferences`: non-macro keys from `NON_MACRO_PREFERENCE_KEYS`, macro targets via `extractMacroTargets`, plus any other preference rows (all values from DB).
-- `lib/coach-chat.ts` — `callCoachClaudeChat`: Anthropic Messages API, model **`claude-sonnet-4-20250514`** (same as `lib/coach-tip.ts`).
+- `lib/coach-chat.ts` — `callCoachClaudeChat`: Anthropic Messages API, model **`claude-sonnet-4-6`** (same as `lib/coach-tip.ts`).
 - `audit-step10.md` — This audit file.
 
 ## Files modified

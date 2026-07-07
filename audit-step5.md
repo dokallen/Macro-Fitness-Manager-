@@ -3,7 +3,7 @@
 Files **created**:
 
 - `app/api/coach-tip/route.ts` — `GET` handler; authenticates via Supabase session, loads coach context from `user_preferences`, returns JSON `{ tip }` using `generateCoachTip`.
-- `lib/coach-tip.ts` — Server-only Claude call (`claude-sonnet-4-20250514`) for a short daily tip from goal, timeframe, and workout frequency.
+- `lib/coach-tip.ts` — Server-only Claude call (`claude-sonnet-4-6`) for a short daily tip from goal, timeframe, and workout frequency.
 - `lib/dashboard/preferences.ts` — Non-macro preference key set, `extractMacroTargets`, `parseLeadingNumber`, `formatMacroLabel`.
 - `lib/dashboard/utc-day.ts` — UTC day bounds for “today” (aligned server/client).
 - `lib/dashboard/food-macros.ts` — `fetchTodayMacroTotals` (today’s `food_logs` → `food_log_macros` aggregate by key).
