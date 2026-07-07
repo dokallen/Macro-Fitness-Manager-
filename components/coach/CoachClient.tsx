@@ -235,7 +235,7 @@ export function CoachClient({
   const loadLatestConversation = useCallback(async () => {
     const { data, error } = await supabase
       .from("coach_conversations")
-      .select("id, messages, updated_at")
+      .select("id, messages, updated_at, created_at")
       .eq("user_id", userId)
       .order("updated_at", { ascending: false })
       .limit(1);
@@ -259,7 +259,18 @@ export function CoachClient({
     }
 
     const row = data?.[0];
-    if (row) {
+    const isSameLocalDay = (iso: string): boolean => {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return false;
+      const now = new Date();
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
+    };
+    const rowDateIso = row ? row.updated_at ?? row.created_at : null;
+    if (row && rowDateIso && isSameLocalDay(rowDateIso)) {
       setConversationId(row.id);
       setMessages(parseStoredMessages(row.id, row.messages));
     } else {
