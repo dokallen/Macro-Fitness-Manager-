@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Bebas_Neue, DM_Sans } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { GuestModeBanner } from "@/components/guest/GuestModeBanner";
@@ -7,16 +6,19 @@ import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { SonnerToaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
-const dmSans = DM_Sans({
-  subsets: ["latin"],
+// DM Sans and Bebas Neue are self-hosted copies of the latin-subset files that
+// Google Fonts serves, so next/font no longer downloads them during the build.
+// Licenses: app/fonts/OFL-DMSans.txt and app/fonts/OFL-BebasNeue.txt.
+const dmSans = localFont({
+  src: "./fonts/DMSans-latin-wght.woff2",
   variable: "--font-sans",
-  weight: ["400", "500", "600", "700"],
+  weight: "400 700",
 });
 
-const bebasNeue = Bebas_Neue({
-  weight: "400",
-  subsets: ["latin"],
+const bebasNeue = localFont({
+  src: "./fonts/BebasNeue-Regular-latin.woff2",
   variable: "--font-heading",
+  weight: "400",
 });
 
 const geistMono = localFont({
