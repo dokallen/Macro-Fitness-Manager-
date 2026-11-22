@@ -7,8 +7,8 @@
 
 ## Project
 - Next.js 14 + TypeScript + Tailwind + shadcn/ui + Supabase (Postgres, Auth, Realtime, RLS) + Claude API + Vercel.
-- Local root is C:\Users\dokal\Macro-Fitness-Manager\Macro-Fitness-Manager-\v3\ (contains package.json). Run all commands from there.
-- The sibling folder ..\v2\ is the production checkout and ..\_archive\ is a backup. Never read from, write to, or run commands in either.
+- Local root is C:\Users\dokal\Macro-Fitness-Manager\Macro-Fitness-Manager-\03_v3\ (contains package.json). Run all commands from there.
+- The sibling folder ..\01_v2\ is the production checkout and ..\00_archive\ is a backup. Never read from, write to, or run commands in either.
 - v3 uses its OWN Supabase project. Never point v3 at the v2/production Supabase project (sqpklcwtfukpuhhdbcus).
 
 ## Non-negotiable product rules
