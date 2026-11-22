@@ -3,7 +3,7 @@
 Read CLAUDE.md first and follow it. This is Phase 0 of Macro Fit v3: foundation only, no feature work. Work on branch v3. Run each step, pass all gates, run the reviewer subagent, commit, push, then continue to the next step automatically. Stop at the end of Phase 0.
 
 ## Step 0.1 — Confirm setup
-- Confirm the working directory is the v3 folder (path ends in `\v3`), the current branch is v3, and the working tree is clean. If not, stop.
+- Confirm the working directory is the 03_v3 folder (path ends in `\03_v3`), the current branch is v3, and the working tree is clean. If not, stop.
 - Confirm node_modules exists (run `npm ci` if it does not).
 - Confirm .env.local exists and NEXT_PUBLIC_SUPABASE_URL does NOT contain "sqpklcwtfukpuhhdbcus". If it does, stop and tell Derak v3 is pointed at production.
 
