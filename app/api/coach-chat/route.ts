@@ -7,6 +7,10 @@ import {
 } from "@/lib/coach-chat-context";
 import { callCoachClaudeChat } from "@/lib/coach-chat";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  CONVERSATION_SUMMARY_PREFIX,
+  normalizeClaudeTurns,
+} from "@/lib/claude-messages";
 
 export const dynamic = "force-dynamic";
 
@@ -111,7 +115,7 @@ async function compressMessagesIfNeeded(
     });
     const summaryMsg: ConvMsg = {
       role: "assistant",
-      content: `[Conversation summary] ${summaryText.trim()}`,
+      content: `${CONVERSATION_SUMMARY_PREFIX} ${summaryText.trim()}`,
       timestamp: new Date().toISOString(),
       coachId: chunk[0]?.coachId ?? "system",
     };
@@ -802,7 +806,7 @@ export async function POST(req: Request) {
             max_tokens: 4096,
             temperature: 0.7,
             system,
-            messages: claudePayload,
+            messages: normalizeClaudeTurns(claudePayload),
           }),
         });
 

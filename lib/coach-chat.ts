@@ -1,5 +1,7 @@
 import "server-only";
 
+import { normalizeClaudeTurns } from "@/lib/claude-messages";
+
 export type ClaudeChatTurn = { role: "user" | "assistant"; content: string };
 
 const MODEL = "claude-sonnet-4-6";
@@ -11,6 +13,11 @@ export async function callCoachClaudeChat(params: {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
+  }
+
+  const messages = normalizeClaudeTurns(params.messages);
+  if (messages.length === 0 || messages[messages.length - 1]!.role !== "user") {
+    throw new Error("No user message to send");
   }
 
   const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -25,7 +32,7 @@ export async function callCoachClaudeChat(params: {
       max_tokens: 4096,
       temperature: 0.7,
       system: params.system,
-      messages: params.messages,
+      messages,
     }),
   });
 
