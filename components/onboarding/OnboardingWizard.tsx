@@ -34,6 +34,7 @@ import {
   onboardingStep2Schema,
   onboardingStep3Schema,
 } from "@/lib/validations";
+import { ONBOARDING_STEP2_DEFAULTS } from "@/lib/onboarding/step2-defaults";
 
 type Step1 = { displayName: string; goal: string };
 type Step2 = {
@@ -120,6 +121,10 @@ function parseTargetNumber(value: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function FieldError({ message }: { message?: string }) {
+  return message ? <p className="text-sm text-destructive">{message}</p> : null;
+}
+
 export function OnboardingWizard() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -147,29 +152,11 @@ export function OnboardingWizard() {
 
   const s2 = useForm<Step2>({
     resolver: zodResolver(onboardingStep2Schema),
-    defaultValues: {
-      currentWeight: 180,
-      currentWeightUnit: "lbs",
-      goalWeight: 170,
-      goalWeightUnit: "lbs",
-      age: 30,
-      height: "",
-      biologicalSex: "male",
-      activityLevel: "moderately active",
-      primaryGoal: "fat loss",
-      targets: [],
-      aiExplanation: "",
-      coachSummary: "",
-      recommendedTimeframe: "",
-      recommendedWorkoutFrequency: "",
-      weeklyPlanSuggestion: "",
-      macroContext: {
-        calories: "",
-        protein: "",
-        carbs: "",
-        fat: "",
-      },
-    },
+    // Step 2 validates with trigger(), never handleSubmit, so the default onSubmit
+    // mode would leave an error showing after the user fixes the field. onTouched
+    // re-checks a field when the user leaves it, then live once it is touched.
+    mode: "onTouched",
+    defaultValues: ONBOARDING_STEP2_DEFAULTS,
   });
   const targetsFA = useFieldArray({ control: s2.control, name: "targets" });
 
@@ -717,10 +704,13 @@ export function OnboardingWizard() {
                     className="h-10 rounded-md border border-slate-300/50 bg-slate-600/90 px-3 text-sm text-white"
                     {...s2.register("currentWeightUnit")}
                   >
+                    <option value="">Unit</option>
                     <option value="lbs">lbs</option>
                     <option value="kg">kg</option>
                   </select>
                 </div>
+                <FieldError message={s2.formState.errors.currentWeight?.message} />
+                <FieldError message={s2.formState.errors.currentWeightUnit?.message} />
               </div>
               <div className="space-y-2">
                 <Label>Goal weight</Label>
@@ -735,10 +725,13 @@ export function OnboardingWizard() {
                     className="h-10 rounded-md border border-slate-300/50 bg-slate-600/90 px-3 text-sm text-white"
                     {...s2.register("goalWeightUnit")}
                   >
+                    <option value="">Unit</option>
                     <option value="lbs">lbs</option>
                     <option value="kg">kg</option>
                   </select>
                 </div>
+                <FieldError message={s2.formState.errors.goalWeight?.message} />
+                <FieldError message={s2.formState.errors.goalWeightUnit?.message} />
               </div>
               <div className="space-y-2">
                 <Label>Age</Label>
@@ -747,6 +740,7 @@ export function OnboardingWizard() {
                   className="border-slate-300/50 bg-slate-600/90 text-white placeholder:text-slate-200"
                   {...s2.register("age", { valueAsNumber: true })}
                 />
+                <FieldError message={s2.formState.errors.age?.message} />
               </div>
               <div className="space-y-2">
                 <Label>Height</Label>
@@ -755,6 +749,7 @@ export function OnboardingWizard() {
                   placeholder='e.g. 5"11 or 180 cm'
                   {...s2.register("height")}
                 />
+                <FieldError message={s2.formState.errors.height?.message} />
               </div>
               <div className="space-y-2">
                 <Label>Biological sex</Label>
@@ -787,6 +782,7 @@ export function OnboardingWizard() {
                     );
                   })}
                 </div>
+                <FieldError message={s2.formState.errors.biologicalSex?.message} />
               </div>
               <div className="space-y-2">
                 <Label>Activity level</Label>
@@ -853,6 +849,7 @@ export function OnboardingWizard() {
                     );
                   })}
                 </div>
+                <FieldError message={s2.formState.errors.activityLevel?.message} />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Primary goal</Label>
@@ -919,6 +916,7 @@ export function OnboardingWizard() {
                     );
                   })}
                 </div>
+                <FieldError message={s2.formState.errors.primaryGoal?.message} />
               </div>
             </div>
             <Button

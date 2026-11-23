@@ -51,25 +51,35 @@ export const onboardingStep1Schema = z.object({
 
 export const onboardingStep2Schema = z
   .object({
-    currentWeight: z.number().positive("Enter current weight."),
-    currentWeightUnit: z.enum(["lbs", "kg"]),
-    goalWeight: z.number().positive("Enter goal weight."),
-    goalWeightUnit: z.enum(["lbs", "kg"]),
-    age: z.number().int().min(13).max(120),
+    currentWeight: z
+      .number({ error: "Enter current weight." })
+      .positive("Enter current weight."),
+    currentWeightUnit: z.enum(["lbs", "kg"], { error: "Choose a unit." }),
+    goalWeight: z
+      .number({ error: "Enter goal weight." })
+      .positive("Enter goal weight."),
+    goalWeightUnit: z.enum(["lbs", "kg"], { error: "Choose a unit." }),
+    age: z
+      .number({ error: "Enter your age." })
+      .int("Enter your age in whole years.")
+      .min(13, "Age must be 13 or older.")
+      .max(120, "Enter a valid age."),
     height: z.string().min(1, "Enter height."),
-    biologicalSex: z.enum(["female", "male", "other"]),
+    biologicalSex: z.enum(["female", "male", "other"], {
+      error: "Choose an option.",
+    }),
     activityLevel: z.enum([
       "sedentary",
       "lightly active",
       "moderately active",
       "very active",
-    ]),
+    ], { error: "Choose your activity level." }),
     primaryGoal: z.enum([
       "fat loss",
       "muscle gain",
       "maintenance",
       "body recomposition",
-    ]),
+    ], { error: "Choose your primary goal." }),
     targets: z
       .array(
         z.object({
