@@ -14,6 +14,18 @@ function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.has(pathname);
 }
 
+/**
+ * Routes called by Vercel Cron (see vercel.json). Cron requests carry no Supabase
+ * session, so they must skip the session redirect. Each route authenticates the
+ * request itself with CRON_SECRET and fails closed when it is unset or wrong.
+ * Exact paths only: every other /api route keeps the normal session handling.
+ */
+const CRON_PATHS = new Set(["/api/meal-plan-rotate", "/api/push-notify"]);
+
+export function isCronPath(pathname: string) {
+  return CRON_PATHS.has(pathname);
+}
+
 /** Logged-in users are redirected away from these (to home or onboarding). */
 const AUTH_ENTRY_PATHS = new Set(["/login", "/signup", "/forgot-password"]);
 
@@ -35,6 +47,11 @@ export async function updateSession(request: NextRequest) {
     request,
   });
   const pathname = request.nextUrl.pathname;
+
+  if (isCronPath(pathname)) {
+    return supabaseResponse;
+  }
+
   const isGuest = request.cookies.get(GUEST_COOKIE)?.value === "1";
 
   if (isGuest) {
