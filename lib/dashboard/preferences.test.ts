@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractMacroTargets,
   formatMacroLabel,
+  isNonMacroPreferenceKey,
   NON_MACRO_PREFERENCE_KEYS,
   parseLeadingNumber,
 } from "@/lib/dashboard/preferences";
@@ -85,5 +86,83 @@ describe("formatMacroLabel", () => {
     expect(formatMacroLabel("protein")).toBe("Protein");
     expect(formatMacroLabel("net_carbs")).toBe("Net Carbs");
     expect(formatMacroLabel("sodium_mg")).toBe("Sodium Mg");
+  });
+});
+
+// Every user_preferences key the app writes that is not a macro target, found by
+// grepping the user_preferences writes in app/, components/ and lib/ (Phase 1.2).
+// Macro targets themselves are the free-form keys the user defines in onboarding.
+const APP_WRITTEN_NON_MACRO_KEYS: Record<string, string> = {
+  // components/onboarding/OnboardingWizard.tsx
+  goal: "Lose fat while keeping strength",
+  recommended_goal_timeframe: "12 weeks",
+  recommended_workout_frequency: "4 days per week",
+  weekly_plan_suggestion: "3 strength days and 2 cardio days",
+  progress_metric_keys: '["Weight","Waist"]',
+  // components/meals/MealsClient.tsx
+  meal_plan_favorites: '["oatmeal"]',
+  meal_plan_dislikes: '["tuna"]',
+  meal_plan_rotation_day: "sunday",
+  // components/meals/MealsClient.tsx and app/api/meal-plan-rotate/route.ts
+  meal_plan_needs_rotation: "true",
+  // components/settings/SettingsClient.tsx and app/api/push-subscribe/route.ts
+  push_subscription: '{"endpoint":"https://push.example/abc"}',
+  notification_timezone: "America/New_York",
+  notification_morning_time: "07:00",
+  notification_morning_enabled: "true",
+  notification_workout_reminder: "true",
+  notification_midday_time: "12:00",
+  notification_midday_enabled: "false",
+  notification_evening_time: "20:00",
+  notification_evening_enabled: "true",
+  notification_streaks: "true",
+  notification_meal_rotation: "true",
+  // components/progress/BodyCompositionClient.tsx and MetricSetupClient.tsx
+  body_weighin_notes: "2026-11-22: felt good",
+  body_metric_keys: '[{"name":"Weight","unit":"lbs"}]',
+  // app/api/push-notify/route.ts, one per notification type in vercel.json
+  notification_last_sent_morning_motivation: "2026-11-22",
+  notification_last_sent_workout_reminder: "2026-11-22",
+  notification_last_sent_midday_checkin: "2026-11-22",
+  notification_last_sent_evening_recap: "2026-11-22",
+  notification_last_sent_streak_celebration: "2026-11-22",
+  notification_last_sent_meal_plan_rotation: "2026-11-22",
+};
+
+describe("non-macro preference keys (Phase 1.2)", () => {
+  it("does not read a push-notify date as a macro target of 2026", () => {
+    expect(
+      extractMacroTargets([
+        { key: "notification_last_sent_morning_motivation", value: "2026-11-22" },
+      ])
+    ).toEqual([]);
+  });
+
+  it("recognises every non-macro key the app writes", () => {
+    for (const key of Object.keys(APP_WRITTEN_NON_MACRO_KEYS)) {
+      expect(isNonMacroPreferenceKey(key), key).toBe(true);
+    }
+  });
+
+  it("returns only the user's macro targets from a full set of saved preferences", () => {
+    const rows = [
+      ...Object.entries(APP_WRITTEN_NON_MACRO_KEYS).map(([key, value]) => ({
+        key,
+        value,
+      })),
+      { key: "calories", value: "2200 kcal" },
+      { key: "protein", value: "180 g" },
+    ];
+    expect(extractMacroTargets(rows).map((r) => r.key)).toEqual([
+      "calories",
+      "protein",
+    ]);
+  });
+
+  it("only excludes the notification_last_sent_ prefix, not lookalike macro keys", () => {
+    expect(isNonMacroPreferenceKey("notification_last_sent_")).toBe(true);
+    expect(isNonMacroPreferenceKey("notification_last")).toBe(false);
+    expect(isNonMacroPreferenceKey("protein")).toBe(false);
+    expect(isNonMacroPreferenceKey("sent_protein")).toBe(false);
   });
 });

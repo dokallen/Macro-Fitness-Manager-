@@ -26,7 +26,22 @@ export const NON_MACRO_PREFERENCE_KEYS = new Set([
   "notification_midday_enabled",
   "notification_evening_enabled",
   "push_subscription",
+  "notification_timezone",
 ]);
+
+/**
+ * Key prefixes stored in user_preferences that are never macro targets.
+ * `notification_last_sent_<type>` holds a YYYY-MM-DD date written by
+ * app/api/push-notify/route.ts; without this its leading year would parse as a target.
+ */
+export const NON_MACRO_PREFERENCE_KEY_PREFIXES = ["notification_last_sent_"] as const;
+
+export function isNonMacroPreferenceKey(key: string): boolean {
+  return (
+    NON_MACRO_PREFERENCE_KEYS.has(key) ||
+    NON_MACRO_PREFERENCE_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
+  );
+}
 
 export type MacroTargetRow = {
   key: string;
@@ -52,7 +67,7 @@ export function extractMacroTargets(
   const out: MacroTargetRow[] = [];
   for (const row of rows) {
     const k = row.key.trim();
-    if (!k || NON_MACRO_PREFERENCE_KEYS.has(k)) continue;
+    if (!k || isNonMacroPreferenceKey(k)) continue;
     const n = parseLeadingNumber(row.value);
     if (n === null) continue;
     out.push({
