@@ -127,6 +127,19 @@ const APP_WRITTEN_NON_MACRO_KEYS: Record<string, string> = {
   notification_last_sent_evening_recap: "2026-11-22",
   notification_last_sent_streak_celebration: "2026-11-22",
   notification_last_sent_meal_plan_rotation: "2026-11-22",
+  // Phase 2.5 saved profile (components/onboarding, components/settings/ProfileSection.tsx)
+  profile_birth_year: "1990",
+  profile_birth_month: "3",
+  profile_birth_day: "14",
+  profile_height: "6'0\"",
+  profile_biological_sex: "male",
+  profile_activity_level: "very active",
+  profile_goal_weight: "200",
+  profile_goal_weight_unit: "lbs",
+  // Phase 2.6 schedule and check-in records use these prefixes
+  weigh_in_frequency: "weekly",
+  check_in_day: "Monday",
+  check_in_2026_11_23: '{"weight":228}',
 };
 
 describe("non-macro preference keys (Phase 1.2)", () => {

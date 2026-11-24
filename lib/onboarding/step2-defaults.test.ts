@@ -10,15 +10,15 @@ import {
 import { onboardingStep2Schema } from "@/lib/validations";
 
 // What step 2 submits if the user touches nothing: empty number inputs registered
-// with valueAsNumber give NaN, unit selects sit on their empty "Unit" option, and
-// the sex / activity / goal button groups stay unset.
+// with valueAsNumber give NaN, unit selects sit on their empty "Unit" option, the
+// optional date-of-birth inputs give undefined, and the sex / activity / goal
+// button groups stay unset.
 const UNTOUCHED_FORM = {
   ...ONBOARDING_STEP2_DEFAULTS,
   currentWeight: Number.NaN,
   currentWeightUnit: "",
   goalWeight: Number.NaN,
   goalWeightUnit: "",
-  age: Number.NaN,
 };
 
 const COMPLETE_ANSWERS = {
@@ -27,7 +27,6 @@ const COMPLETE_ANSWERS = {
   currentWeightUnit: "lbs",
   goalWeight: 200,
   goalWeightUnit: "lbs",
-  age: 35,
   height: "6'0\"",
   biologicalSex: "male",
   activityLevel: "very active",
@@ -69,7 +68,7 @@ describe("onboardingStep2Schema", () => {
     expect(messages.get("currentWeightUnit")).toBe("Choose a unit.");
     expect(messages.get("goalWeight")).toBe("Enter goal weight.");
     expect(messages.get("goalWeightUnit")).toBe("Choose a unit.");
-    expect(messages.get("age")).toBe("Enter your age.");
+    expect(messages.has("birthYear")).toBe(false);
     expect(messages.get("height")).toBe("Enter height.");
     expect(messages.get("biologicalSex")).toBe("Choose an option.");
     expect(messages.get("activityLevel")).toBe("Choose your activity level.");
@@ -80,12 +79,30 @@ describe("onboardingStep2Schema", () => {
     expect(onboardingStep2Schema.safeParse(COMPLETE_ANSWERS).success).toBe(true);
   });
 
-  it("still enforces the existing age range", () => {
+  it("does not require a date of birth", () => {
+    expect(onboardingStep2Schema.safeParse(COMPLETE_ANSWERS).success).toBe(true);
     expect(
-      onboardingStep2Schema.safeParse({ ...COMPLETE_ANSWERS, age: 12 }).success
-    ).toBe(false);
+      onboardingStep2Schema.safeParse({ ...COMPLETE_ANSWERS, birthYear: 1990 }).success
+    ).toBe(true);
     expect(
-      onboardingStep2Schema.safeParse({ ...COMPLETE_ANSWERS, age: 121 }).success
-    ).toBe(false);
+      onboardingStep2Schema.safeParse({ ...COMPLETE_ANSWERS, birthYear: 1990, birthMonth: 3, birthDay: 14 }).success
+    ).toBe(true);
+  });
+
+  it("rejects an incomplete or impossible date of birth", () => {
+    const bad = [
+      { birthMonth: 3 },
+      { birthYear: 1990, birthDay: 14 },
+      { birthYear: 1990, birthMonth: 2, birthDay: 30 },
+      { birthYear: 1990, birthMonth: 13 },
+      { birthYear: new Date().getFullYear() - 5 },
+      { birthYear: 1990, birthMonth: 3, birthDay: 14.5 },
+      { birthYear: 1990.5 },
+    ];
+    for (const b of bad) {
+      const r = onboardingStep2Schema.safeParse({ ...COMPLETE_ANSWERS, ...b });
+      expect(r.success, JSON.stringify(b)).toBe(false);
+      expect(r.error!.issues[0]!.path[0]).toBe("birthYear");
+    }
   });
 });

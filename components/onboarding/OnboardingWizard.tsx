@@ -20,7 +20,7 @@ import {
   Venus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -35,6 +35,37 @@ import {
   onboardingStep3Schema,
 } from "@/lib/validations";
 import { ONBOARDING_STEP2_DEFAULTS } from "@/lib/onboarding/step2-defaults";
+import { parseBodyMetricDefs } from "@/lib/metrics/tracked";
+import { placeFirstWeighIn } from "@/lib/metrics/weight";
+import {
+  PROFILE_KEYS,
+  dobError,
+  localCalendarDate,
+  profileWrites,
+  readProfile,
+} from "@/lib/profile/profile";
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+/** Empty date-of-birth inputs mean "not given", not 0 or NaN. */
+function optionalInt(v: unknown): number | undefined {
+  if (v === "" || v === null || v === undefined) return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 type Step1 = { displayName: string; goal: string };
 type Step2 = {
@@ -42,7 +73,9 @@ type Step2 = {
   currentWeightUnit: "lbs" | "kg";
   goalWeight: number;
   goalWeightUnit: "lbs" | "kg";
-  age: number;
+  birthYear?: number;
+  birthMonth?: number;
+  birthDay?: number;
   height: string;
   biologicalSex: "female" | "male" | "other";
   activityLevel:
@@ -164,6 +197,43 @@ export function OnboardingWizard() {
     resolver: zodResolver(onboardingStep3Schema),
     defaultValues: { selectedMetrics: [], customMetric: "" },
   });
+
+  // Show a date of birth saved earlier (Settings or Coach), so a repeat
+  // onboarding never clears one the user was not shown. Until that read has
+  // succeeded, empty date-of-birth fields never delete saved ones.
+  const savedDobShownRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createBrowserSupabaseClient();
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { data, error } = await supabase
+        .from("user_preferences")
+        .select("key, value")
+        .eq("user_id", user.id)
+        .in("key", [PROFILE_KEYS.birthYear, PROFILE_KEYS.birthMonth, PROFILE_KEYS.birthDay]);
+      if (cancelled || error) return;
+      if (!data?.length) {
+        savedDobShownRef.current = true;
+        return;
+      }
+      const { dob } = readProfile(data);
+      const cur = s2.getValues();
+      if (cur.birthYear !== undefined || cur.birthMonth !== undefined || cur.birthDay !== undefined) return;
+      if (dob.year !== undefined) s2.setValue("birthYear", dob.year);
+      if (dob.month !== undefined) s2.setValue("birthMonth", dob.month);
+      if (dob.day !== undefined) s2.setValue("birthDay", dob.day);
+      savedDobShownRef.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Runs once on mount; s2 is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const metricCount =
     s3.watch("selectedMetrics").length + (s3.watch("customMetric")?.trim() ? 1 : 0);
   const selectedGoals = s1
@@ -218,14 +288,42 @@ export function OnboardingWizard() {
       },
     ];
 
-    const progressMetrics = [
+    const chosenMetrics = [
       ...v3.selectedMetrics.map((m) => m.trim()).filter(Boolean),
       ...(v3.customMetric?.trim() ? [v3.customMetric.trim()] : []),
     ];
+    // One weight metric: reuse the user's own if they track one (in its unit), else add "Weight".
+    const { data: bodyDefsRow, error: bodyDefsErr } = await supabase
+      .from("user_preferences")
+      .select("value")
+      .eq("user_id", user.id)
+      .eq("key", "body_metric_keys")
+      .maybeSingle();
+    if (bodyDefsErr) {
+      toast.error(bodyDefsErr.message);
+      setSubmitting(false);
+      return;
+    }
+    const weighIn = placeFirstWeighIn(chosenMetrics, parseBodyMetricDefs(bodyDefsRow?.value), {
+      value: v2.currentWeight,
+      unit: v2.currentWeightUnit,
+    });
+    const progressMetrics = weighIn.progressNames;
     prefs.push({
       key: "progress_metric_keys",
       value: JSON.stringify(progressMetrics),
     });
+
+    // Saved profile (Phase 2.5). Age is never stored; it comes from the date of birth.
+    const profile = profileWrites({
+      dob: { year: v2.birthYear, month: v2.birthMonth, day: v2.birthDay },
+      height: v2.height,
+      biologicalSex: v2.biologicalSex,
+      activityLevel: v2.activityLevel,
+      goalWeight: v2.goalWeight,
+      goalWeightUnit: v2.goalWeightUnit,
+    });
+    prefs.push(...profile.upserts);
 
     v2.targets.forEach((row) => {
       const k = row.key.trim();
@@ -257,6 +355,47 @@ export function OnboardingWizard() {
       toast.error(prefErr.message);
       setSubmitting(false);
       return;
+    }
+
+    // Date-of-birth parts the user cleared. The form is prefilled from the saved
+    // profile, so an empty part here was shown to the user and left empty.
+    if (profile.deletes.length && savedDobShownRef.current) {
+      const { error: delErr } = await supabase
+        .from("user_preferences")
+        .delete()
+        .eq("user_id", user.id)
+        .in("key", profile.deletes);
+      if (delErr) {
+        toast.error(delErr.message);
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    // The entered current weight is the first weigh-in; on a repeat onboarding,
+    // skip it if that metric already has an entry today.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const { data: todays } = await supabase
+      .from("progress_entries")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("metric_key", weighIn.metricName)
+      .gte("logged_at", startOfToday.toISOString())
+      .limit(1);
+    if (todays?.length) {
+      toast(`Today's ${weighIn.metricName} entry was already saved, so this weight was not added again.`);
+    } else {
+      const { error: weighErr } = await supabase.from("progress_entries").insert({
+        user_id: user.id,
+        metric_key: weighIn.metricName,
+        value: weighIn.value,
+        unit: weighIn.unit,
+        logged_at: new Date().toISOString(),
+      });
+      if (weighErr) {
+        toast.error(`Saved, but your weigh-in was not: ${weighErr.message}`);
+      }
     }
 
     toast.success("Onboarding complete.");
@@ -294,7 +433,6 @@ export function OnboardingWizard() {
       "currentWeightUnit",
       "goalWeight",
       "goalWeightUnit",
-      "age",
       "height",
       "biologicalSex",
       "activityLevel",
@@ -302,6 +440,16 @@ export function OnboardingWizard() {
     ]);
     if (!valid) {
       toast.error("Please complete the required inputs first.");
+      return;
+    }
+    s2.clearErrors("birthYear");
+    const dobValues = s2.getValues();
+    const dobMessage = dobError(
+      { year: dobValues.birthYear, month: dobValues.birthMonth, day: dobValues.birthDay },
+      localCalendarDate()
+    );
+    if (dobMessage) {
+      s2.setError("birthYear", { message: dobMessage });
       return;
     }
 
@@ -317,7 +465,11 @@ export function OnboardingWizard() {
           currentWeightUnit: payload.currentWeightUnit,
           goalWeight: payload.goalWeight,
           goalWeightUnit: payload.goalWeightUnit,
-          age: payload.age,
+          dateOfBirth: {
+            year: payload.birthYear,
+            month: payload.birthMonth,
+            day: payload.birthDay,
+          },
           height: payload.height,
           biologicalSex: payload.biologicalSex,
           activityLevel: payload.activityLevel,
@@ -467,7 +619,11 @@ export function OnboardingWizard() {
           currentWeightUnit: payload.currentWeightUnit,
           goalWeight: payload.goalWeight,
           goalWeightUnit: payload.goalWeightUnit,
-          age: payload.age,
+          dateOfBirth: {
+            year: payload.birthYear,
+            month: payload.birthMonth,
+            day: payload.birthDay,
+          },
           height: payload.height,
           biologicalSex: payload.biologicalSex,
           activityLevel: payload.activityLevel,
@@ -734,13 +890,50 @@ export function OnboardingWizard() {
                 <FieldError message={s2.formState.errors.goalWeightUnit?.message} />
               </div>
               <div className="space-y-2">
-                <Label>Age</Label>
-                <Input
-                  type="number"
-                  className="border-slate-300/50 bg-slate-600/90 text-white placeholder:text-slate-200"
-                  {...s2.register("age", { valueAsNumber: true })}
-                />
-                <FieldError message={s2.formState.errors.age?.message} />
+                <Label>Date of birth (optional)</Label>
+                <div className="flex gap-2">
+                  <select
+                    aria-label="Birth month"
+                    className="h-10 min-w-0 flex-1 rounded-md border border-slate-300/50 bg-slate-600/90 px-2 text-sm text-white"
+                    {...s2.register("birthMonth", {
+                      setValueAs: optionalInt,
+                      onChange: () => s2.clearErrors("birthYear"),
+                    })}
+                  >
+                    <option value="">Month</option>
+                    {MONTH_NAMES.map((name, i) => (
+                      <option key={name} value={i + 1}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Day"
+                    aria-label="Birth day"
+                    className="w-20 border-slate-300/50 bg-slate-600/90 text-white placeholder:text-slate-200"
+                    {...s2.register("birthDay", {
+                      setValueAs: optionalInt,
+                      onChange: () => s2.clearErrors("birthYear"),
+                    })}
+                  />
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Year"
+                    aria-label="Birth year"
+                    className="w-24 border-slate-300/50 bg-slate-600/90 text-white placeholder:text-slate-200"
+                    {...s2.register("birthYear", {
+                      setValueAs: optionalInt,
+                      onChange: () => s2.clearErrors("birthYear"),
+                    })}
+                  />
+                </div>
+                <p className="text-xs text-slate-200">
+                  Improves calorie estimates. Add as much as you like, or skip it and add it later in Settings.
+                </p>
+                <FieldError message={s2.formState.errors.birthYear?.message} />
               </div>
               <div className="space-y-2">
                 <Label>Height</Label>

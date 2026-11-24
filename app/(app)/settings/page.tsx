@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 
 import { SubpageHeader } from "@/components/layout/SubpageHeader";
+import { ProfileSection } from "@/components/settings/ProfileSection";
 import { SettingsClient } from "@/components/settings/SettingsClient";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -43,8 +44,8 @@ export default async function SettingsPage() {
       <SubpageHeader title="SETTINGS" subtitle="Targets & preferences" />
       <div className="px-4">
         <p style={{ fontSize: 14, color: "var(--text2)", fontFamily: "var(--fb)" }}>
-          Macro targets and profile preferences are managed in onboarding. Use the
-          menu to open onboarding anytime.
+          Macro targets are managed in onboarding. Use the menu to open onboarding
+          anytime. Edit your profile below.
         </p>
         <Link
           href="/onboarding"
@@ -53,6 +54,7 @@ export default async function SettingsPage() {
         >
           Open onboarding →
         </Link>
+        <ProfileSection userId={user.id} />
         <SettingsClient userId={user.id} />
       </div>
     </div>

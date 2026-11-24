@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 
+import {
+  buildMacroTargetsUserPrompt,
+  macroProfileForPrompt,
+  readDobFromBody,
+  type MacroProfileInput,
+} from "@/lib/profile/macro-prompt";
+import { calendarDateIn, dobError } from "@/lib/profile/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -8,25 +15,7 @@ function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
-type MacroRequest = {
-  currentWeight: number;
-  currentWeightUnit: "lbs" | "kg";
-  goalWeight: number;
-  goalWeightUnit: "lbs" | "kg";
-  age: number;
-  height: string;
-  biologicalSex: "female" | "male" | "other";
-  activityLevel:
-    | "sedentary"
-    | "lightly active"
-    | "moderately active"
-    | "very active";
-  primaryGoal:
-    | "fat loss"
-    | "muscle gain"
-    | "maintenance"
-    | "body recomposition";
-};
+type MacroRequest = MacroProfileInput;
 
 type TargetRow = { key: string; value: string; unit?: string };
 
@@ -81,7 +70,7 @@ Use this exact JSON shape and key names:
 }
 
 Rules for the JSON:
-- Interpret user profile: current weight, goal weight, age, height, biological sex, activity level, and primary goal.
+- Interpret user profile: current weight, goal weight, age, height, biological sex, activity level, and primary goal. Age may be "unknown" or one of two values; never invent an age the profile does not give.
 - Always use established sports nutrition formulas (Mifflin-St Jeor for BMR, TDEE multipliers for activity level) to calculate targets. Show your math in the explanation. Results must be consistent for the same inputs.
 - Use proven deterministic calculation order: calories from TDEE adjusted for goal, protein based on lean body mass or goal weight, and carbs/fat from remaining calories after protein is set.
 - Give a realistic timeframe using safe rates of progress.
@@ -232,7 +221,8 @@ function parseCaloriesFromTargets(targets: TargetRow[]): number | null {
 
 async function askClaudeForCustomTargetEvaluation(
   apiKey: string,
-  input: CustomMacroEvaluationRequest
+  input: CustomMacroEvaluationRequest,
+  today: ReturnType<typeof calendarDateIn>
 ) {
   const recommendedCalories = parseCaloriesFromTargets(input.recommendationTargets);
   if (!recommendedCalories) {
@@ -244,21 +234,7 @@ async function askClaudeForCustomTargetEvaluation(
   const system = `You are a fitness coach. The user has been recommended ${x} calories based on their profile. They want to try their own target. Evaluate their request honestly — give 2-3 sentences of context on what their chosen target means for their goals. Then ask them clearly: which do you want to go with — my recommendation of ${x} or your target of ${y}? Keep it conversational and short.`;
 
   const userContent = `User profile:
-${JSON.stringify(
-    {
-      currentWeight: input.currentWeight,
-      currentWeightUnit: input.currentWeightUnit,
-      goalWeight: input.goalWeight,
-      goalWeightUnit: input.goalWeightUnit,
-      age: input.age,
-      height: input.height,
-      biologicalSex: input.biologicalSex,
-      activityLevel: input.activityLevel,
-      primaryGoal: input.primaryGoal,
-    },
-    null,
-    2
-  )}
+${JSON.stringify(macroProfileForPrompt(input, today), null, 2)}
 
 Coach recommendation summary:
 ${input.coachSummary ?? ""}
@@ -333,6 +309,17 @@ export async function POST(req: Request) {
       return jsonError("Invalid JSON body.", 400);
     }
 
+    // Age comes from the optional date of birth, never from a number the client sends.
+    const today = calendarDateIn(new Date());
+    if (typeof body === "object" && body !== null) {
+      const o = body as Record<string, unknown>;
+      const dateOfBirth = readDobFromBody(o.dateOfBirth);
+      const dobProblem = dobError(dateOfBirth, today);
+      if (dobProblem) return jsonError(dobProblem, 400);
+      delete o.age;
+      o.dateOfBirth = dateOfBirth;
+    }
+
     const maybeCustom =
       typeof body === "object" && body !== null
         ? (body as Partial<CustomMacroEvaluationRequest>)
@@ -346,16 +333,13 @@ export async function POST(req: Request) {
       if (!Array.isArray(input.recommendationTargets) || input.recommendationTargets.length === 0) {
         return jsonError("Missing recommendation targets.", 400);
       }
-      const result = await askClaudeForCustomTargetEvaluation(apiKey, input);
+      const result = await askClaudeForCustomTargetEvaluation(apiKey, input, today);
       return NextResponse.json(result);
     }
 
     const input = body as MacroRequest;
 
-    const userPrompt = `User profile (JSON):
-${JSON.stringify(input, null, 2)}
-
-Respond with ONLY the JSON object in the exact format specified in your instructions. No other text.`;
+    const userPrompt = buildMacroTargetsUserPrompt(input, today);
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

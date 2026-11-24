@@ -11,7 +11,9 @@ export const ONBOARDING_STEP2_DEFAULTS = {
   currentWeightUnit: undefined,
   goalWeight: undefined,
   goalWeightUnit: undefined,
-  age: undefined,
+  birthYear: undefined,
+  birthMonth: undefined,
+  birthDay: undefined,
   height: "",
   biologicalSex: undefined,
   activityLevel: undefined,
@@ -30,13 +32,15 @@ export const ONBOARDING_STEP2_DEFAULTS = {
   },
 };
 
-/** The answers step 2 asks the user for; none may have a default value. */
+/** The answers step 2 asks the user for; none may have a default value. Date of birth is optional. */
 export const ONBOARDING_STEP2_PROFILE_FIELDS = [
   "currentWeight",
   "currentWeightUnit",
   "goalWeight",
   "goalWeightUnit",
-  "age",
+  "birthYear",
+  "birthMonth",
+  "birthDay",
   "height",
   "biologicalSex",
   "activityLevel",

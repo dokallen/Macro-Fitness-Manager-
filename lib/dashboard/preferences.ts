@@ -31,10 +31,17 @@ export const NON_MACRO_PREFERENCE_KEYS = new Set([
 
 /**
  * Key prefixes stored in user_preferences that are never macro targets.
- * `notification_last_sent_<type>` holds a YYYY-MM-DD date written by
- * app/api/push-notify/route.ts; without this its leading year would parse as a target.
+ * - `notification_last_sent_<type>` holds a YYYY-MM-DD date written by
+ *   app/api/push-notify/route.ts; without this its leading year would parse as a target.
+ * - `profile_` (saved profile), `weigh_in_` and `check_in_` (weekly check-in) hold
+ *   numbers such as a birth year or a goal weight.
  */
-export const NON_MACRO_PREFERENCE_KEY_PREFIXES = ["notification_last_sent_"] as const;
+export const NON_MACRO_PREFERENCE_KEY_PREFIXES = [
+  "notification_last_sent_",
+  "profile_",
+  "weigh_in_",
+  "check_in_",
+] as const;
 
 export function isNonMacroPreferenceKey(key: string): boolean {
   return (

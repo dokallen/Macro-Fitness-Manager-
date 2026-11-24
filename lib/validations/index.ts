@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { dobError, localCalendarDate } from "@/lib/profile/profile";
+
 export const loginSchema = z.object({
   email: z.string().email("Enter a valid email."),
   password: z.string().min(1, "Password is required."),
@@ -59,11 +61,11 @@ export const onboardingStep2Schema = z
       .number({ error: "Enter goal weight." })
       .positive("Enter goal weight."),
     goalWeightUnit: z.enum(["lbs", "kg"], { error: "Choose a unit." }),
-    age: z
-      .number({ error: "Enter your age." })
-      .int("Enter your age in whole years.")
-      .min(13, "Age must be 13 or older.")
-      .max(120, "Enter a valid age."),
+    // Date of birth is fully optional (Phase 2.5); checked together below.
+    // Integer and range checks happen in dobError, so every message lands on birthYear.
+    birthYear: z.number().optional(),
+    birthMonth: z.number().optional(),
+    birthDay: z.number().optional(),
     height: z.string().min(1, "Enter height."),
     biologicalSex: z.enum(["female", "male", "other"], {
       error: "Choose an option.",
@@ -98,7 +100,14 @@ export const onboardingStep2Schema = z
   .refine(
     (data) => data.targets.some((t) => t.key.trim() && t.value.trim()),
     { message: "Provide at least one macro target.", path: ["targets"] }
-  );
+  )
+  .superRefine((data, ctx) => {
+    const message = dobError(
+      { year: data.birthYear, month: data.birthMonth, day: data.birthDay },
+      localCalendarDate()
+    );
+    if (message) ctx.addIssue({ code: "custom", message, path: ["birthYear"] });
+  });
 
 export const onboardingStep3Schema = z
   .object({

@@ -4,6 +4,7 @@ import { logFood, logProgressEntry } from "@/lib/coach-actions/logging";
 import { removeMacroTarget, setMacroTargets } from "@/lib/coach-actions/macro-targets";
 import { COACH_ACTIONS, coachTools } from "@/lib/coach-actions/registry";
 import { setPreference } from "@/lib/coach-actions/set-preference";
+import { updateProfile } from "@/lib/coach-actions/update-profile";
 import { CoachActionError, type CoachActionContext, type CoachActionDef } from "@/lib/coach-actions/types";
 import { extractMacroTargets } from "@/lib/dashboard/preferences";
 import { createFakeSupabase, type FakeSupabase } from "@/lib/test-utils/fake-supabase";
@@ -230,10 +231,60 @@ describe("log_progress_entry", () => {
   });
 });
 
+describe("update_profile", () => {
+  const withProfile = [
+    ...PREFS,
+    { user_id: "user-1", key: "profile_birth_year", value: "1990" },
+    { user_id: "user-1", key: "profile_height", value: "6'0\"" },
+  ];
+
+  it("writes only the fields it changes, labelled as the Coach", async () => {
+    const { fake, ctx } = setup(withProfile);
+    await run(updateProfile as unknown as CoachActionDef, ctx, { birth_month: 3, goal_weight: 195, goal_weight_unit: "lbs" });
+    const get = (k: string) => userPrefs(fake).find((r) => r.key === k);
+    expect(get("profile_birth_month")).toMatchObject({ value: "3", updated_by: "coach" });
+    expect(get("profile_goal_weight")).toMatchObject({ value: "195" });
+    expect(get("profile_birth_year")!.value).toBe("1990");
+    expect(get("profile_height")!.updated_by).toBeUndefined(); // untouched
+  });
+
+  it("clears a field with null", async () => {
+    const { fake, ctx } = setup(withProfile);
+    await run(updateProfile as unknown as CoachActionDef, ctx, { height: null });
+    expect(userPrefs(fake).find((r) => r.key === "profile_height")).toBeUndefined();
+  });
+
+  it("refuses a date of birth that is incomplete once merged", async () => {
+    const { fake, ctx } = setup(PREFS);
+    await expect(
+      run(updateProfile as unknown as CoachActionDef, ctx, { birth_month: 3 })
+    ).rejects.toThrow("year");
+    expect(userPrefs(fake).some((r) => String(r.key).startsWith("profile_"))).toBe(false);
+  });
+
+  it("keeps goal weight with its unit", async () => {
+    const { ctx } = setup(withProfile);
+    await expect(
+      run(updateProfile as unknown as CoachActionDef, ctx, { goal_weight: 195 })
+    ).rejects.toThrow("unit");
+  });
+
+  it("rejects bad values and empty proposals before running", () => {
+    expect(updateProfile.schema.safeParse({}).success).toBe(false);
+    expect(updateProfile.schema.safeParse({ biological_sex: "robot" }).success).toBe(false);
+    expect(updateProfile.schema.safeParse({ birth_month: 13 }).success).toBe(false);
+    expect(updateProfile.schema.safeParse({ goal_weight: -1 }).success).toBe(false);
+  });
+
+  it("summarizes the change", () => {
+    expect(updateProfile.summarize({ birth_year: 1990, height: null })).toBe("Update profile: birth year 1990, clear height");
+  });
+});
+
 describe("registry", () => {
   it("offers every action to Claude with a valid object schema", () => {
     expect(Object.keys(COACH_ACTIONS).sort()).toEqual(
-      ["log_food", "log_progress_entry", "remove_macro_target", "set_macro_targets", "set_preference"].sort()
+      ["log_food", "log_progress_entry", "remove_macro_target", "set_macro_targets", "set_preference", "update_profile"].sort()
     );
     for (const t of coachTools()) expect(t.input_schema.type).toBe("object");
   });
