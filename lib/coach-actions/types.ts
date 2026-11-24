@@ -4,7 +4,7 @@ import type { z } from "zod";
 import type { Database, Json } from "@/lib/types";
 
 /** A change the Coach proposed. Nothing is written until the user applies it. */
-export type ProposalStatus = "pending" | "applied" | "cancelled" | "failed";
+export type ProposalStatus = "pending" | "applying" | "applied" | "cancelled" | "failed";
 
 export type CoachProposal = {
   id: string;

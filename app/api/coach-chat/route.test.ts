@@ -147,4 +147,40 @@ describe("Coach chat with tools", () => {
     const json = (await res.json()) as { messages: { proposals?: { status: string }[] }[] };
     expect(json.messages[json.messages.length - 1]!.proposals?.[0]?.status).toBe("pending");
   });
+
+  it("never turns a proposal applied during the Claude call back into pending", async () => {
+    fake.tables.coach_conversations!.push({
+      id: "conv-2",
+      user_id: "user-1",
+      updated_at: "2026-11-24T10:00:00.000Z",
+      messages: [
+        { role: "user", content: "Raise protein", timestamp: "t1", coachId: "drdata" },
+        {
+          role: "assistant",
+          content: "Here you go.",
+          timestamp: "t2",
+          coachId: "drdata",
+          proposals: [
+            { id: "p9", action: "set_macro_targets", input: {}, summary: "Set Protein 180 g", status: "pending" },
+          ],
+        },
+      ],
+    });
+    chatReply = [{ type: "text", text: "Anything else?" }];
+    fetchMock.mockImplementationOnce(async (_u, init) => {
+      sent.push(JSON.parse(String(init?.body)) as SentBody);
+      // The user taps Apply in another tab while Claude is replying.
+      const conv = fake.tables.coach_conversations!.find((c) => c.id === "conv-2")!;
+      const msgs = conv.messages as { proposals?: Record<string, unknown>[] }[];
+      msgs[1]!.proposals![0]!.status = "applied";
+      conv.updated_at = "2026-11-24T10:00:07.000Z";
+      return new Response(JSON.stringify({ content: chatReply }), { status: 200 });
+    });
+    const res = await post({ content: "Thanks", conversationId: "conv-2" });
+    expect(res.status).toBe(200);
+    const conv = fake.tables.coach_conversations!.find((c) => c.id === "conv-2")!;
+    const msgs = conv.messages as { content: string; proposals?: { status: string }[] }[];
+    expect(msgs[1]!.proposals![0]!.status).toBe("applied");
+    expect(msgs[msgs.length - 1]!.content).toBe("Anything else?");
+  });
 });

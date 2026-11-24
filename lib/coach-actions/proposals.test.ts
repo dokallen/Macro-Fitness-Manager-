@@ -130,3 +130,33 @@ describe("coachTools", () => {
     }
   });
 });
+
+import { mergeProposalDecisions, replaceProposalById } from "@/lib/coach-actions/proposals";
+
+describe("mergeProposalDecisions", () => {
+  const msg = (status: string) => ({
+    role: "assistant",
+    proposals: [{ id: "p", action: "a", input: null, summary: "S", status }],
+  });
+  it("only moves statuses forward", () => {
+    expect(mergeProposalDecisions([msg("pending")], [msg("applied")])[0]!.proposals[0]!.status).toBe("applied");
+    expect(mergeProposalDecisions([msg("pending")], [msg("applying")])[0]!.proposals[0]!.status).toBe("applying");
+    expect(mergeProposalDecisions([msg("applied")], [msg("pending")])[0]!.proposals[0]!.status).toBe("applied");
+    expect(mergeProposalDecisions([msg("applying")], [msg("failed")])[0]!.proposals[0]!.status).toBe("failed");
+    // A stale local "failed" never replaces a saved "applied".
+    expect(mergeProposalDecisions([msg("failed")], [msg("applied")])[0]!.proposals[0]!.status).toBe("applied");
+  });
+  it("leaves messages without proposals untouched", () => {
+    const plain = { role: "user", content: "hi" };
+    expect(mergeProposalDecisions([plain], [msg("applied")])[0]).toBe(plain);
+  });
+});
+
+describe("replaceProposalById", () => {
+  it("replaces by id wherever it is, and returns null when missing", () => {
+    const stored = [{ role: "user" }, { role: "assistant", proposals: [{ id: "x" }, { id: "y", status: "pending" }] }];
+    const next = { id: "y", action: "a", input: null, summary: "S", status: "applied" as const };
+    expect((replaceProposalById(stored, "y", next)![1]!.proposals as unknown[])[1]).toEqual(next);
+    expect(replaceProposalById(stored, "zzz", next)).toBeNull();
+  });
+});

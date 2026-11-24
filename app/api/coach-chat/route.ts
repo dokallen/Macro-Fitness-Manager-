@@ -10,11 +10,13 @@ import { randomUUID } from "node:crypto";
 import {
   assistantTextForClaude,
   COACH_TOOLS_SYSTEM_NOTE,
+  mergeProposalDecisions,
   parseStoredNotes,
   parseStoredProposals,
   proposalsFromToolUses,
   replyForToolOnlyTurn,
 } from "@/lib/coach-actions/proposals";
+import { updateConversationMessages } from "@/lib/coach-actions/conversation-store";
 import { COACH_ACTIONS, coachTools } from "@/lib/coach-actions/registry";
 import type { CoachProposal } from "@/lib/coach-actions/types";
 import {
@@ -878,19 +880,23 @@ export async function POST(req: Request) {
     const sliceTitle = content.slice(0, 50);
 
     if (rowId) {
-      const { error: upErr } = await supabase
-        .from("coach_conversations")
-        .update({
-          messages: messagesArr,
-          updated_at: updatedAt,
-          coach_id: coachId,
-        })
-        .eq("id", rowId)
-        .eq("user_id", user.id);
+      // Merge in any Apply/Cancel decisions saved while Claude was replying,
+      // so this write can never turn a decided proposal back into a pending one.
+      const local = messagesArr;
+      const saved = await updateConversationMessages(supabase, {
+        conversationId: rowId,
+        userId: user.id,
+        build: (stored) => mergeProposalDecisions(local, stored),
+        extra: { coach_id: coachId },
+      });
 
-      if (upErr) {
-        return jsonError(upErr.message, 500);
+      if (!saved.ok) {
+        return jsonError(
+          saved.message ?? "Could not save the conversation. Please try again.",
+          saved.reason === "not_found" ? 404 : 500
+        );
       }
+      messagesArr = saved.messages as ConvMsg[];
     } else {
       const { data: ins, error: insErr } = await supabase
         .from("coach_conversations")
