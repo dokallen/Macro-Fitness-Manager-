@@ -13,7 +13,7 @@ import {
   WEIGH_IN_RECOMMENDATION,
   readSchedule,
 } from "@/lib/coaching/schedule";
-import { checkInSettingsWrites, type CheckInSettingsForm as Form } from "@/lib/coaching/settings";
+import { checkInSettingsWrites, onlyChanged, type CheckInSettingsForm as Form } from "@/lib/coaching/settings";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createBrowserSupabaseClient();
@@ -25,6 +25,7 @@ const inputClass =
 export function CheckInSection({ userId }: { userId: string }) {
   const [form, setForm] = useState<Form>({ frequency: "", day: "", reminder: false, direction: "", percent: "" });
   const [loaded, setLoaded] = useState(false);
+  const [stored, setStored] = useState<Map<string, string>>(new Map());
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -38,6 +39,7 @@ export function CheckInSection({ userId }: { userId: string }) {
       return;
     }
     const rows = (data ?? []).map((r) => ({ key: r.key, value: r.value ?? "" }));
+    setStored(new Map(rows.map((r) => [r.key, r.value])));
     const s = readSchedule(rows);
     const pace = readGoalPace(rows);
     setForm({
@@ -55,21 +57,28 @@ export function CheckInSection({ userId }: { userId: string }) {
   }, [load]);
 
   async function save() {
-    const { upserts, deletes, error } = checkInSettingsWrites(form);
-    if (error) {
-      toast.error(error);
+    const all = checkInSettingsWrites(form);
+    if (all.error) {
+      toast.error(all.error);
+      return;
+    }
+    const { upserts, deletes } = onlyChanged(all, stored);
+    if (!upserts.length && !deletes.length) {
+      toast("No changes to save.");
       return;
     }
     setSaving(true);
     try {
       const now = new Date().toISOString();
-      const { error: upErr } = await supabase.from("user_preferences").upsert(
-        upserts.map((u) => ({ user_id: userId, key: u.key, value: u.value, updated_by: "user" as const, updated_at: now })),
-        { onConflict: "user_id,key" }
-      );
-      if (upErr) {
-        toast.error(upErr.message);
-        return;
+      if (upserts.length) {
+        const { error: upErr } = await supabase.from("user_preferences").upsert(
+          upserts.map((u) => ({ user_id: userId, key: u.key, value: u.value, updated_by: "user" as const, updated_at: now })),
+          { onConflict: "user_id,key" }
+        );
+        if (upErr) {
+          toast.error(upErr.message);
+          return;
+        }
       }
       if (deletes.length) {
         const { error: delErr } = await supabase.from("user_preferences").delete().eq("user_id", userId).in("key", deletes);
@@ -79,6 +88,7 @@ export function CheckInSection({ userId }: { userId: string }) {
         }
       }
       toast.success("Check-in settings saved.");
+      await load();
     } finally {
       setSaving(false);
     }

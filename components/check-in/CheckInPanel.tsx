@@ -268,10 +268,13 @@ function CheckInFlow({
   userId,
   state,
   onFinished,
+  onApplied,
 }: {
   userId: string;
   state: PanelState;
   onFinished: () => void;
+  /** Called when an applied change may have changed what other screens show. */
+  onApplied?: () => void;
 }) {
   const [weighed, setWeighed] = useState(state.weighedSinceLastCheckIn);
   const [answer, setAnswer] = useState<"yes" | "mostly" | "no" | null>(null);
@@ -331,6 +334,7 @@ function CheckInFlow({
       }
       const outcome = interpretDecisionResponse(proposal.id, proposal.summary, ok, payload, status);
       if (outcome.update) setProposal({ ...proposal, ...outcome.update });
+      if (outcome.refresh) onApplied?.();
       if (outcome.toast) {
         const { kind, text } = outcome.toast;
         if (kind === "success") toast.success(text);
@@ -431,7 +435,16 @@ function CheckInFlow({
  * Shows the weekly check-in card when a check-in is due or late, otherwise the
  * weigh-in card when a weigh-in is due. Shows nothing when there is no schedule.
  */
-export function CheckInPanel({ userId, onChanged }: { userId: string; onChanged?: () => void }) {
+export function CheckInPanel({
+  userId,
+  onChanged,
+  maxHeight = "45vh",
+}: {
+  userId: string;
+  onChanged?: () => void;
+  /** Tallest the card may be; it scrolls inside. */
+  maxHeight?: string;
+}) {
   const [state, setState] = useState<PanelState | null>(null);
   const [started, setStarted] = useState(false);
 
@@ -454,7 +467,7 @@ export function CheckInPanel({ userId, onChanged }: { userId: string; onChanged?
 
   if (s === "due" || s === "late" || s === "missed" || (s === "early" && started)) {
     return (
-      <div className="supp-card" style={cardStyle}>
+      <div className="supp-card" style={{ ...cardStyle, maxHeight }}>
         <h2 style={{ fontFamily: "var(--fd)", fontSize: 13, letterSpacing: 2, color: "var(--accent3)", marginBottom: 8 }}>
           WEEKLY CHECK-IN
           {state.status.state === "late" ? ` · ${state.status.daysLate} day${state.status.daysLate === 1 ? "" : "s"} late` : ""}
@@ -467,6 +480,7 @@ export function CheckInPanel({ userId, onChanged }: { userId: string; onChanged?
             void load();
             onChanged?.();
           }}
+          onApplied={onChanged}
         />
       </div>
     );
@@ -474,7 +488,7 @@ export function CheckInPanel({ userId, onChanged }: { userId: string; onChanged?
 
   if (state.weighInDue) {
     return (
-      <div className="supp-card" style={cardStyle}>
+      <div className="supp-card" style={{ ...cardStyle, maxHeight }}>
         {s === "early" ? (
           <div style={{ textAlign: "right" }}>
             <Button type="button" size="sm" variant="ghost" onClick={() => setStarted(true)}>

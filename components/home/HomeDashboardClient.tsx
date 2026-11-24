@@ -8,6 +8,7 @@ import { useSideDrawer } from "@/components/layout/SideDrawer";
 import { fetchTodayMacroTotals } from "@/lib/dashboard/food-macros";
 import type { MacroTargetRow } from "@/lib/dashboard/preferences";
 import { formatMacroLabel } from "@/lib/dashboard/preferences";
+import { useRouter } from "next/navigation";
 import { CheckInPanel } from "@/components/check-in/CheckInPanel";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -22,7 +23,10 @@ export type HomeDashboardStats = {
   goalWeight?: number | null;
   startWeight?: number | null;
   weightLog?: { date: string; weight: number }[];
+  /** "To goal" distance, in weightUnit. */
   lbsToGoal: string;
+  /** The user's weight unit; null until known. */
+  weightUnit?: "lbs" | "kg" | null;
   workoutStreak: string;
   macroStreak: string;
 };
@@ -82,6 +86,7 @@ export function HomeDashboardClient({
   userId: string;
 }) {
   const { openDrawer } = useSideDrawer();
+  const router = useRouter();
   const [macroTotals, setMacroTotals] = useState<Record<string, number>>({});
 
   const refreshMacroTotals = useCallback(async () => {
@@ -240,7 +245,7 @@ export function HomeDashboardClient({
         {(
           [
             { label: "CURRENT WEIGHT", value: stats.currentWeight },
-            { label: "LBS TO GOAL", value: stats.lbsToGoal },
+            { label: `${(stats.weightUnit ?? "").toUpperCase() || "WEIGHT"} TO GOAL`, value: stats.lbsToGoal },
             { label: "WK STREAK", value: stats.workoutStreak },
             { label: "MACRO STREAK", value: stats.macroStreak },
           ] as const
@@ -261,7 +266,8 @@ export function HomeDashboardClient({
       </section>
 
       <div className="shrink-0">
-        <CheckInPanel userId={userId} />
+        {/* Small on Home so the macro bars stay on screen; the card scrolls inside. */}
+        <CheckInPanel userId={userId} onChanged={() => router.refresh()} maxHeight="28vh" />
       </div>
 
       {macroTargets.length === 0 ? (
@@ -383,8 +389,12 @@ export function HomeDashboardClient({
               color: "var(--text3)",
             }}
           >
-            <span>{stats.startWeight} lbs</span>
-            <span>{stats.goalWeight} lbs</span>
+            <span>
+              {stats.startWeight} {stats.weightUnit ?? ""}
+            </span>
+            <span>
+              {stats.goalWeight} {stats.weightUnit ?? ""}
+            </span>
           </div>
           {goalBlock.eta ? (
             <div

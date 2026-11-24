@@ -6,7 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { calculateTargets, type CalcResult, type LoggingAnswer, type WeighIn } from "@/lib/coaching/calc";
-import { CALC_WINDOW_DAYS } from "@/lib/coaching/constants";
+import { CALC_WINDOW_DAYS, MAX_CALORIE_DECREASE_FRACTION } from "@/lib/coaching/constants";
 import { readGoalPace } from "@/lib/coaching/goal-pace";
 import { identifyMacroRoles, HOLD_REASON_TEXT } from "@/lib/coaching/calc";
 import {
@@ -216,7 +216,7 @@ export function runCalculation(data: CheckInData, loggingAnswer: LoggingAnswer |
   return calculateTargets({
     today: data.today,
     weighIns: data.weighIns,
-    weightUnit: data.weightUnit ?? "lbs", // only reached with weigh-ins, which set the unit
+    weightUnit: data.weightUnit,
     dailyCalories: data.dailyCalories,
     loggedDays: data.loggedDays,
     loggingAnswer,
@@ -233,7 +233,7 @@ export type CheckInRecord = {
   dueDate: string | null;
   status: CheckInStatus["state"];
   loggingAnswer: LoggingAnswer;
-  weightUnit: "lbs" | "kg";
+  weightUnit: "lbs" | "kg" | null;
   trendWeight: number | null;
   trendChangePerWeek: number | null;
   averageIntake: number | null;
@@ -242,6 +242,9 @@ export type CheckInRecord = {
   decision: "change" | "hold";
   reasons: string[];
   reason: string;
+  /** The 10% floor capped the calorie cut; calculatedCalories is the uncapped value. */
+  limitedByFloor?: boolean;
+  calculatedCalories?: number | null;
   changes: { key: string; from: number; to: number; unit: string }[];
   proposalId?: string;
 };
@@ -273,11 +276,14 @@ export function buildCheckInRecord(
     reasons: r.holdReasons,
     reason:
       r.decision === "change"
-        ? "Enough data: targets recalculated from your trend weight and intake."
+        ? r.limitedByFloor
+          ? `Enough data: targets recalculated from your trend weight and intake. The calculation gave ${r.calculatedCalories} kcal; the cut was capped at ${Math.round(MAX_CALORIE_DECREASE_FRACTION * 100)}% of the current target.`
+          : "Enough data: targets recalculated from your trend weight and intake."
         : r.holdReasons.length
           ? r.holdReasons.map((h) => HOLD_REASON_TEXT[h]).join(" ")
           : "The calculated targets match your current ones.",
     changes: r.changes,
+    ...(r.limitedByFloor ? { limitedByFloor: true, calculatedCalories: r.calculatedCalories } : {}),
     ...(proposalId ? { proposalId } : {}),
   };
 }

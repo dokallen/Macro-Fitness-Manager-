@@ -34,3 +34,14 @@ export function checkInSettingsWrites(form: CheckInSettingsForm): {
   return { upserts: [...upserts, ...p.upserts], deletes: [...deletes, ...p.deletes], error: null };
 }
 
+
+/** Only the writes that change what is stored, so the Coach's label survives on untouched keys. */
+export function onlyChanged(
+  writes: { upserts: { key: string; value: string }[]; deletes: string[] },
+  stored: ReadonlyMap<string, string>
+): { upserts: { key: string; value: string }[]; deletes: string[] } {
+  return {
+    upserts: writes.upserts.filter((u) => stored.get(u.key) !== u.value),
+    deletes: writes.deletes.filter((k) => stored.has(k)),
+  };
+}

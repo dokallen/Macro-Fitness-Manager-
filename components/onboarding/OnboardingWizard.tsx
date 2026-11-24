@@ -36,6 +36,8 @@ import {
 } from "@/lib/validations";
 import { ONBOARDING_STEP2_DEFAULTS } from "@/lib/onboarding/step2-defaults";
 import { parseBodyMetricDefs } from "@/lib/metrics/tracked";
+import { GOAL_PACE_GUIDE, GOAL_PACE_MAX } from "@/lib/coaching/constants";
+import { goalPaceError, goalPaceWrites, type GoalPace } from "@/lib/coaching/goal-pace";
 import {
   SCHEDULE_KEYS,
   WEEKDAY_NAMES,
@@ -172,6 +174,8 @@ export function OnboardingWizard() {
   // Optional weigh-in / check-in schedule (Phase 2.6). Empty means skipped: no default.
   const [weighInFrequency, setWeighInFrequency] = useState("");
   const [checkInDay, setCheckInDay] = useState("");
+  const [paceDirection, setPaceDirection] = useState("");
+  const [pacePercent, setPacePercent] = useState("");
   const [generatingTargets, setGeneratingTargets] = useState(false);
   const [showTargets, setShowTargets] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -336,6 +340,19 @@ export function OnboardingWizard() {
     prefs.push(...profile.upserts);
     if (weighInFrequency) prefs.push({ key: SCHEDULE_KEYS.weighInFrequency, value: weighInFrequency });
     if (checkInDay) prefs.push({ key: SCHEDULE_KEYS.checkInDay, value: checkInDay });
+    // Goal pace (optional, no default). Checked before anything is saved.
+    let pace: GoalPace | null = null;
+    if (paceDirection === "maintain") pace = { direction: "maintain" };
+    else if (paceDirection === "loss" || paceDirection === "gain") {
+      pace = { direction: paceDirection, percentPerWeek: Number(pacePercent) };
+      const paceProblem = goalPaceError(pace);
+      if (paceProblem) {
+        toast.error(`Goal pace: ${paceProblem}`);
+        setSubmitting(false);
+        return;
+      }
+    }
+    if (pace) prefs.push(...goalPaceWrites(pace).upserts);
 
     v2.targets.forEach((row) => {
       const k = row.key.trim();
@@ -1465,6 +1482,34 @@ export function OnboardingWizard() {
                     ))}
                   </select>
                 </label>
+                <label className="space-y-1 text-sm">
+                  <span>Goal pace</span>
+                  <select
+                    className="h-10 w-full rounded-md border border-slate-300/50 bg-slate-600/90 px-3 text-sm text-white"
+                    value={paceDirection}
+                    onChange={(e) => setPaceDirection(e.target.value)}
+                  >
+                    <option value="">Skip for now</option>
+                    <option value="loss">Lose weight</option>
+                    <option value="gain">Gain weight</option>
+                    <option value="maintain">Maintain</option>
+                  </select>
+                </label>
+                {paceDirection === "loss" || paceDirection === "gain" ? (
+                  <label className="space-y-1 text-sm">
+                    <span>% of body weight per week</span>
+                    <input
+                      className="h-10 w-full rounded-md border border-slate-300/50 bg-slate-600/90 px-3 text-sm text-white"
+                      inputMode="decimal"
+                      value={pacePercent}
+                      onChange={(e) => setPacePercent(e.target.value)}
+                    />
+                    <span className="block text-xs text-slate-200">
+                      {GOAL_PACE_GUIDE[paceDirection].map((g) => `${g.label} ${g.min}–${g.max}%`).join(" · ")} (max{" "}
+                      {GOAL_PACE_MAX[paceDirection]}%)
+                    </span>
+                  </label>
+                ) : null}
               </div>
             </div>
 

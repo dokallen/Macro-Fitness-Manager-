@@ -278,15 +278,24 @@ async function handleNotify(req: Request, notificationType: NotificationType) {
     return NextResponse.json({ ok: true, sent: 0, type: notificationType });
   }
 
-  const { data: allPrefs, error: prefErr } = await admin
-    .from("user_preferences")
-    .select("user_id, key, value")
-    .in("user_id", userIds);
-
-  if (prefErr) return jsonError(prefErr.message, 500);
+  // Paged: the database returns at most 1,000 rows per request, and weekly
+  // check-in records keep adding rows.
+  const PAGE = 1000;
+  const allPrefs: { user_id: string; key: string; value: string }[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error: prefErr } = await admin
+      .from("user_preferences")
+      .select("user_id, key, value")
+      .in("user_id", userIds)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (prefErr) return jsonError(prefErr.message, 500);
+    allPrefs.push(...((page ?? []) as { user_id: string; key: string; value: string }[]));
+    if (!page || page.length < PAGE) break;
+  }
 
   const prefsByUser = new Map<string, Record<string, string>>();
-  for (const row of allPrefs ?? []) {
+  for (const row of allPrefs) {
     const uid = String((row as { user_id?: string }).user_id ?? "");
     if (!uid) continue;
     const map = prefsByUser.get(uid) ?? {};

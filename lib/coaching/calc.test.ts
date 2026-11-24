@@ -201,6 +201,22 @@ describe("calculateTargets", () => {
     expect(r.holdReasons).toEqual(["calories_unknown"]);
   });
 
+  it("never cuts calories by more than 10% of the current target in one check-in", () => {
+    // Current target 2,200 → floor 1,980. A steep pace would calculate lower.
+    const r = calculateTargets({ ...input, pace: { direction: "loss", percentPerWeek: 1.5 }, dailyCalories: Object.fromEntries(Array.from({ length: 14 }, (_, i) => [addDays(today, -i), 1900])) });
+    expect(r.decision).toBe("change");
+    expect(r.limitedByFloor).toBe(true);
+    expect(r.newCalories).toBe(1980);
+    expect(r.calculatedCalories!).toBeLessThan(1980);
+    expect(describeResult(r)).toMatch(/cut by at most 10% per check-in/);
+  });
+
+  it("does not limit an increase", () => {
+    const r = calculateTargets({ ...input, pace: { direction: "maintain" } });
+    expect(r.limitedByFloor).toBe(false);
+    expect(r.newCalories!).toBeGreaterThan(2200);
+  });
+
   it("holds when the result is zero or below", () => {
     // Fast weight gain while eating little gives a tiny burn; a steep loss pace pushes it below zero.
     const gaining = Array.from({ length: 8 }, (_, i) => ({ date: addDays(today, -14 + i * 2), value: 300 + i * 3 }));
@@ -226,12 +242,13 @@ describe("calculateTargets", () => {
   });
 
   it("holds when the calculated targets equal the current ones", () => {
-    const r1 = calculateTargets(input);
+    // Maintain: an increase, so the floor doesn't apply.
+    const r1 = calculateTargets({ ...input, pace: { direction: "maintain" } });
     const same = TARGETS.map((x) => {
       const c = r1.changes.find((ch) => ch.key === x.key);
       return c ? t(x.key, `${c.to} ${c.unit}`) : x;
     });
-    const r2 = calculateTargets({ ...input, targets: same });
+    const r2 = calculateTargets({ ...input, pace: { direction: "maintain" }, targets: same });
     expect(r2).toMatchObject({ decision: "hold", holdReasons: [] });
     expect(describeResult(r2)).toMatch(/match your current ones/);
   });

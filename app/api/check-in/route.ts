@@ -21,6 +21,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+/** Several Claude calls in a row can exceed the platform's default limit. */
+export const maxDuration = 60;
 
 function json(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status });
@@ -214,7 +216,12 @@ export async function POST(req: Request) {
         .insert({
           user_id: user.id,
           title: "Weekly check-in",
-          messages: [message] as unknown as Json,
+          // A user turn first, so the Coach keeps its own review as context
+          // (a conversation that starts with the assistant has that turn dropped).
+          messages: [
+            { role: "user", content: "Weekly check-in", timestamp: now.toISOString(), coachId },
+            message,
+          ] as unknown as Json,
           coach_id: coachId,
           updated_at: now.toISOString(),
         })

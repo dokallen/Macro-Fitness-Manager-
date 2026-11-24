@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -239,6 +239,7 @@ export function CoachClient({
   );
   const busyProposalsRef = useRef<Map<string, "apply" | "cancel">>(new Map());
   const [targetsNonce, setTargetsNonce] = useState(0);
+  const router = useRouter();
 
   useEffect(() => {
     draftRef.current = draft;
@@ -387,6 +388,13 @@ export function CoachClient({
             ...(img ? { imageBase64: img } : {}),
             ...(coachId ? { coachId } : {}),
             ...(conversationId ? { conversationId } : {}),
+            timeZone: (() => {
+              try {
+                return Intl.DateTimeFormat().resolvedOptions().timeZone;
+              } catch {
+                return undefined;
+              }
+            })(),
           }),
         });
 
@@ -563,8 +571,9 @@ export function CoachClient({
         else toast(text);
       }
       if (outcome.refresh) {
-        // Same data this screen loads itself: reload the targets shown in quick-log.
+        // Reload the targets shown in quick-log, and the cached data of other screens.
         setTargetsNonce((n) => n + 1);
+        router.refresh();
       }
     } finally {
       busyProposalsRef.current.delete(p.id);
@@ -677,7 +686,14 @@ export function CoachClient({
       ) : null}
 
       <div className="shrink-0">
-        <CheckInPanel userId={userId} onChanged={() => void loadLatestConversation()} />
+        <CheckInPanel
+          userId={userId}
+          onChanged={() => {
+            void loadLatestConversation();
+            setTargetsNonce((n) => n + 1);
+            router.refresh();
+          }}
+        />
       </div>
 
       <div

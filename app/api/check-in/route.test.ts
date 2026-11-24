@@ -104,8 +104,11 @@ describe("POST /api/check-in", () => {
     const rec = fake.tables.user_preferences!.find((p) => p.key === `check_in_${TODAY}`)!;
     const parsed = JSON.parse(String(rec.value));
     expect(Object.keys(parsed).sort()).toEqual(
-      ["averageIntake", "changes", "completedAt", "date", "daysLogged", "decision", "dueDate", "estimatedBurn", "loggingAnswer", "proposalId", "reason", "reasons", "status", "trendChangePerWeek", "trendWeight", "weightUnit"].sort()
+      ["averageIntake", "calculatedCalories", "changes", "completedAt", "date", "daysLogged", "decision", "dueDate", "estimatedBurn", "limitedByFloor", "loggingAnswer", "proposalId", "reason", "reasons", "status", "trendChangePerWeek", "trendWeight", "weightUnit"].sort()
     );
+    // This fixture's 1%/week pace asks for a bigger cut than 10%, so the floor applies and is recorded.
+    expect(parsed.limitedByFloor).toBe(true);
+    expect(parsed.reason).toMatch(/capped at 10%/);
     expect(parsed.proposalId).toBe(body.proposal.id);
     expect(parsed.completedAt).toBe(NOW.toISOString());
   });
@@ -138,8 +141,11 @@ describe("POST /api/check-in", () => {
     expect(body.record).toMatchObject({ decision: "hold", reasons: ["logging_incomplete"] });
     expect(body.proposal).toBeUndefined();
     expect(body.text).toMatch(/Holding targets steady/);
-    // A new conversation holds the check-in message.
+    // A new conversation holds the check-in, after a user turn so the Coach keeps its review as context.
     expect(fake.tables.coach_conversations).toHaveLength(1);
+    const msgs = fake.tables.coach_conversations![0]!.messages as { role: string; content: string }[];
+    expect(msgs.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(msgs[0]!.content).toBe("Weekly check-in");
   });
 
   it("asks for a weigh-in first when there is none since the last check-in", async () => {

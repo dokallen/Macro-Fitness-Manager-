@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { describeGoalPace, goalPaceError, goalPaceWrites, readGoalPace } from "@/lib/coaching/goal-pace";
-import { checkInSettingsWrites } from "@/lib/coaching/settings";
+import { checkInSettingsWrites, onlyChanged } from "@/lib/coaching/settings";
 
 describe("goal pace", () => {
   it("has no default", () => expect(readGoalPace([])).toBeNull());
@@ -35,5 +35,17 @@ describe("check-in settings writes", () => {
   });
   it("rejects an invalid pace", () => {
     expect(checkInSettingsWrites({ frequency: "", day: "", reminder: false, direction: "loss", percent: "5" }).error).toBeTruthy();
+  });
+});
+
+describe("onlyChanged", () => {
+  it("drops writes that match what is stored, and deletes of keys that aren't there", () => {
+    const stored = new Map([["weigh_in_frequency", "weekly"], ["check_in_day", "Monday"]]);
+    expect(
+      onlyChanged(
+        { upserts: [{ key: "weigh_in_frequency", value: "weekly" }, { key: "check_in_reminder", value: "true" }], deletes: ["check_in_day", "profile_goal_pace_percent"] },
+        stored
+      )
+    ).toEqual({ upserts: [{ key: "check_in_reminder", value: "true" }], deletes: ["check_in_day"] });
   });
 });

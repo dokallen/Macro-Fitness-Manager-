@@ -4,7 +4,9 @@
  */
 import {
   CALC_WINDOW_DAYS,
+  CHECK_IN_LATE_MAX_DAYS,
   CALORIE_ROUNDING,
+  MAX_CALORIE_DECREASE_FRACTION,
   HOLD_LOGGED_DAYS_WINDOW,
   HOLD_MIN_LOGGED_DAYS,
   HOLD_MIN_WEIGH_IN_SPAN_DAYS,
@@ -134,8 +136,8 @@ export const HOLD_REASON_TEXT: Record<HoldReason, string> = {
   not_enough_weigh_ins: `Need at least ${HOLD_MIN_WEIGH_INS} weigh-ins at least ${HOLD_MIN_WEIGH_IN_SPAN_DAYS} days apart in the last ${CALC_WINDOW_DAYS} days.`,
   logging_incomplete: "You said you didn't log everything this week, so the numbers can't be trusted yet.",
   not_enough_logged_days: `Need food logged on at least ${HOLD_MIN_LOGGED_DAYS} of the last ${HOLD_LOGGED_DAYS_WINDOW} days.`,
-  check_in_missed: "This check-in is more than 14 days late, so the data is too old to act on.",
-  no_goal_pace: "Set a goal pace in your profile first.",
+  check_in_missed: `This check-in is more than ${CHECK_IN_LATE_MAX_DAYS} days late, so the data is too old to act on.`,
+  no_goal_pace: "Set a goal pace first (Settings → Weekly check-in).",
   calories_unknown: "Can't tell which target is calories.",
   macros_unknown: "Can't tell which targets are protein, carbs and fat, or can't fit them to the new calories.",
   target_not_positive: "The calculation came out at or below zero, so it is not used. Check your recent weigh-ins and food logs.",
@@ -264,7 +266,8 @@ export function scaleMacros(
 export type CalcInput = {
   today: string;
   weighIns: readonly WeighIn[];
-  weightUnit: "lbs" | "kg";
+  /** Null when no weigh-in has a usable unit; the calculation then holds. */
+  weightUnit: "lbs" | "kg" | null;
   /** Calories per local day, only for days that have a calorie entry. */
   dailyCalories: Readonly<Record<string, number>>;
   /** Local days with any food logged (for the hold rule). Defaults to dailyCalories' days. */
@@ -279,7 +282,7 @@ export type CalcInput = {
 export type CalcResult = {
   windowStart: string;
   today: string;
-  weightUnit: "lbs" | "kg";
+  weightUnit: "lbs" | "kg" | null;
   trendWeight: number | null;
   trendChange: number | null;
   trendDays: number | null;
@@ -288,6 +291,10 @@ export type CalcResult = {
   daysLoggedLastWeek: number;
   estimatedBurn: number | null;
   newCalories: number | null;
+  /** The calculation came out lower than the floor, so the floor was used. */
+  limitedByFloor: boolean;
+  /** The calculated value before the floor, when the floor applied. */
+  calculatedCalories: number | null;
   decision: "change" | "hold";
   holdReasons: HoldReason[];
   changes: TargetChange[];
@@ -323,7 +330,7 @@ export function calculateTargets(input: CalcInput): CalcResult {
   });
 
   const burn =
-    intake.average !== null && trendChange !== null && trendDays
+    intake.average !== null && trendChange !== null && trendDays && input.weightUnit
       ? estimateBurn(intake.average, trendChange, trendDays, input.weightUnit)
       : null;
 
@@ -339,6 +346,8 @@ export function calculateTargets(input: CalcInput): CalcResult {
     daysLoggedLastWeek: lastWeek.daysLogged,
     estimatedBurn: burn,
     newCalories: null,
+    limitedByFloor: false,
+    calculatedCalories: null,
     decision: "hold",
     holdReasons: reasons,
     changes: [],
@@ -346,10 +355,21 @@ export function calculateTargets(input: CalcInput): CalcResult {
   if (!input.pace) reasons.push("no_goal_pace");
   const roles = identifyMacroRoles(input.targets, input.rememberedCaloriesKey);
   if (!roles.calories) reasons.push("calories_unknown");
-  if (reasons.length || burn === null || !end || !input.pace) return base;
+  if (reasons.length || burn === null || !end || !input.pace || !input.weightUnit) return base;
 
-  const newCalories = calorieTargetFor(burn, input.pace, end.trend, input.weightUnit);
-  if (newCalories <= 0) return { ...base, newCalories, holdReasons: ["target_not_positive"] };
+  const calculated = calorieTargetFor(burn, input.pace, end.trend, input.weightUnit);
+  if (calculated <= 0) return { ...base, newCalories: calculated, holdReasons: ["target_not_positive"] };
+  // Floor based on the current target: never more than a 10% cut in one check-in.
+  const currentCalories = input.targets.find((t) => t.key === roles.calories)?.targetNumber;
+  const floor =
+    currentCalories && currentCalories > 0
+      ? Math.ceil((currentCalories * (1 - MAX_CALORIE_DECREASE_FRACTION)) / CALORIE_ROUNDING) * CALORIE_ROUNDING
+      : null;
+  const limitedByFloor = floor !== null && calculated < floor;
+  const newCalories = limitedByFloor ? floor! : calculated;
+  Object.assign(base, { limitedByFloor, calculatedCalories: limitedByFloor ? calculated : null });
+  // Same calories: nothing to change (rescaling would only add rounding noise).
+  if (currentCalories === newCalories) return { ...base, newCalories };
   const changes = scaleMacros(input.targets, roles, newCalories);
   if (!changes) return { ...base, newCalories, holdReasons: ["macros_unknown"] };
   const real = changes.filter((c) => c.to !== c.from);
@@ -359,7 +379,7 @@ export function calculateTargets(input: CalcInput): CalcResult {
 
 /** Plain-words summary of a result, using only the calculated numbers. */
 export function describeResult(r: CalcResult): string {
-  const u = r.weightUnit;
+  const u = r.weightUnit ?? "";
   const parts: string[] = [];
   if (r.trendWeight !== null) parts.push(`Trend weight ${r.trendWeight.toFixed(1)} ${u}`);
   if (r.trendChange !== null && r.trendDays) {
@@ -371,7 +391,10 @@ export function describeResult(r: CalcResult): string {
   const facts = parts.join(", ");
   if (r.decision === "change") {
     const list = r.changes.map((c) => `${formatMacroLabel(c.key)} ${c.from} → ${c.to}${c.unit ? ` ${c.unit}` : ""}`).join(", ");
-    return `${facts}. Proposed: ${list}.`;
+    const floorNote = r.limitedByFloor
+      ? ` The calculation gave ${r.calculatedCalories} kcal; calories are cut by at most ${Math.round(MAX_CALORIE_DECREASE_FRACTION * 100)}% per check-in, so this is the limit.`
+      : "";
+    return `${facts}. Proposed: ${list}.${floorNote}`;
   }
   const why = r.holdReasons.length
     ? r.holdReasons.map((h) => HOLD_REASON_TEXT[h]).join(" ")

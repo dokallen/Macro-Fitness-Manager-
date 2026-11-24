@@ -39,6 +39,8 @@ import {
 } from "@/lib/claude-messages";
 
 export const dynamic = "force-dynamic";
+/** Several Claude calls in a row can exceed the platform's default limit. */
+export const maxDuration = 60;
 
 const MAX_MESSAGE_CHARS = 12000;
 
@@ -90,6 +92,8 @@ type ConvMsg = {
   /** Changes the Coach proposed in this reply; written only when the user applies them. */
   proposals?: CoachProposal[];
   notes?: string[];
+  /** Set on a weekly check-in message (YYYY-MM-DD); kept so it isn't posted twice. */
+  checkInDate?: string;
 };
 
 function storedExtras(o: Record<string, unknown>): Pick<ConvMsg, "proposals" | "notes"> {
@@ -112,6 +116,7 @@ function parseConvMessages(raw: unknown): ConvMsg[] {
       timestamp: String(o.timestamp ?? new Date().toISOString()),
       coachId: String(o.coachId ?? o.coach_id ?? "drdata"),
       ...(role === "assistant" ? storedExtras(o) : {}),
+      ...(typeof o.checkInDate === "string" ? { checkInDate: o.checkInDate } : {}),
     });
   }
   return out;
@@ -788,7 +793,11 @@ export async function POST(req: Request) {
     // The user's numbers (Phase 2.7). If they can't be loaded, the Coach still answers.
     let coachData: Awaited<ReturnType<typeof loadCoachDataContext>> | null = null;
     try {
-      coachData = await loadCoachDataContext(supabase, user.id, new Date(), prefs ?? []);
+      const clientTz =
+        bodyObj && typeof (bodyObj as Record<string, unknown>).timeZone === "string"
+          ? String((bodyObj as Record<string, unknown>).timeZone)
+          : null;
+      coachData = await loadCoachDataContext(supabase, user.id, new Date(), prefs ?? [], clientTz);
     } catch (e) {
       console.error("[coach-chat] data context", e);
     }
@@ -803,6 +812,10 @@ export async function POST(req: Request) {
     let rowId: string | null = existingConvId;
     let messagesArr: ConvMsg[] = [];
 
+    // Messages in the conversation when this request read it. A check-in that
+    // lands after that read (while this reply is being written) is kept on save.
+    const readAtStart = new Set<string>();
+
     if (existingConvId) {
       const { data: row, error: rowErr } = await supabase
         .from("coach_conversations")
@@ -815,6 +828,7 @@ export async function POST(req: Request) {
         return jsonError(rowErr?.message ?? "Conversation not found.", 404);
       }
       messagesArr = parseConvMessages(row.messages);
+      for (const m of messagesArr) readAtStart.add(`${m.role}|${m.timestamp}`);
     }
 
     const nowIso = new Date().toISOString();
@@ -963,7 +977,16 @@ export async function POST(req: Request) {
       const saved = await updateConversationMessages(supabase, {
         conversationId: rowId,
         userId: user.id,
-        build: (stored) => mergeProposalDecisions(local, stored),
+        build: (stored) => {
+          const merged = mergeProposalDecisions(local, stored);
+          const known = new Set(merged.map((m) => `${m.role}|${m.timestamp}`));
+          const postedMeanwhile = stored.filter((m) => {
+            if (typeof m.checkInDate !== "string") return false;
+            const key = `${m.role === "user" ? "user" : "assistant"}|${String(m.timestamp)}`;
+            return !readAtStart.has(key) && !known.has(key);
+          }) as unknown as ConvMsg[];
+          return postedMeanwhile.length ? [...merged, ...postedMeanwhile] : merged;
+        },
         extra: { coach_id: coachId },
       });
 

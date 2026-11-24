@@ -60,3 +60,10 @@ export const GOAL_PACE_GUIDE = {
 
 /** Highest pace the app accepts, in percent of body weight per week. */
 export const GOAL_PACE_MAX = { loss: 1.5, gain: 1.0 } as const;
+
+/**
+ * Calorie floor, based on the current target: one check-in may lower the
+ * calorie target by at most this share of it (0.1 = 10%). If the calculation
+ * comes out lower, the floor is proposed instead and the user is told.
+ */
+export const MAX_CALORIE_DECREASE_FRACTION = 0.1;

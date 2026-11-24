@@ -1,7 +1,7 @@
 import "server-only";
 
 import {
-  NON_MACRO_PREFERENCE_KEYS,
+  isNonMacroPreferenceKey,
   extractMacroTargets,
 } from "@/lib/dashboard/preferences";
 export {
@@ -138,6 +138,26 @@ export function getCoachPersonaForPrompt(coachId: string): {
  * Builds a system prompt segment from raw user_preferences rows.
  * All values come from the database; keys are emitted as stored (no invented goals).
  */
+/**
+ * Keys never sent to the model in the raw preference list:
+ * - push_subscription (device token) and notification_last_sent_* / notification_timezone (app bookkeeping);
+ * - weigh_in_snoozed_date (bookkeeping);
+ * - dated check-in records (check_in_YYYY-MM-DD) and profile_* keys: the Coach gets
+ *   these summarized by lib/coaching/coach-context.ts.
+ * Settings the Coach can change (reminder times and switches, weigh-in and check-in
+ * schedule) stay visible so it knows their current values.
+ */
+export function isHiddenFromCoachPrompt(key: string): boolean {
+  return (
+    key === "push_subscription" ||
+    key === "notification_timezone" ||
+    key.startsWith("notification_last_sent_") ||
+    key === "weigh_in_snoozed_date" ||
+    /^check_in_\d{4}-\d{2}-\d{2}$/.test(key) ||
+    key.startsWith("profile_")
+  );
+}
+
 export function buildCoachSystemPromptFromPreferences(
   rows: { key: string; value: string }[],
   coachId: string = "drdata"
@@ -203,7 +223,7 @@ export function buildCoachSystemPromptFromPreferences(
   ];
 
   const nonMacro = rows
-    .filter((r) => NON_MACRO_PREFERENCE_KEYS.has(r.key) && r.value.trim())
+    .filter((r) => isNonMacroPreferenceKey(r.key) && !isHiddenFromCoachPrompt(r.key) && r.value.trim())
     .sort((a, b) => a.key.localeCompare(b.key));
 
   if (nonMacro.length) {
@@ -216,7 +236,7 @@ export function buildCoachSystemPromptFromPreferences(
 
   const macros = extractMacroTargets(rows);
   if (macros.length) {
-    lines.push("Macro targets (from onboarding):");
+    lines.push("Current macro targets:");
     for (const m of macros) {
       lines.push(`${m.key}: ${m.displayValue}`);
     }
@@ -227,7 +247,8 @@ export function buildCoachSystemPromptFromPreferences(
   const extras = rows.filter(
     (r) =>
       r.value.trim() &&
-      !NON_MACRO_PREFERENCE_KEYS.has(r.key) &&
+      !isNonMacroPreferenceKey(r.key) &&
+      !isHiddenFromCoachPrompt(r.key) &&
       !macroKeys.has(r.key)
   );
   if (extras.length) {

@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { describeResult, type CalcResult } from "@/lib/coaching/calc";
 import {
   loadCheckInData,
+  validTimeZone,
   parseCheckInRecord,
   runCalculation,
   type CheckInData,
@@ -92,7 +93,9 @@ export async function loadCoachDataContext(
   supabase: Client,
   userId: string,
   now: Date,
-  preloadedPrefs?: readonly { key: string; value: string | null }[]
+  preloadedPrefs?: readonly { key: string; value: string | null }[],
+  /** The device's time zone, so the Coach and the check-in card agree. */
+  clientTimeZone?: string | null
 ): Promise<{ text: string; data: CheckInData }> {
   const prefsForMetrics = preloadedPrefs
     ? preloadedPrefs.map((p) => ({ key: p.key, value: p.value ?? "" }))
@@ -123,8 +126,10 @@ export async function loadCoachDataContext(
   const tzFromPrefs = (prefs: { key: string; value: string }[]) =>
     prefs.find((p) => p.key === "notification_timezone")?.value || null;
   const [data, early] = await Promise.all([
-    loadCheckInData(supabase, userId, now, null, preloadedPrefs),
-    prefsForMetrics ? loadHistories(prefsForMetrics, tzFromPrefs(prefsForMetrics)) : Promise.resolve(null),
+    loadCheckInData(supabase, userId, now, clientTimeZone ?? null, preloadedPrefs),
+    prefsForMetrics
+      ? loadHistories(prefsForMetrics, validTimeZone(clientTimeZone) ?? tzFromPrefs(prefsForMetrics))
+      : Promise.resolve(null),
   ]);
   const histories = early ?? (await loadHistories(data.prefs, data.timeZone));
   const calc = runCalculation(data, null);

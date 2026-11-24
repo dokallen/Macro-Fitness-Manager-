@@ -183,4 +183,36 @@ describe("Coach chat with tools", () => {
     expect(msgs[1]!.proposals![0]!.status).toBe("applied");
     expect(msgs[msgs.length - 1]!.content).toBe("Anything else?");
   });
+
+  it("keeps a check-in message posted while the reply was being written", async () => {
+    fake.tables.coach_conversations!.push({
+      id: "conv-3",
+      user_id: "user-1",
+      updated_at: "2026-11-24T10:00:00.000Z",
+      messages: [{ role: "user", content: "Hi", timestamp: "2020-01-01T00:00:00.000Z", coachId: "drdata" }],
+    });
+    chatReply = [{ type: "text", text: "Hello!" }];
+    fetchMock.mockImplementationOnce(async (_u, init) => {
+      sent.push(JSON.parse(String(init?.body)));
+      // The weekly check-in lands in this conversation meanwhile.
+      const conv = fake.tables.coach_conversations!.find((c) => c.id === "conv-3")!;
+      (conv.messages as unknown[]).push({
+        role: "assistant",
+        content: "Weekly check-in. Holding steady.",
+        // Stamped when the check-in started, i.e. before this chat request began.
+        timestamp: "2026-11-24T09:59:00.000Z",
+        coachId: "drdata",
+        checkInDate: "2026-11-24",
+      });
+      conv.updated_at = "2026-11-24T10:00:07.000Z";
+      return new Response(JSON.stringify({ content: chatReply }), { status: 200 });
+    });
+    await post({ content: "Morning", conversationId: "conv-3" });
+    const msgs = fake.tables.coach_conversations!.find((c) => c.id === "conv-3")!.messages as {
+      content: string;
+      checkInDate?: string;
+    }[];
+    expect(msgs.map((m) => m.content)).toEqual(["Hi", "Morning", "Hello!", "Weekly check-in. Holding steady."]);
+    expect(msgs.at(-1)!.checkInDate).toBe("2026-11-24");
+  });
 });
