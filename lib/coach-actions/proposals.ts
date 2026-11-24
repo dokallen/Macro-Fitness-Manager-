@@ -108,6 +108,8 @@ const STATUSES = new Set<ProposalStatus>(["pending", "applying", "applied", "can
  * rather than pending, so it can never run twice.
  */
 export const STALE_APPLYING_MS = 5 * 60 * 1000;
+export const STALE_APPLYING_ERROR =
+  "Interrupted before finishing. Check whether the change was saved.";
 
 /** Reads proposals back from stored jsonb, dropping anything malformed. */
 export function parseStoredProposals(
@@ -129,7 +131,7 @@ export function parseStoredProposals(
       const started = typeof o.decidedAt === "string" ? Date.parse(o.decidedAt) : NaN;
       if (!Number.isFinite(started) || now.getTime() - started > STALE_APPLYING_MS) {
         status = "failed";
-        staleError = "Interrupted before finishing. Check whether the change was saved.";
+        staleError = STALE_APPLYING_ERROR;
       }
     }
     out.push({

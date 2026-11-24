@@ -8,6 +8,14 @@ import { toast } from "sonner";
 import { ConversationSidebar } from "@/components/coach/ConversationSidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  applyProposalUpdate,
+  interpretDecisionResponse,
+  mergeIncomingMessages,
+  proposalCardView,
+  readUiProposals,
+  type UiProposal,
+} from "@/lib/coach-actions/card-state";
 import type { MacroTargetRow } from "@/lib/dashboard/preferences";
 import {
   extractMacroTargets,
@@ -33,6 +41,8 @@ export type CoachMessageRow = {
   role: string;
   content: string;
   created_at: string;
+  /** Changes the Coach proposed in this message (Apply / Cancel cards). */
+  proposals?: UiProposal[];
 };
 
 type StoredConvMsg = {
@@ -40,6 +50,7 @@ type StoredConvMsg = {
   content: string;
   timestamp: string;
   coachId?: string;
+  proposals?: unknown;
 };
 
 function formatTime(iso: string) {
@@ -109,11 +120,13 @@ function parseStoredMessages(
     const o = x as StoredConvMsg;
     const role = o.role === "user" ? "user" : "coach";
     const ts = String(o.timestamp ?? new Date().toISOString());
+    const proposals = role === "coach" ? readUiProposals(o.proposals) : undefined;
     out.push({
       id: `${convId}-${i}-${ts}`,
       role,
       content: String(o.content ?? ""),
       created_at: ts,
+      ...(proposals ? { proposals } : {}),
     });
     i += 1;
   }
@@ -219,6 +232,12 @@ export function CoachClient({
     {}
   );
   const [quickLogBusy, setQuickLogBusy] = useState(false);
+  /** Proposals with an Apply/Cancel request in flight. The ref blocks a double tap before re-render. */
+  const [busyProposals, setBusyProposals] = useState<Map<string, "apply" | "cancel">>(
+    () => new Map()
+  );
+  const busyProposalsRef = useRef<Map<string, "apply" | "cancel">>(new Map());
+  const [targetsNonce, setTargetsNonce] = useState(0);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -315,7 +334,7 @@ export function CoachClient({
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, targetsNonce]);
 
   useEffect(() => {
     scrollToBottom();
@@ -387,7 +406,17 @@ export function CoachClient({
           setConversationId(payload.conversationId);
         }
         if (Array.isArray(payload.messages)) {
-          setMessages(payload.messages);
+          const incoming = payload.messages.map((m) => {
+              const proposals = readUiProposals(m.proposals);
+              return {
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                created_at: m.created_at,
+                ...(proposals ? { proposals } : {}),
+              };
+            });
+          setMessages((prev) => mergeIncomingMessages(prev, incoming));
         } else {
           await loadLatestConversation();
         }
@@ -498,6 +527,48 @@ export function CoachClient({
     setQuickLogFood(foodName);
     setQuickLogFields(fieldInit);
     setQuickLogOpen(true);
+  }
+
+  async function decideProposal(p: UiProposal, decision: "apply" | "cancel") {
+    if (!conversationId || busyProposalsRef.current.has(p.id)) return;
+    busyProposalsRef.current.set(p.id, decision);
+    setBusyProposals(new Map(busyProposalsRef.current));
+    try {
+      let ok = false;
+      let status: number | undefined;
+      let payload: unknown = {};
+      try {
+        const res = await fetch("/api/coach-actions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversationId, proposalId: p.id, decision }),
+        });
+        ok = res.ok;
+        status = res.status;
+        payload = await res.json().catch(() => ({}));
+      } catch {
+        ok = false;
+        payload = {};
+      }
+      const outcome = interpretDecisionResponse(p.id, p.summary, ok, payload, status);
+      if (outcome.update) {
+        const update = outcome.update;
+        setMessages((prev) => applyProposalUpdate(prev, update));
+      }
+      if (outcome.toast) {
+        const { kind, text } = outcome.toast;
+        if (kind === "success") toast.success(text);
+        else if (kind === "error") toast.error(text);
+        else toast(text);
+      }
+      if (outcome.refresh) {
+        // Same data this screen loads itself: reload the targets shown in quick-log.
+        setTargetsNonce((n) => n + 1);
+      }
+    } finally {
+      busyProposalsRef.current.delete(p.id);
+      setBusyProposals(new Map(busyProposalsRef.current));
+    }
   }
 
   async function submitQuickLogFromCoach() {
@@ -638,6 +709,58 @@ export function CoachClient({
                 >
                   {formatTime(m.created_at)}
                 </p>
+                {!isUser && m.proposals?.length ? (
+                  <div className="mt-2 space-y-2">
+                    {m.proposals.map((p) => {
+                      const view = proposalCardView(p);
+                      const inFlight = busyProposals.get(p.id);
+                      const busy = inFlight !== undefined;
+                      const toneClass =
+                        view.tone === "success"
+                          ? "text-[var(--accent)]"
+                          : view.tone === "error"
+                            ? "text-destructive"
+                            : "text-muted-foreground";
+                      return (
+                        <div
+                          key={p.id}
+                          className="rounded-lg border border-border bg-surface-2 p-2"
+                          data-testid="coach-proposal"
+                        >
+                          <p className="text-xs font-semibold text-foreground">{p.summary}</p>
+                          {view.showButtons ? (
+                            <div className="mt-2 flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={busy || !conversationId}
+                                aria-label={`Apply: ${p.summary}`}
+                                onClick={() => void decideProposal(p, "apply")}
+                              >
+                                {inFlight === "apply" ? "Applying…" : "Apply"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={busy || !conversationId}
+                                aria-label={`Cancel: ${p.summary}`}
+                                onClick={() => void decideProposal(p, "cancel")}
+                              >
+                                {inFlight === "cancel" ? "Cancelling…" : "Cancel"}
+                              </Button>
+                            </div>
+                          ) : (
+                            <p className={`mt-1 text-xs ${toneClass}`} role="status">
+                              {view.statusLabel}
+                              {view.detail ? ` — ${view.detail}` : ""}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 {showFoodLog ? (
                   <button
                     type="button"
