@@ -1,0 +1,26 @@
+import { z } from "zod";
+
+import { removeMacroTarget, setMacroTargets } from "@/lib/coach-actions/macro-targets";
+import type { CoachActionDef } from "@/lib/coach-actions/types";
+
+/** Every change the Coach can propose. Each one runs only after the user taps Apply. */
+export const COACH_ACTIONS: Readonly<Record<string, CoachActionDef>> = Object.fromEntries(
+  [setMacroTargets, removeMacroTarget].map((a) => [a.name, a as unknown as CoachActionDef])
+);
+
+export type ClaudeTool = {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+};
+
+/** Claude tool definitions, generated from each action's zod schema so they cannot drift. */
+export function coachTools(
+  actions: Readonly<Record<string, CoachActionDef>> = COACH_ACTIONS
+): ClaudeTool[] {
+  return Object.values(actions).map((a) => {
+    const schema = { ...(z.toJSONSchema(a.schema, { io: "input" }) as Record<string, unknown>) };
+    delete schema.$schema;
+    return { name: a.name, description: a.description, input_schema: schema };
+  });
+}

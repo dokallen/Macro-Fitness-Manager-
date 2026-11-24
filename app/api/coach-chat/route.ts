@@ -5,11 +5,26 @@ import {
   buildCoachSystemPromptFromPreferences,
   getProgramWeekNumberFromPreferencesRows,
 } from "@/lib/coach-chat-context";
-import { callCoachClaudeChat } from "@/lib/coach-chat";
+import { randomUUID } from "node:crypto";
+
+import {
+  assistantTextForClaude,
+  COACH_TOOLS_SYSTEM_NOTE,
+  parseStoredNotes,
+  parseStoredProposals,
+  proposalsFromToolUses,
+  replyForToolOnlyTurn,
+} from "@/lib/coach-actions/proposals";
+import { COACH_ACTIONS, coachTools } from "@/lib/coach-actions/registry";
+import type { CoachProposal } from "@/lib/coach-actions/types";
+import {
+  callCoachClaudeWithTools,
+  type ClaudeContentBlock,
+} from "@/lib/coach-chat";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   CONVERSATION_SUMMARY_PREFIX,
-  normalizeClaudeTurns,
+  type ClaudeTurn,
 } from "@/lib/claude-messages";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +76,16 @@ type ConvMsg = {
   content: string;
   timestamp: string;
   coachId: string;
+  /** Changes the Coach proposed in this reply; written only when the user applies them. */
+  proposals?: CoachProposal[];
+  notes?: string[];
 };
+
+function storedExtras(o: Record<string, unknown>): Pick<ConvMsg, "proposals" | "notes"> {
+  const proposals = parseStoredProposals(o.proposals);
+  const notes = parseStoredNotes(o.notes);
+  return { ...(proposals ? { proposals } : {}), ...(notes ? { notes } : {}) };
+}
 
 function parseConvMessages(raw: unknown): ConvMsg[] {
   if (!Array.isArray(raw)) return [];
@@ -76,6 +100,7 @@ function parseConvMessages(raw: unknown): ConvMsg[] {
       content: String(o.content ?? ""),
       timestamp: String(o.timestamp ?? new Date().toISOString()),
       coachId: String(o.coachId ?? o.coach_id ?? "drdata"),
+      ...(role === "assistant" ? storedExtras(o) : {}),
     });
   }
   return out;
@@ -84,12 +109,21 @@ function parseConvMessages(raw: unknown): ConvMsg[] {
 function toUiMessages(
   convId: string,
   msgs: ConvMsg[]
-): { id: string; role: string; content: string; created_at: string }[] {
+): {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string;
+  proposals?: CoachProposal[];
+  notes?: string[];
+}[] {
   return msgs.map((m, i) => ({
     id: `${convId}-${i}-${m.timestamp}`,
     role: m.role === "user" ? "user" : "coach",
     content: m.content,
     created_at: m.timestamp,
+    ...(m.proposals ? { proposals: m.proposals } : {}),
+    ...(m.notes ? { notes: m.notes } : {}),
   }));
 }
 
@@ -102,7 +136,14 @@ async function compressMessagesIfNeeded(
     const chunk = messages.slice(0, 20);
     const rest = messages.slice(20);
     const blob = chunk
-      .map((m) => `${m.role}: ${m.content}`)
+      .map(
+        (m) =>
+          `${m.role}: ${
+            m.role === "assistant"
+              ? assistantTextForClaude(m.content, m.proposals, m.notes)
+              : m.content
+          }`
+      )
       .join("\n\n")
       .slice(0, 12000);
     const summaryText = await callAnthropicVisionOrText({
@@ -733,7 +774,9 @@ export async function POST(req: Request) {
       fromCookie ||
       "drdata";
 
-    const system = buildCoachSystemPromptFromPreferences(prefs ?? [], coachId);
+    const system =
+      buildCoachSystemPromptFromPreferences(prefs ?? [], coachId) +
+      COACH_TOOLS_SYSTEM_NOTE;
 
     let rowId: string | null = existingConvId;
     let messagesArr: ConvMsg[] = [];
@@ -762,115 +805,71 @@ export async function POST(req: Request) {
     messagesArr = [...messagesArr, userMsg];
     messagesArr = await compressMessagesIfNeeded(apiKey!, messagesArr);
 
-    let reply: string;
-
-    if (rawChatImg) {
-      const { mediaType, b64 } = parseImagePayload(rawChatImg);
-      const claudePayload: {
-        role: "user" | "assistant";
-        content: string | AnthropicBlock[];
-      }[] = [];
-      for (let i = 0; i < messagesArr.length; i++) {
-        const m = messagesArr[i]!;
-        const isLast = i === messagesArr.length - 1;
-        if (m.role === "user") {
-          if (isLast) {
-            claudePayload.push({
-              role: "user",
-              content: [
-                {
-                  type: "image",
-                  source: { type: "base64", media_type: mediaType, data: b64 },
-                },
-                { type: "text", text: m.content },
-              ],
-            });
-          } else {
-            claudePayload.push({ role: "user", content: m.content });
-          }
-        } else {
-          claudePayload.push({ role: "assistant", content: m.content });
-        }
-      }
-
-      try {
-        const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-api-key": apiKey!,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 4096,
-            temperature: 0.7,
-            system,
-            messages: normalizeClaudeTurns(claudePayload),
-          }),
+    const claudeTurns: ClaudeTurn<ClaudeContentBlock>[] = [];
+    for (let i = 0; i < messagesArr.length; i++) {
+      const m = messagesArr[i]!;
+      const isLast = i === messagesArr.length - 1;
+      if (m.role === "assistant") {
+        claudeTurns.push({
+          role: "assistant",
+          content: assistantTextForClaude(m.content, m.proposals, m.notes),
         });
-
-        if (!anthropicRes.ok) {
-          const txt = (await anthropicRes.text()).slice(0, 1500);
-          throw new Error(`Claude API error (${anthropicRes.status}): ${txt}`);
-        }
-
-        const raw = (await anthropicRes.json()) as {
-          content?: Array<{ type: string; text?: string }>;
-        };
-        reply =
-          raw.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
-        if (!reply) throw new Error("Empty reply from Claude");
-      } catch (e) {
-        const message =
-          e instanceof Error ? e.message : "Failed to reach Claude.";
-        if (/not configured/i.test(message)) {
-          return jsonError(
-            "ANTHROPIC_API_KEY is missing or empty. Set a valid key and retry.",
-            503
-          );
-        }
-        if (/Claude API error \(401\)|Claude API error \(403\)/i.test(message)) {
-          return jsonError(
-            "Anthropic rejected the API key (401/403). Verify ANTHROPIC_API_KEY.",
-            502
-          );
-        }
-        return jsonError(message, 500);
-      }
-    } else {
-      const claudeMessages: { role: "user" | "assistant"; content: string }[] =
-        messagesArr.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
-
-      try {
-        reply = await callCoachClaudeChat({ system, messages: claudeMessages });
-      } catch (e) {
-        const message =
-          e instanceof Error ? e.message : "Failed to reach Claude.";
-        if (/not configured/i.test(message)) {
-          return jsonError(
-            "ANTHROPIC_API_KEY is missing or empty. Set a valid key and retry.",
-            503
-          );
-        }
-        if (/Claude API error \(401\)|Claude API error \(403\)/i.test(message)) {
-          return jsonError(
-            "Anthropic rejected the API key (401/403). Verify ANTHROPIC_API_KEY.",
-            502
-          );
-        }
-        return jsonError(message, 500);
+      } else if (isLast && rawChatImg) {
+        const { mediaType, b64 } = parseImagePayload(rawChatImg);
+        claudeTurns.push({
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: b64 },
+            },
+            { type: "text", text: m.content },
+          ],
+        });
+      } else {
+        claudeTurns.push({ role: "user", content: m.content });
       }
     }
+
+    let claudeResult: Awaited<ReturnType<typeof callCoachClaudeWithTools>>;
+    try {
+      claudeResult = await callCoachClaudeWithTools({
+        system,
+        messages: claudeTurns,
+        tools: coachTools(),
+      });
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to reach Claude.";
+      if (/not configured/i.test(message)) {
+        return jsonError(
+          "ANTHROPIC_API_KEY is missing or empty. Set a valid key and retry.",
+          503
+        );
+      }
+      if (/Claude API error \(401\)|Claude API error \(403\)/i.test(message)) {
+        return jsonError(
+          "Anthropic rejected the API key (401/403). Verify ANTHROPIC_API_KEY.",
+          502
+        );
+      }
+      return jsonError(message, 500);
+    }
+
+    const { proposals, notes } = proposalsFromToolUses(
+      claudeResult.toolUses,
+      COACH_ACTIONS,
+      () => randomUUID()
+    );
+    const reply = claudeResult.text || replyForToolOnlyTurn(proposals);
 
     const asstMsg: ConvMsg = {
       role: "assistant",
       content: reply,
       timestamp: new Date().toISOString(),
       coachId,
+      ...(proposals.length ? { proposals } : {}),
+      ...(notes.length ? { notes } : {}),
     };
     messagesArr = [...messagesArr, asstMsg];
     messagesArr = await compressMessagesIfNeeded(apiKey!, messagesArr);
