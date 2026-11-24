@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { goalPaceError, goalPaceWrites, readGoalPace, type GoalPace } from "@/lib/coaching/goal-pace";
 import { CoachActionError, type CoachActionDef } from "@/lib/coach-actions/types";
 import {
   ACTIVITY_LEVEL_OPTIONS,
@@ -26,6 +27,8 @@ export const updateProfileSchema = z
     activity_level: z.enum(ACTIVITY_LEVEL_OPTIONS).nullable().optional(),
     goal_weight: z.number().positive().nullable().optional(),
     goal_weight_unit: z.enum(WEIGHT_UNITS).nullable().optional(),
+    goal_pace_direction: z.enum(["loss", "gain", "maintain"]).nullable().optional(),
+    goal_pace_percent: z.number().positive().nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "Change at least one field",
@@ -42,6 +45,8 @@ const LABELS: Record<keyof Input, string> = {
   activity_level: "activity level",
   goal_weight: "goal weight",
   goal_weight_unit: "goal weight unit",
+  goal_pace_direction: "goal pace",
+  goal_pace_percent: "goal pace % per week",
 };
 
 /** Applies the changes onto the stored profile. */
@@ -65,7 +70,7 @@ export function mergeProfile(stored: Profile, input: Input): Profile {
 export const updateProfile: CoachActionDef<typeof updateProfileSchema> = {
   name: "update_profile",
   description:
-    "Propose changing the user's saved profile: date of birth (birth_year, birth_month 1-12, birth_day; each optional, a day needs a month and a month needs a year), height (text with its unit, as the user says it), biological_sex, activity_level, goal_weight and goal_weight_unit. Send only fields that change; send null to clear one. To clear the date of birth, send null for birth_year, birth_month and birth_day together. goal_weight and goal_weight_unit always go together. Never set any date-of-birth field unless the user stated it in this conversation. Current weight is not a profile field: use log_progress_entry. The user must tap Apply before anything changes.",
+    "Propose changing the user's saved profile: date of birth (birth_year, birth_month 1-12, birth_day; each optional, a day needs a month and a month needs a year), height (text with its unit, as the user says it), biological_sex, activity_level, goal_weight and goal_weight_unit. Send only fields that change; send null to clear one. To clear the date of birth, send null for birth_year, birth_month and birth_day together. goal_weight and goal_weight_unit always go together. Goal pace: goal_pace_direction loss, gain or maintain, and goal_pace_percent (percent of body weight per week) for loss or gain. Never set any date-of-birth field unless the user stated it in this conversation. Current weight is not a profile field: use log_progress_entry. The user must tap Apply before anything changes.",
   schema: updateProfileSchema,
   summarize: (input) => {
     const parts = (Object.keys(LABELS) as (keyof Input)[])
@@ -87,7 +92,32 @@ export const updateProfile: CoachActionDef<typeof updateProfileSchema> = {
     if (problem) throw new CoachActionError(problem);
 
     // Only write what this proposal changes; leave other fields as stored.
-    const { upserts: toUpsert, deletes: toDelete } = changedProfileWrites(stored, merged);
+    const changed = changedProfileWrites(stored, merged);
+    const toUpsert = [...changed.upserts];
+    const toDelete = [...changed.deletes];
+
+    if (input.goal_pace_direction !== undefined || input.goal_pace_percent !== undefined) {
+      const current = readGoalPace(prefs);
+      const direction =
+        input.goal_pace_direction === undefined ? current?.direction ?? null : input.goal_pace_direction;
+      const percent =
+        input.goal_pace_percent === undefined
+          ? current && current.direction !== "maintain"
+            ? current.percentPerWeek
+            : null
+          : input.goal_pace_percent;
+      let pace: GoalPace | null = null;
+      if (direction === "maintain") pace = { direction };
+      else if (direction) {
+        if (percent === null) throw new CoachActionError("Give the goal pace as a percent per week.");
+        pace = { direction, percentPerWeek: percent };
+        const err = goalPaceError(pace);
+        if (err) throw new CoachActionError(err);
+      }
+      const w = goalPaceWrites(pace);
+      toUpsert.push(...w.upserts);
+      toDelete.push(...w.deletes);
+    }
     if (toUpsert.length) {
       const { error: upErr } = await supabase.from("user_preferences").upsert(
         toUpsert.map((u) => ({

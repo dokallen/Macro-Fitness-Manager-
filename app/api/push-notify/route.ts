@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import webpush from "web-push";
 
+import { checkInReminderDue } from "@/lib/coaching/schedule";
 import { getCoachPersonaForPrompt } from "@/lib/coach-chat-context";
 import { extractMacroTargets } from "@/lib/dashboard/preferences";
 import { parseTrainingDaysPerWeek } from "@/lib/dashboard/workout-schedule";
@@ -41,6 +42,14 @@ const NOTIFICATION_URLS = {
 } as const;
 
 type NotificationType = keyof typeof NOTIFICATION_URLS;
+
+/**
+ * Weekly check-in reminder (Phase 2.6). Sent from the existing morning run, on
+ * the check-in day only, to users who turned it on and have not checked in.
+ * Fixed text, so no Claude call.
+ */
+const CHECK_IN_REMINDER = "check_in_reminder";
+const CHECK_IN_REMINDER_BODY = "Your weekly check-in is ready. It takes about a minute.";
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -220,7 +229,7 @@ Remind ${name} it's time to rotate their meal plan. Under 15 words. Stay in char
 async function upsertLastSent(
   admin: ReturnType<typeof createAdminSupabaseClient>,
   userId: string,
-  type: NotificationType,
+  type: NotificationType | typeof CHECK_IN_REMINDER,
   ymd: string
 ) {
   await admin.from("user_preferences").upsert(
@@ -324,6 +333,28 @@ async function handleNotify(req: Request, notificationType: NotificationType) {
 
     const tz = prefs[PREF_TIMEZONE]?.trim() || "UTC";
     const todayYmd = localYmd(now, tz);
+
+    if (
+      notificationType === "morning_motivation" &&
+      prefs[`notification_last_sent_${CHECK_IN_REMINDER}`] !== todayYmd &&
+      checkInReminderDue(
+        Object.entries(prefs).map(([key, value]) => ({ key, value })),
+        tz,
+        now
+      )
+    ) {
+      try {
+        await webpush.sendNotification(
+          subscription,
+          JSON.stringify({ title: "Weekly check-in", body: CHECK_IN_REMINDER_BODY, url: "/coach" })
+        );
+        await upsertLastSent(admin, userId, CHECK_IN_REMINDER, todayYmd);
+        sent += 1;
+      } catch (err) {
+        console.error("[push-notify] check-in", userId, err);
+      }
+    }
+
     const lastKey = `notification_last_sent_${notificationType}`;
     if (prefs[lastKey] === todayYmd) continue;
 

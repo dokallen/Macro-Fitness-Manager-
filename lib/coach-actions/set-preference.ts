@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { WEIGH_IN_FREQUENCIES } from "@/lib/coaching/schedule";
+import { extractMacroTargets } from "@/lib/dashboard/preferences";
 import { CoachActionError, type CoachActionDef } from "@/lib/coach-actions/types";
 
 /**
@@ -12,7 +14,7 @@ import { CoachActionError, type CoachActionDef } from "@/lib/coach-actions/types
  * Never allowed: push_subscription, notification_last_sent_*, notification_timezone,
  * body_metric_keys, progress_metric_keys, meal_plan_needs_rotation, macro targets.
  */
-type Kind = "text" | "weekday" | "time" | "boolean";
+type Kind = "text" | "weekday" | "time" | "boolean" | "frequency";
 
 export const COACH_SETTABLE_PREFERENCES: Record<string, { label: string; kind: Kind }> = {
   goal: { label: "goal", kind: "text" },
@@ -26,6 +28,10 @@ export const COACH_SETTABLE_PREFERENCES: Record<string, { label: string; kind: K
   notification_evening_time: { label: "evening recap time", kind: "time" },
   notification_streaks: { label: "streak notifications", kind: "boolean" },
   notification_meal_rotation: { label: "meal plan rotation reminder", kind: "boolean" },
+  weigh_in_frequency: { label: "weigh-in frequency", kind: "frequency" },
+  check_in_day: { label: "check-in day", kind: "weekday" },
+  check_in_reminder: { label: "check-in push reminder", kind: "boolean" },
+  check_in_calories_key: { label: "target used as calories in check-ins", kind: "text" },
 };
 
 export const WEEKDAYS = [
@@ -61,6 +67,11 @@ export function normalizePreferenceValue(
       const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(text);
       return m ? { value: `${m[1]!.padStart(2, "0")}:${m[2]}` } : { error: "Use a 24-hour time like 07:30" };
     }
+    case "frequency": {
+      if (!text) return { value: "" };
+      const f = WEIGH_IN_FREQUENCIES.find((x) => x === text.toLowerCase());
+      return f ? { value: f } : { error: "Use daily, weekly or biweekly" };
+    }
     case "boolean": {
       const t = text.toLowerCase();
       if (t === "true" || t === "false") return { value: t };
@@ -91,7 +102,7 @@ export const setPreference: CoachActionDef<typeof setPreferenceSchema> = {
   description: `Propose changing one of the user's settings. Allowed keys: ${Object.entries(
     COACH_SETTABLE_PREFERENCES
   )
-    .map(([k, r]) => `${k} (${r.kind === "time" ? "HH:MM" : r.kind === "weekday" ? "weekday name, or empty to clear" : r.kind === "boolean" ? "true/false" : "text"})`)
+    .map(([k, r]) => `${k} (${r.kind === "time" ? "HH:MM" : r.kind === "weekday" ? "weekday name, or empty to clear" : r.kind === "frequency" ? "daily, weekly or biweekly, or empty to clear" : r.kind === "boolean" ? "true/false" : "text"})`)
     .join(", ")}. The user must tap Apply before anything changes.`,
   schema: setPreferenceSchema,
   summarize: ({ key, value }) => {
@@ -101,6 +112,16 @@ export const setPreference: CoachActionDef<typeof setPreferenceSchema> = {
   async execute({ supabase, userId, now }, { key, value }) {
     const r = normalizePreferenceValue(key, value);
     if ("error" in r) throw new CoachActionError(r.error);
+    if (key === "check_in_calories_key") {
+      const { data: prefs, error: pErr } = await supabase
+        .from("user_preferences")
+        .select("key, value")
+        .eq("user_id", userId);
+      if (pErr) throw new CoachActionError(pErr.message);
+      if (!extractMacroTargets(prefs ?? []).some((t) => t.key === r.value)) {
+        throw new CoachActionError(`${r.value} is not one of your targets.`);
+      }
+    }
     if (COACH_SETTABLE_PREFERENCES[key]!.kind === "time") {
       // Reminder times are read in the user's time zone, which only the app
       // (from the device) saves. Without it the time would be read as UTC.

@@ -110,6 +110,16 @@ describe("set_preference", () => {
     expect(userPrefs(fake).find((r) => r.key === "notification_evening_time")).toBeUndefined();
   });
 
+  it("sets the weigh-in and check-in schedule", async () => {
+    const { fake, ctx } = setup();
+    await run(setPreference as unknown as CoachActionDef, ctx, { key: "weigh_in_frequency", value: "Weekly" });
+    await run(setPreference as unknown as CoachActionDef, ctx, { key: "check_in_day", value: "monday" });
+    await run(setPreference as unknown as CoachActionDef, ctx, { key: "check_in_reminder", value: true });
+    const get = (k: string) => userPrefs(fake).find((r) => r.key === k)?.value;
+    expect([get("weigh_in_frequency"), get("check_in_day"), get("check_in_reminder")]).toEqual(["weekly", "Monday", "true"]);
+    expect(setPreference.schema.safeParse({ key: "weigh_in_frequency", value: "monthly" }).success).toBe(false);
+  });
+
   it("lists the allowed keys in the schema Claude sees", () => {
     const tool = coachTools().find((t) => t.name === "set_preference")!;
     const keyProp = (tool.input_schema.properties as Record<string, { enum?: string[] }>).key;
@@ -274,6 +284,18 @@ describe("update_profile", () => {
     expect(updateProfile.schema.safeParse({ biological_sex: "robot" }).success).toBe(false);
     expect(updateProfile.schema.safeParse({ birth_month: 13 }).success).toBe(false);
     expect(updateProfile.schema.safeParse({ goal_weight: -1 }).success).toBe(false);
+  });
+
+  it("sets the goal pace, validated", async () => {
+    const { fake, ctx } = setup(withProfile);
+    await run(updateProfile as unknown as CoachActionDef, ctx, { goal_pace_direction: "loss", goal_pace_percent: 0.75 });
+    const get = (k: string) => userPrefs(fake).find((r) => r.key === k)?.value;
+    expect([get("profile_goal_pace_direction"), get("profile_goal_pace_percent")]).toEqual(["loss", "0.75"]);
+    await run(updateProfile as unknown as CoachActionDef, ctx, { goal_pace_direction: "maintain" });
+    expect(get("profile_goal_pace_percent")).toBeUndefined();
+    await expect(
+      run(updateProfile as unknown as CoachActionDef, ctx, { goal_pace_direction: "loss", goal_pace_percent: 3 })
+    ).rejects.toThrow("1.5");
   });
 
   it("summarizes the change", () => {

@@ -36,6 +36,13 @@ import {
 } from "@/lib/validations";
 import { ONBOARDING_STEP2_DEFAULTS } from "@/lib/onboarding/step2-defaults";
 import { parseBodyMetricDefs } from "@/lib/metrics/tracked";
+import {
+  SCHEDULE_KEYS,
+  WEEKDAY_NAMES,
+  WEIGH_IN_FREQUENCIES,
+  WEIGH_IN_FREQUENCY_LABELS,
+  WEIGH_IN_RECOMMENDATION,
+} from "@/lib/coaching/schedule";
 import { placeFirstWeighIn } from "@/lib/metrics/weight";
 import {
   PROFILE_KEYS,
@@ -162,6 +169,9 @@ export function OnboardingWizard() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  // Optional weigh-in / check-in schedule (Phase 2.6). Empty means skipped: no default.
+  const [weighInFrequency, setWeighInFrequency] = useState("");
+  const [checkInDay, setCheckInDay] = useState("");
   const [generatingTargets, setGeneratingTargets] = useState(false);
   const [showTargets, setShowTargets] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -324,6 +334,8 @@ export function OnboardingWizard() {
       goalWeightUnit: v2.goalWeightUnit,
     });
     prefs.push(...profile.upserts);
+    if (weighInFrequency) prefs.push({ key: SCHEDULE_KEYS.weighInFrequency, value: weighInFrequency });
+    if (checkInDay) prefs.push({ key: SCHEDULE_KEYS.checkInDay, value: checkInDay });
 
     v2.targets.forEach((row) => {
       const k = row.key.trim();
@@ -1418,6 +1430,43 @@ export function OnboardingWizard() {
                 {String(s3.formState.errors.customMetric.message)}
               </p>
             ) : null}
+
+            <div className="space-y-3 rounded-xl border border-slate-300/25 bg-slate-700/75 p-4">
+              <p className="text-sm font-semibold">Weigh-ins &amp; weekly check-in (optional)</p>
+              <p className="text-xs text-slate-200">{WEIGH_IN_RECOMMENDATION} You can skip this and set it later in Settings.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-sm">
+                  <span>Weigh-in frequency</span>
+                  <select
+                    className="h-10 w-full rounded-md border border-slate-300/50 bg-slate-600/90 px-3 text-sm text-white"
+                    value={weighInFrequency}
+                    onChange={(e) => setWeighInFrequency(e.target.value)}
+                  >
+                    <option value="">Skip for now</option>
+                    {WEIGH_IN_FREQUENCIES.map((f) => (
+                      <option key={f} value={f}>
+                        {WEIGH_IN_FREQUENCY_LABELS[f]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Check-in day</span>
+                  <select
+                    className="h-10 w-full rounded-md border border-slate-300/50 bg-slate-600/90 px-3 text-sm text-white"
+                    value={checkInDay}
+                    onChange={(e) => setCheckInDay(e.target.value)}
+                  >
+                    <option value="">Skip for now</option>
+                    {WEEKDAY_NAMES.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
 
             <div className="rounded-xl border border-slate-300/25 bg-slate-700/75 p-4">
               <p className="mb-3 text-sm font-semibold">Dashboard preview</p>

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 
 import { SubpageHeader } from "@/components/layout/SubpageHeader";
+import { CheckInSection } from "@/components/settings/CheckInSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { SettingsClient } from "@/components/settings/SettingsClient";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -55,6 +56,7 @@ export default async function SettingsPage() {
           Open onboarding →
         </Link>
         <ProfileSection userId={user.id} />
+        <CheckInSection userId={user.id} />
         <SettingsClient userId={user.id} />
       </div>
     </div>

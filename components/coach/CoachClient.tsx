@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { CheckInPanel } from "@/components/check-in/CheckInPanel";
 import { ConversationSidebar } from "@/components/coach/ConversationSidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -674,6 +675,10 @@ export function CoachClient({
           </div>
         </header>
       ) : null}
+
+      <div className="shrink-0">
+        <CheckInPanel userId={userId} onChanged={() => void loadLatestConversation()} />
+      </div>
 
       <div
         ref={scrollRef}

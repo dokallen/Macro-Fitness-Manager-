@@ -8,6 +8,7 @@ import { useSideDrawer } from "@/components/layout/SideDrawer";
 import { fetchTodayMacroTotals } from "@/lib/dashboard/food-macros";
 import type { MacroTargetRow } from "@/lib/dashboard/preferences";
 import { formatMacroLabel } from "@/lib/dashboard/preferences";
+import { CheckInPanel } from "@/components/check-in/CheckInPanel";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -258,6 +259,10 @@ export function HomeDashboardClient({
           </div>
         ))}
       </section>
+
+      <div className="shrink-0">
+        <CheckInPanel userId={userId} />
+      </div>
 
       {macroTargets.length === 0 ? (
         <p

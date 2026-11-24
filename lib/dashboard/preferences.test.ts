@@ -137,8 +137,14 @@ const APP_WRITTEN_NON_MACRO_KEYS: Record<string, string> = {
   profile_goal_weight: "200",
   profile_goal_weight_unit: "lbs",
   // Phase 2.6 schedule and check-in records use these prefixes
+  profile_goal_pace_direction: "loss",
+  profile_goal_pace_percent: "0.5",
   weigh_in_frequency: "weekly",
+  weigh_in_snoozed_date: "2026-11-23",
   check_in_day: "Monday",
+  check_in_reminder: "true",
+  check_in_calories_key: "calories",
+  notification_last_sent_check_in_reminder: "2026-11-23",
   check_in_2026_11_23: '{"weight":228}',
 };
 
