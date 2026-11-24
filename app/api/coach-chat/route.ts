@@ -7,6 +7,7 @@ import {
 } from "@/lib/coach-chat-context";
 import { randomUUID } from "node:crypto";
 
+import { coachDateContext } from "@/lib/coach-actions/dates";
 import {
   assistantTextForClaude,
   COACH_TOOLS_SYSTEM_NOTE,
@@ -778,7 +779,8 @@ export async function POST(req: Request) {
 
     const system =
       buildCoachSystemPromptFromPreferences(prefs ?? [], coachId) +
-      COACH_TOOLS_SYSTEM_NOTE;
+      COACH_TOOLS_SYSTEM_NOTE +
+      coachDateContext(new Date(), prefs ?? []);
 
     let rowId: string | null = existingConvId;
     let messagesArr: ConvMsg[] = [];

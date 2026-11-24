@@ -47,10 +47,20 @@ export const setMacroTargets: CoachActionDef<typeof setMacroTargetsSchema> = {
       .map((t) => `${formatMacroLabel(t.key)} ${formatTargetValue(t.value, t.unit)}`)
       .join(" · ")}`,
   async execute({ supabase, userId, now }, { targets }) {
+    // Reuse the user's existing spelling of a target ("Protein" vs "protein"),
+    // so a change updates it instead of adding a second one.
+    const { data: prefs, error: readErr } = await supabase
+      .from("user_preferences")
+      .select("key, value")
+      .eq("user_id", userId);
+    if (readErr) throw new CoachActionError(readErr.message);
+    const existing = new Map(
+      extractMacroTargets(prefs ?? []).map((t) => [t.key.toLowerCase(), t.key])
+    );
     const { error } = await supabase.from("user_preferences").upsert(
       targets.map((t) => ({
         user_id: userId,
-        key: t.key,
+        key: existing.get(t.key.toLowerCase()) ?? t.key,
         value: formatTargetValue(t.value, t.unit),
         updated_by: "coach" as const,
         updated_at: now.toISOString(),
@@ -76,14 +86,16 @@ export const removeMacroTarget: CoachActionDef<typeof removeMacroTargetSchema> =
       .select("key, value")
       .eq("user_id", userId);
     if (error) throw new CoachActionError(error.message);
-    const current = extractMacroTargets(data ?? []).find((t) => t.key === key);
+    const current = extractMacroTargets(data ?? []).find(
+      (t) => t.key.toLowerCase() === key.toLowerCase()
+    );
     if (!current) throw new CoachActionError(`${formatMacroLabel(key)} is not one of your targets.`);
     const { error: delErr } = await supabase
       .from("user_preferences")
       .delete()
       .eq("user_id", userId)
-      .eq("key", key);
+      .eq("key", current.key);
     if (delErr) throw new CoachActionError(delErr.message);
-    return { message: `Removed the ${formatMacroLabel(key)} target.` };
+    return { message: `Removed the ${formatMacroLabel(current.key)} target.` };
   },
 };

@@ -1,11 +1,13 @@
 import { z } from "zod";
 
+import { logFood, logProgressEntry } from "@/lib/coach-actions/logging";
 import { removeMacroTarget, setMacroTargets } from "@/lib/coach-actions/macro-targets";
+import { setPreference } from "@/lib/coach-actions/set-preference";
 import type { CoachActionDef } from "@/lib/coach-actions/types";
 
 /** Every change the Coach can propose. Each one runs only after the user taps Apply. */
 export const COACH_ACTIONS: Readonly<Record<string, CoachActionDef>> = Object.fromEntries(
-  [setMacroTargets, removeMacroTarget].map((a) => [a.name, a as unknown as CoachActionDef])
+  [setMacroTargets, removeMacroTarget, setPreference, logFood, logProgressEntry].map((a) => [a.name, a as unknown as CoachActionDef])
 );
 
 export type ClaudeTool = {
