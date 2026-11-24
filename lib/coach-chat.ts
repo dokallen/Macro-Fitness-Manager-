@@ -10,6 +10,8 @@ const MODEL = "claude-sonnet-4-6";
 export async function callCoachClaudeChat(params: {
   system: string;
   messages: ClaudeChatTurn[];
+  /** Give up after this long (ms). */
+  timeoutMs?: number;
 }): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
@@ -35,6 +37,7 @@ export async function callCoachClaudeChat(params: {
       system: params.system,
       messages,
     }),
+    ...(params.timeoutMs ? { signal: AbortSignal.timeout(params.timeoutMs) } : {}),
   });
 
   if (!anthropicRes.ok) {
@@ -58,7 +61,9 @@ export type ClaudeContentBlock =
   | {
       type: "image";
       source: { type: "base64"; media_type: string; data: string };
-    };
+    }
+  | { type: "tool_use"; id: string; name: string; input: unknown }
+  | { type: "tool_result"; tool_use_id: string; content: string };
 
 export type ClaudeToolUse = { id: string; name: string; input: unknown };
 
@@ -71,6 +76,11 @@ export async function callCoachClaudeWithTools(params: {
   system: string;
   messages: ClaudeTurn<ClaudeContentBlock>[];
   tools: ClaudeTool[];
+  /**
+   * "none" keeps the tools defined (required when the history has tool_use or
+   * tool_result blocks) but stops Claude calling them.
+   */
+  toolChoice?: "auto" | "none";
 }): Promise<{ text: string; toolUses: ClaudeToolUse[] }> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
@@ -96,6 +106,7 @@ export async function callCoachClaudeWithTools(params: {
       system: params.system,
       messages,
       ...(params.tools.length ? { tools: params.tools } : {}),
+      ...(params.tools.length && params.toolChoice ? { tool_choice: { type: params.toolChoice } } : {}),
     }),
   });
 

@@ -98,14 +98,20 @@ export async function loadCheckInData(
   supabase: Client,
   userId: string,
   now: Date,
-  clientTimeZone?: string | null
+  clientTimeZone?: string | null,
+  /** The user's preference rows, if the caller already loaded them. */
+  preloadedPrefs?: readonly { key: string; value: string | null }[]
 ): Promise<CheckInData> {
-  const { data: prefRows, error: prefErr } = await supabase
-    .from("user_preferences")
-    .select("key, value")
-    .eq("user_id", userId);
-  if (prefErr) throw new Error(prefErr.message);
-  const prefs = (prefRows ?? []).map((p) => ({ key: p.key, value: p.value ?? "" }));
+  let prefRows = preloadedPrefs;
+  if (!prefRows) {
+    const { data, error: prefErr } = await supabase
+      .from("user_preferences")
+      .select("key, value")
+      .eq("user_id", userId);
+    if (prefErr) throw new Error(prefErr.message);
+    prefRows = data ?? [];
+  }
+  const prefs = prefRows.map((p) => ({ key: p.key, value: p.value ?? "" }));
   const timeZone =
     validTimeZone(clientTimeZone) ?? validTimeZone(prefs.find((p) => p.key === "notification_timezone")?.value);
   const today = ymdInZone(now, timeZone);

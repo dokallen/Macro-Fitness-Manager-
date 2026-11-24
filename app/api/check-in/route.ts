@@ -11,6 +11,8 @@ import {
   weighedSinceLastCheckIn,
 } from "@/lib/coaching/check-in";
 import { describeResult } from "@/lib/coaching/calc";
+import { buildCheckInReviewRequest } from "@/lib/coaching/coach-context";
+import { callCoachClaudeChat } from "@/lib/coach-chat";
 import { SCHEDULE_KEYS, checkInRecordKey, isWeighInDue, readSchedule } from "@/lib/coaching/schedule";
 import { updateConversationMessages } from "@/lib/coach-actions/conversation-store";
 import { setMacroTargets } from "@/lib/coach-actions/macro-targets";
@@ -132,7 +134,22 @@ export async function POST(req: Request) {
         result = { ...result, decision: "hold", changes: [], holdReasons: ["macros_unknown"] };
       }
     }
-    const text = `Weekly check-in. ${describeResult(result)}`;
+    const proposalId = proposal?.id;
+    const record = buildCheckInRecord(data, result, loggingAnswer, now, proposalId);
+    const resultText = describeResult(result);
+    // The Coach's short review, written from the calculated numbers only.
+    let text = `Weekly check-in. ${resultText}`;
+    try {
+      const req = buildCheckInReviewRequest(record, resultText);
+      const review = await callCoachClaudeChat({
+        system: req.system,
+        messages: [{ role: "user", content: req.user }],
+        timeoutMs: 20_000,
+      });
+      text = `Weekly check-in. ${review}`;
+    } catch (e) {
+      console.error("[check-in] review", e);
+    }
 
     // The check-in shows in the Coach chat, with any change as an Apply/Cancel card.
     const coachId = data.prefs.find((p) => p.key === "chosen_coach_id")?.value?.trim() || "drdata";
@@ -175,19 +192,20 @@ export async function POST(req: Request) {
         const recordExists = data.prefs.some((p) => p.key === checkInRecordKey(data.today));
         if (recordExists) return json({ error: "You already checked in today." }, 409);
         const existingId = (alreadyInChat as { proposals?: { id?: string }[] } | null)?.proposals?.[0]?.id;
-        const record = buildCheckInRecord(data, result, loggingAnswer, now, existingId);
+        const recovered = buildCheckInRecord(data, result, loggingAnswer, now, existingId);
         const { error: recErr } = await supabase.from("user_preferences").upsert(
           {
             user_id: user.id,
             key: checkInRecordKey(data.today),
-            value: JSON.stringify(record),
+            value: JSON.stringify(recovered),
             updated_by: "user",
             updated_at: now.toISOString(),
           },
           { onConflict: "user_id,key" }
         );
         if (recErr) throw new Error(recErr.message);
-        return json({ record, text, conversationId: latest.id });
+        const stored = (alreadyInChat as { content?: unknown } | null)?.content;
+        return json({ record: recovered, text: typeof stored === "string" ? stored : text, conversationId: latest.id });
       }
     }
     if (!conversationId) {
@@ -206,7 +224,6 @@ export async function POST(req: Request) {
       conversationId = ins.id;
     }
 
-    const record = buildCheckInRecord(data, result, loggingAnswer, now, proposal?.id);
     const { error: recErr } = await supabase.from("user_preferences").upsert(
       {
         user_id: user.id,

@@ -9,8 +9,16 @@ import { randomUUID } from "node:crypto";
 
 import { coachDateContext } from "@/lib/coach-actions/dates";
 import {
+  CALCULATED_TARGETS_TOOL,
+  COACH_TARGET_RULES,
+  COACH_TARGETS_UNAVAILABLE,
+  calculatedTargetsProposal,
+  loadCoachDataContext,
+} from "@/lib/coaching/coach-context";
+import {
   assistantTextForClaude,
   COACH_TOOLS_SYSTEM_NOTE,
+  MAX_PROPOSALS_PER_REPLY,
   mergeProposalDecisions,
   parseStoredNotes,
   parseStoredProposals,
@@ -777,10 +785,20 @@ export async function POST(req: Request) {
       fromCookie ||
       "drdata";
 
+    // The user's numbers (Phase 2.7). If they can't be loaded, the Coach still answers.
+    let coachData: Awaited<ReturnType<typeof loadCoachDataContext>> | null = null;
+    try {
+      coachData = await loadCoachDataContext(supabase, user.id, new Date(), prefs ?? []);
+    } catch (e) {
+      console.error("[coach-chat] data context", e);
+    }
+
     const system =
       buildCoachSystemPromptFromPreferences(prefs ?? [], coachId) +
       COACH_TOOLS_SYSTEM_NOTE +
-      coachDateContext(new Date(), prefs ?? []);
+      COACH_TARGET_RULES +
+      coachDateContext(new Date(), prefs ?? []) +
+      (coachData ? `\n${coachData.text}` : COACH_TARGETS_UNAVAILABLE);
 
     let rowId: string | null = existingConvId;
     let messagesArr: ConvMsg[] = [];
@@ -840,7 +858,7 @@ export async function POST(req: Request) {
       claudeResult = await callCoachClaudeWithTools({
         system,
         messages: claudeTurns,
-        tools: coachTools(),
+        tools: coachData ? [...coachTools(), CALCULATED_TARGETS_TOOL] : coachTools(),
       });
     } catch (e) {
       const message =
@@ -860,12 +878,69 @@ export async function POST(req: Request) {
       return jsonError(message, 500);
     }
 
+    const calcUse = claudeResult.toolUses.find((t) => t.name === CALCULATED_TARGETS_TOOL.name);
     const { proposals, notes } = proposalsFromToolUses(
-      claudeResult.toolUses,
+      claudeResult.toolUses.filter(
+        (t) =>
+          t.name !== CALCULATED_TARGETS_TOOL.name &&
+          // When the calculation runs, its targets are the only target proposal.
+          !(calcUse && t.name === "set_macro_targets")
+      ),
       COACH_ACTIONS,
       () => randomUUID()
     );
-    const reply = claudeResult.text || replyForToolOnlyTurn(proposals);
+    let replyText = claudeResult.text;
+
+    // "Adjust my macros": the server calculates; Claude then explains the result.
+    if (calcUse && coachData) {
+      const calc = calculatedTargetsProposal(coachData.data, () => randomUUID());
+      let calcShown = false;
+      if (calc.proposal) {
+        if (proposals.length < MAX_PROPOSALS_PER_REPLY) {
+          proposals.unshift(calc.proposal);
+          calcShown = true;
+        } else {
+          notes.push("The calculated targets were left out: too many changes proposed at once.");
+        }
+      }
+      const toolResults: ClaudeContentBlock[] = claudeResult.toolUses.map((t) => ({
+        type: "tool_result" as const,
+        tool_use_id: t.id,
+        content:
+          t.id === calcUse.id
+            ? `${calc.resultText}${calcShown ? " A card with these targets is shown to the user to Apply or Cancel; nothing has changed yet." : ""}`
+            : t.name === CALCULATED_TARGETS_TOOL.name
+              ? "Same calculation as above."
+              : t.name === "set_macro_targets"
+                ? "Not shown: the calculated targets are the proposal for this turn."
+                : "Received. If valid it is shown to the user as a proposal card; nothing has changed yet.",
+      }));
+      try {
+        const followUp = await callCoachClaudeWithTools({
+          system,
+          messages: [
+            ...claudeTurns,
+            {
+              role: "assistant",
+              content: [
+                ...(claudeResult.text ? [{ type: "text" as const, text: claudeResult.text }] : []),
+                ...claudeResult.toolUses.map((t) => ({ type: "tool_use" as const, id: t.id, name: t.name, input: t.input })),
+              ],
+            },
+            { role: "user", content: toolResults },
+          ],
+          // Tools must stay defined when the history has tool blocks; "none" stops new calls.
+          tools: [...coachTools(), CALCULATED_TARGETS_TOOL],
+          toolChoice: "none",
+        });
+        // Only the explanation written after the calculation; earlier text may have guessed.
+        replyText = followUp.text || calc.resultText;
+      } catch (e) {
+        console.error("[coach-chat] calculated targets follow-up", e);
+        replyText = calc.resultText;
+      }
+    }
+    const reply = replyText || replyForToolOnlyTurn(proposals);
 
     const asstMsg: ConvMsg = {
       role: "assistant",

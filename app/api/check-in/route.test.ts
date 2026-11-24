@@ -4,6 +4,7 @@ import { addDays } from "@/lib/coaching/ymd";
 import { createFakeSupabase, type FakeSupabase } from "@/lib/test-utils/fake-supabase";
 
 let fake: FakeSupabase;
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabaseClient: () => fake.client }));
 
 import { GET, POST } from "@/app/api/check-in/route";
@@ -57,9 +58,16 @@ const post = (body: unknown) =>
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
+  // Never a real Claude call: no key, and any fetch fails.
+  vi.stubEnv("ANTHROPIC_API_KEY", "");
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("no network in tests"); }));
   seed();
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 
 describe("GET /api/check-in", () => {
   it("reports a due check-in and whether a weigh-in is due", async () => {
@@ -100,6 +108,29 @@ describe("POST /api/check-in", () => {
     );
     expect(parsed.proposalId).toBe(body.proposal.id);
     expect(parsed.completedAt).toBe(NOW.toISOString());
+  });
+
+  it("posts the Coach's review, written from the calculated numbers only", async () => {
+    seed({ conversation: true });
+    const bodies: { system: string; messages: { content: string }[]; tools?: unknown }[] = [];
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key-not-real");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_u: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ content: [{ type: "text", text: "Good week. Your trend is down; tap Apply for the new targets." }] }), { status: 200 });
+      })
+    );
+    {
+      const body = await (await post({ loggingAnswer: "yes", timeZone: TZ })).json();
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]!.tools).toBeUndefined();
+      expect(bodies[0]!.system).toMatch(/Use only the numbers given below/);
+      expect(bodies[0]!.messages[0]!.content).toContain(`"averageIntake": 2400`);
+      expect(body.text).toBe("Weekly check-in. Good week. Your trend is down; tap Apply for the new targets.");
+      const last = (fake.tables.coach_conversations![0]!.messages as { content: string }[]).at(-1)!;
+      expect(last.content).toBe(body.text);
+    }
   });
 
   it("holds steady, with the reason, when logging was incomplete", async () => {
