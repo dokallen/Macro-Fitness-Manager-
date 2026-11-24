@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { COACH_LINK_PROMPTS } from "@/components/settings/MacroTargetsSection";
 
 const supabase = createBrowserSupabaseClient();
 
@@ -261,12 +262,12 @@ export function ProgressClient({ userId }: { userId: string }) {
         <div className="rounded-2xl border border-dashed border-warning/40 bg-warning/10 px-4 py-8 text-center">
           <p className="text-sm font-sans text-foreground">No metrics to track yet.</p>
           <p className="mt-2 text-sm font-sans text-muted-foreground">
-            Set up progress metrics during onboarding, or ask Coach from the home
-            screen to help you choose what to measure.
+            Add metrics in the body metrics setup on this page, or ask Coach to
+            help you choose what to measure.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <Button asChild variant="secondary" size="sm">
-              <Link href="/onboarding">Onboarding</Link>
+              <Link href={`/coach?ask=${encodeURIComponent(COACH_LINK_PROMPTS.chooseMetrics)}`}>Ask Coach</Link>
             </Button>
             <Button asChild variant="outline" size="sm">
               <Link href="/">Home</Link>

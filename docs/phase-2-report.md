@@ -12,6 +12,7 @@ Branch `v3`. Every step: lint, typecheck, tests, build all passed; an independen
 | 2.6 Weekly check-in | bfb1c8c | 240 total |
 | 2.7 Coach role | b073c6e | 249 total |
 | 2.8 Cleanup (audit fixes) | e24a6fe | 259 total |
+| 2.9 Macro target design | see git log | 273 total |
 
 ## Order change (needs no action)
 The target calculation (spec Step 2.7, items 1–7) was built in Step 2.6, because the check-in's decision step uses it. Building it later would have meant check-ins recording a placeholder decision. Step 2.7 then added only the Coach's side.
@@ -49,9 +50,18 @@ Coach sees profile, pace, last 8 entries per metric, trend, burn, check-in statu
 ### 2.8 Cleanup (cross-cutting audit of Phases 1–2)
 Home weight stats from weigh-ins and the profile goal weight, in the user's unit; Coach prompt no longer carries the push token, bookkeeping or raw records; refresh after Apply; check-in message kept if posted during a chat reply; Coach keeps its own review; optional goal pace in onboarding; calorie floor; changed-only settings writes; 60 s route limit; push settings read paged; device time zone for the Coach. Reviewer must-fix: a timing gap could still overwrite a check-in posted mid-reply → now keyed on what the request read, not on time; the Coach must still see settings it can change.
 
+### 2.9 Macro target design (approved by Derak)
+Files: `lib/coaching/own-targets.ts`, `lib/coach-actions/macro-targets.ts`, `app/api/targets/route.ts`, `components/settings/MacroTargetsSection.tsx`, chat and check-in routes, `CoachClient` (`?ask=`), Home/Progress links.
+- Targets come from the calculation. Settings → Macro targets shows current targets, whether they are your own numbers (and why), and what the calculation gives now. No direct number editor.
+- Goal or lifestyle change: update profile / goal pace, then "Recalculate with Coach".
+- Own numbers go through the Coach: it confirms the goal, looks up the calculation (`get_calculated_targets`, read-only), explains plainly, asks what changed, and only in a later turn proposes them with the reason. Removing a target also needs a reason; the calorie target can't be removed.
+- Only the server can mark targets as calculated; the model never sees that field.
+- Check-ins: on own numbers and moving toward the goal → they stay; not moving → the calculated targets are proposed again, with a note.
+Reviewer fixes: the Coach could look up and propose in one turn (now blocked); removal bypassed the own-numbers rule; empty-targets state; `?ask=` limited to the app's own prompts on /coach.
+
 ## Decisions
 1. **Calorie floor (decided by Derak: "based on the target").** One check-in may lower calories by at most 10% of the current calorie target. If the calculation is lower, the floor is proposed and explained, and the record notes it. The 10% is for Derak to confirm.
-2. **Macro target editing (pending Derak's approval of the design).** Proposed: targets come from the calculation; goal, pace or activity changes recalculate; own numbers go through the Coach, which explains the trade-off, asks the reason, and marks them as the user's own; check-ins offer the calculated targets again if progress stalls. Not built yet.
+2. **Macro target editing (approved by Derak).** Built in Step 2.9 as described above.
 
 ## Constants for Derak to confirm (`lib/coaching/constants.ts`)
 | Constant | Value |
@@ -69,6 +79,7 @@ Home weight stats from weigh-ins and the profile goal weight, in the user's unit
 | Gain pace guide (%/week) | Gentle 0.1–0.25, Moderate 0.25–0.5; max 1.0 |
 | Coach context | 8 entries per metric, 4 check-ins |
 | Calorie floor | at most a 10% cut of the current target per check-in |
+| Own numbers, maintain goal | on track if the weekly trend change is within 0.25% of body weight |
 
 ## Not testable without a paid API call
 How well the real model chooses tools, explains a calculation, writes the check-in review, and respects "ask once". Tests mock Claude. Try these on the `v3` preview.
@@ -82,6 +93,11 @@ How well the real model chooses tools, explains a calculation, writes the check-
 - Pre-existing bug, not fixed (cleanup phase): reminder pushes run once a day and need an exact minute match, so custom reminder times rarely fire.
 - The fake Supabase client used in tests is not a full database emulator. The live v3 schema was checked separately: columns, own-row security, UNIQUE(user_id, key), the updated_by check and cascades all match.
 - Not yet: the push-subscription read isn't paged (matters only with many users); onboarding checks goal pace only at the final step.
+- Pending target cards created before Step 2.9 have no source; on Apply they now fail ("no longer valid") instead of being applied. Only affects old preview data.
+- The own-numbers marker is an in-app process, not server-enforced: a user can still edit their own rows directly through the database API (row-level security allows own rows).
+- Applying an older calculated card clears the own-numbers marker, even if it changed only some targets.
+- Own numbers count as "on track" for any movement toward the goal, even faster than the chosen pace.
+- First targets after onboarding come from onboarding's estimate; a user with no targets sets starting numbers with the Coach (marked as their own).
 - Settings the user can change but the Coach can't yet: tracked-metric lists, favourite/disliked foods, chosen coach, display name, editing or deleting past logs.
 
 ## How the two metric systems relate (not merged, per spec)

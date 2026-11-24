@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { coachDateContext } from "@/lib/coach-actions/dates";
 import {
   CALCULATED_TARGETS_TOOL,
+  GET_CALCULATED_TARGETS_TOOL,
   COACH_TARGET_RULES,
   COACH_TARGETS_UNAVAILABLE,
   calculatedTargetsProposal,
@@ -872,7 +873,7 @@ export async function POST(req: Request) {
       claudeResult = await callCoachClaudeWithTools({
         system,
         messages: claudeTurns,
-        tools: coachData ? [...coachTools(), CALCULATED_TARGETS_TOOL] : coachTools(),
+        tools: coachData ? [...coachTools(), CALCULATED_TARGETS_TOOL, GET_CALCULATED_TARGETS_TOOL] : coachTools(),
       });
     } catch (e) {
       const message =
@@ -892,24 +893,37 @@ export async function POST(req: Request) {
       return jsonError(message, 500);
     }
 
+    // Tools the server runs itself (the calculation); their results go back to Claude.
+    const SERVER_TOOL_NAMES = new Set([CALCULATED_TARGETS_TOOL.name, GET_CALCULATED_TARGETS_TOOL.name]);
     const calcUse = claudeResult.toolUses.find((t) => t.name === CALCULATED_TARGETS_TOOL.name);
+    const lookupUse = claudeResult.toolUses.find((t) => t.name === GET_CALCULATED_TARGETS_TOOL.name);
     const { proposals, notes } = proposalsFromToolUses(
-      claudeResult.toolUses.filter(
-        (t) =>
-          t.name !== CALCULATED_TARGETS_TOOL.name &&
-          // When the calculation runs, its targets are the only target proposal.
-          !(calcUse && t.name === "set_macro_targets")
-      ),
+      claudeResult.toolUses
+        .filter(
+          (t) =>
+            !SERVER_TOOL_NAMES.has(t.name) &&
+            // When the calculation runs, its targets are the only target proposal.
+            // After a lookup, the Coach must explain and ask first: no card this turn.
+            !((calcUse || lookupUse) && (t.name === "set_macro_targets" || t.name === "remove_macro_target"))
+        )
+        // Only the server marks targets as calculated; anything the model
+        // proposes is the user's own numbers and needs their reason.
+        .map((t) =>
+          t.name === "set_macro_targets" && t.input && typeof t.input === "object"
+            ? { ...t, input: { ...(t.input as Record<string, unknown>), source: "user" } }
+            : t
+        ),
       COACH_ACTIONS,
       () => randomUUID()
     );
     let replyText = claudeResult.text;
 
-    // "Adjust my macros": the server calculates; Claude then explains the result.
-    if (calcUse && coachData) {
+    // "Adjust my macros" / "what would the calculation give": the server
+    // calculates; Claude then explains the result.
+    if ((calcUse || lookupUse) && coachData) {
       const calc = calculatedTargetsProposal(coachData.data, () => randomUUID());
       let calcShown = false;
-      if (calc.proposal) {
+      if (calcUse && calc.proposal) {
         if (proposals.length < MAX_PROPOSALS_PER_REPLY) {
           proposals.unshift(calc.proposal);
           calcShown = true;
@@ -921,12 +935,16 @@ export async function POST(req: Request) {
         type: "tool_result" as const,
         tool_use_id: t.id,
         content:
-          t.id === calcUse.id
+          t.id === calcUse?.id
             ? `${calc.resultText}${calcShown ? " A card with these targets is shown to the user to Apply or Cancel; nothing has changed yet." : ""}`
-            : t.name === CALCULATED_TARGETS_TOOL.name
+            : t.id === lookupUse?.id
+              ? `For reference only, nothing proposed. ${calc.resultText.replace(/^(.*?)Proposed:/, "$1Calculated:")}`
+              : SERVER_TOOL_NAMES.has(t.name)
               ? "Same calculation as above."
-              : t.name === "set_macro_targets"
+              : (t.name === "set_macro_targets" || t.name === "remove_macro_target") && calcUse
                 ? "Not shown: the calculated targets are the proposal for this turn."
+                : t.name === "set_macro_targets" || t.name === "remove_macro_target"
+                ? "Not shown yet: first explain the comparison to the user and ask what changed. Propose their numbers in a later turn, after they answer."
                 : "Received. If valid it is shown to the user as a proposal card; nothing has changed yet.",
       }));
       try {
@@ -944,7 +962,7 @@ export async function POST(req: Request) {
             { role: "user", content: toolResults },
           ],
           // Tools must stay defined when the history has tool blocks; "none" stops new calls.
-          tools: [...coachTools(), CALCULATED_TARGETS_TOOL],
+          tools: [...coachTools(), CALCULATED_TARGETS_TOOL, GET_CALCULATED_TARGETS_TOOL],
           toolChoice: "none",
         });
         // Only the explanation written after the calculation; earlier text may have guessed.

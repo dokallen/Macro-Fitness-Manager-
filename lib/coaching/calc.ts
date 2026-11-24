@@ -130,7 +130,8 @@ export type HoldReason =
   | "no_goal_pace"
   | "calories_unknown"
   | "macros_unknown"
-  | "target_not_positive";
+  | "target_not_positive"
+  | "own_targets_on_track";
 
 export const HOLD_REASON_TEXT: Record<HoldReason, string> = {
   not_enough_weigh_ins: `Need at least ${HOLD_MIN_WEIGH_INS} weigh-ins at least ${HOLD_MIN_WEIGH_IN_SPAN_DAYS} days apart in the last ${CALC_WINDOW_DAYS} days.`,
@@ -141,6 +142,7 @@ export const HOLD_REASON_TEXT: Record<HoldReason, string> = {
   calories_unknown: "Can't tell which target is calories.",
   macros_unknown: "Can't tell which targets are protein, carbs and fat, or can't fit them to the new calories.",
   target_not_positive: "The calculation came out at or below zero, so it is not used. Check your recent weigh-ins and food logs.",
+  own_targets_on_track: "You're on your own targets and your trend is moving toward your goal, so they stay.",
 };
 
 /** Data-quality rules, in a fixed order. Empty means the data is good enough. */

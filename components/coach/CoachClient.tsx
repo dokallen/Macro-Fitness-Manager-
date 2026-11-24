@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { CheckInPanel } from "@/components/check-in/CheckInPanel";
+import { COACH_LINK_PROMPTS } from "@/components/settings/MacroTargetsSection";
 import { ConversationSidebar } from "@/components/coach/ConversationSidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -438,6 +439,20 @@ export function CoachClient({
     },
     [conversationId, loadLatestConversation, pendingImage, sending]
   );
+
+  // Opened at /coach?ask=... from one of the app's own buttons: send that
+  // built-in prompt once. Anything else in ?ask is ignored.
+  const askedRef = useRef(false);
+  useEffect(() => {
+    if (loading || askedRef.current || typeof window === "undefined") return;
+    if (window.location.pathname !== "/coach") return;
+    const ask = new URLSearchParams(window.location.search).get("ask")?.trim();
+    if (!ask) return;
+    askedRef.current = true;
+    window.history.replaceState(null, "", window.location.pathname);
+    if (!(Object.values(COACH_LINK_PROMPTS) as string[]).includes(ask)) return;
+    void submitContent(ask, null);
+  }, [loading, submitContent]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

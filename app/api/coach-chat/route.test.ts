@@ -56,7 +56,7 @@ describe("Coach chat with tools", () => {
         type: "tool_use",
         id: "toolu_1",
         name: "set_macro_targets",
-        input: { targets: [{ key: "protein", value: 180, unit: "g" }] },
+        input: { targets: [{ key: "protein", value: 180, unit: "g" }], reason: "Training harder" },
       },
     ];
     const res = await post({ content: "Set my protein to 180 g" });
@@ -69,7 +69,7 @@ describe("Coach chat with tools", () => {
     expect(reply.role).toBe("coach");
     expect(reply.content).toBe("Let's bump protein.");
     expect(reply.proposals).toHaveLength(1);
-    expect(reply.proposals![0]).toMatchObject({ status: "pending", summary: "Set Protein 180 g" });
+    expect(reply.proposals![0]).toMatchObject({ status: "pending", summary: "Set Protein 180 g (your own numbers: Training harder)" });
 
     // The only writes are the conversation itself; the target is untouched.
     expect(fake.writes.every((w) => w.table === "coach_conversations")).toBe(true);
@@ -130,7 +130,7 @@ describe("Coach chat with tools", () => {
         type: "tool_use",
         id: "t",
         name: "set_macro_targets",
-        input: { targets: [{ key: "protein", value: 175, unit: "g" }] },
+        input: { targets: [{ key: "protein", value: 175, unit: "g" }], reason: "More training" },
       },
     ];
     const res = await post({ content: "What about this meal?", imageBase64: "data:image/png;base64,AAAA" });

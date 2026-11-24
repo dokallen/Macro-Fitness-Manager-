@@ -24,6 +24,11 @@ export function coachTools(
   return Object.values(actions).map((a) => {
     const schema = { ...(z.toJSONSchema(a.schema, { io: "input" }) as Record<string, unknown>) };
     delete schema.$schema;
+    // "source" is set by the server only; the model never sees it.
+    const props = schema.properties as Record<string, unknown> | undefined;
+    if (props && "source" in props) {
+      schema.properties = Object.fromEntries(Object.entries(props).filter(([k]) => k !== "source"));
+    }
     return { name: a.name, description: a.description, input_schema: schema };
   });
 }

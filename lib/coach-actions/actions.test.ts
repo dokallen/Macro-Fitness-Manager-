@@ -41,6 +41,7 @@ describe("set_macro_targets", () => {
         { key: "protein", value: 180, unit: "g" },
         { key: "fat", value: 60, unit: "g" },
       ],
+      reason: "Training harder",
     });
     const rows = userPrefs(fake);
     expect(rows.find((r) => r.key === "Protein")).toMatchObject({ value: "180 g", updated_by: "coach" });
@@ -52,6 +53,23 @@ describe("set_macro_targets", () => {
     expect(targets.find((t) => t.key === "fat")?.targetNumber).toBe(60);
     // Another user's data is untouched.
     expect(fake.tables.user_preferences!.find((r) => r.user_id === "user-2")!.value).toBe("999 g");
+  });
+
+  it("own numbers need the user's reason and are marked as theirs", async () => {
+    expect(setMacroTargets.schema.safeParse({ targets: [{ key: "protein", value: 190 }] }).success).toBe(false);
+    const { fake, ctx } = setup();
+    await run(setMacroTargets as unknown as CoachActionDef, ctx, { targets: [{ key: "protein", value: 190, unit: "g" }], reason: "Started lifting 5 days a week" });
+    const marker = userPrefs(fake).find((r) => r.key === "check_in_own_targets")!;
+    expect(JSON.parse(String(marker.value))).toEqual({ reason: "Started lifting 5 days a week", setAt: NOW.toISOString() });
+    expect(setMacroTargets.summarize(setMacroTargets.schema.parse({ targets: [{ key: "protein", value: 190, unit: "g" }], reason: "Started lifting" }))).toBe(
+      "Set Protein 190 g (your own numbers: Started lifting)"
+    );
+  });
+
+  it("calculated targets clear the own-numbers marker", async () => {
+    const { fake, ctx } = setup([...PREFS, { user_id: "user-1", key: "check_in_own_targets", value: '{"reason":"x","setAt":"y"}' }]);
+    await run(setMacroTargets as unknown as CoachActionDef, ctx, { targets: [{ key: "calories", value: 2100, unit: "kcal" }], source: "calculated" });
+    expect(userPrefs(fake).some((r) => r.key === "check_in_own_targets")).toBe(false);
   });
 
   it("rejects reserved keys, non-positive values and duplicates", () => {
@@ -69,7 +87,7 @@ describe("set_macro_targets", () => {
 describe("remove_macro_target", () => {
   it("deletes only that target, matched without case", async () => {
     const { fake, ctx } = setup();
-    await run(removeMacroTarget as unknown as CoachActionDef, ctx, { key: "protein" });
+    await run(removeMacroTarget as unknown as CoachActionDef, ctx, { key: "protein", reason: "Tracking only calories for now" });
     expect(userPrefs(fake).map((r) => r.key)).not.toContain("Protein");
     expect(userPrefs(fake).map((r) => r.key)).toContain("calories");
     expect(fake.tables.user_preferences!.some((r) => r.user_id === "user-2")).toBe(true);
@@ -77,9 +95,20 @@ describe("remove_macro_target", () => {
 
   it("refuses a key that is not a current target", async () => {
     const { ctx } = setup();
-    await expect(run(removeMacroTarget as unknown as CoachActionDef, ctx, { key: "fiber" })).rejects.toThrow(CoachActionError);
+    await expect(run(removeMacroTarget as unknown as CoachActionDef, ctx, { key: "fiber", reason: "Not needed" })).rejects.toThrow(CoachActionError);
     // "goal" is a setting, not a target, and is rejected before running.
-    expect(removeMacroTarget.schema.safeParse({ key: "goal" }).success).toBe(false);
+    expect(removeMacroTarget.schema.safeParse({ key: "goal", reason: "Not needed" }).success).toBe(false);
+  });
+
+  it("needs a reason, marks the set as the user's own, and never removes calories", async () => {
+    expect(removeMacroTarget.schema.safeParse({ key: "protein" }).success).toBe(false);
+    const { fake, ctx } = setup();
+    await run(removeMacroTarget as unknown as CoachActionDef, ctx, { key: "protein", reason: "Doctor's advice" });
+    expect(JSON.parse(String(userPrefs(fake).find((r) => r.key === "check_in_own_targets")!.value)).reason).toBe("Doctor's advice");
+    await expect(
+      run(removeMacroTarget as unknown as CoachActionDef, ctx, { key: "calories", reason: "Don't want to count" })
+    ).rejects.toThrow("can't be removed");
+    expect(userPrefs(fake).some((r) => r.key === "calories")).toBe(true);
   });
 });
 
@@ -309,5 +338,8 @@ describe("registry", () => {
       ["log_food", "log_progress_entry", "remove_macro_target", "set_macro_targets", "set_preference", "update_profile"].sort()
     );
     for (const t of coachTools()) expect(t.input_schema.type).toBe("object");
+    // The model never sees "source"; only the server sets it.
+    const set = coachTools().find((t) => t.name === "set_macro_targets")!;
+    expect(Object.keys(set.input_schema.properties as object)).not.toContain("source");
   });
 });

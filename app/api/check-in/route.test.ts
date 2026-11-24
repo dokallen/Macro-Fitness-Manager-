@@ -136,6 +136,23 @@ describe("POST /api/check-in", () => {
     }
   });
 
+  it("keeps the user's own targets while the trend moves toward the goal", async () => {
+    seed({ prefs: [...basePrefs, { user_id: "user-1", key: "check_in_own_targets", value: '{"reason":"Holiday travel","setAt":"2026-11-01T00:00:00Z"}' }] });
+    const body = await (await post({ loggingAnswer: "yes", timeZone: TZ })).json();
+    expect(body.record).toMatchObject({ decision: "hold", reasons: ["own_targets_on_track"] });
+    expect(body.proposal).toBeUndefined();
+  });
+
+  it("brings the calculated targets back when the user's own targets aren't working", async () => {
+    // Weight rising on a loss goal.
+    seed({ prefs: [...basePrefs, { user_id: "user-1", key: "check_in_own_targets", value: '{"reason":"Holiday travel","setAt":"2026-11-01T00:00:00Z"}' }] });
+    fake.tables.progress_entries = fake.tables.progress_entries!.map((e, i) => ({ ...e, value: 200 + i * 0.4 }));
+    const body = await (await post({ loggingAnswer: "yes", timeZone: TZ })).json();
+    expect(body.record.decision).toBe("change");
+    expect(body.proposal).toBeDefined();
+    expect(body.text).toMatch(/You're on your own targets \(Holiday travel\), but your trend isn't moving toward your goal/);
+  });
+
   it("holds steady, with the reason, when logging was incomplete", async () => {
     const body = await (await post({ loggingAnswer: "no", timeZone: TZ })).json();
     expect(body.record).toMatchObject({ decision: "hold", reasons: ["logging_incomplete"] });

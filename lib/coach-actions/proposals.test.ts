@@ -19,7 +19,7 @@ describe("proposalsFromToolUses", () => {
         {
           id: "toolu_1",
           name: "set_macro_targets",
-          input: { targets: [{ key: "protein", value: 180, unit: "g" }] },
+          input: { targets: [{ key: "protein", value: 180, unit: "g" }], reason: "Training harder" },
         },
       ],
       COACH_ACTIONS,
@@ -30,8 +30,8 @@ describe("proposalsFromToolUses", () => {
       {
         id: "p-fixed",
         action: "set_macro_targets",
-        input: { targets: [{ key: "protein", value: 180, unit: "g" }] },
-        summary: "Set Protein 180 g",
+        input: { targets: [{ key: "protein", value: 180, unit: "g" }], reason: "Training harder", source: "user" },
+        summary: "Set Protein 180 g (your own numbers: Training harder)",
         status: "pending",
       },
     ]);
@@ -58,7 +58,7 @@ describe("proposalsFromToolUses", () => {
     const uses = Array.from({ length: 7 }, (_, i) => ({
       id: `t${i}`,
       name: "remove_macro_target",
-      input: { key: `target${i}` },
+      input: { key: `target${i}`, reason: "Simplifying" },
     }));
     const { proposals, notes } = proposalsFromToolUses(uses, COACH_ACTIONS, makeId);
     expect(proposals).toHaveLength(MAX_PROPOSALS_PER_REPLY);

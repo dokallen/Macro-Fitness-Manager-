@@ -67,3 +67,9 @@ export const GOAL_PACE_MAX = { loss: 1.5, gain: 1.0 } as const;
  * comes out lower, the floor is proposed instead and the user is told.
  */
 export const MAX_CALORIE_DECREASE_FRACTION = 0.1;
+
+/**
+ * For a "maintain" goal on the user's own targets: weekly trend change within
+ * this percent of body weight counts as holding steady.
+ */
+export const MAINTAIN_TOLERANCE_PERCENT_PER_WEEK = 0.25;

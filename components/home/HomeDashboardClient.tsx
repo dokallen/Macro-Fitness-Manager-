@@ -280,7 +280,9 @@ export function HomeDashboardClient({
             padding: "2px 16px 4px",
           }}
         >
-          Set up your macros in onboarding
+          <Link href="/settings#targets" style={{ textDecoration: "underline" }}>
+            Set up your macro targets
+          </Link>
         </p>
       ) : (
         <div

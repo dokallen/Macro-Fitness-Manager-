@@ -15,6 +15,7 @@ import {
   type CheckInRecord,
 } from "@/lib/coaching/check-in";
 import { describeGoalPace, readGoalPace } from "@/lib/coaching/goal-pace";
+import { readOwnTargets } from "@/lib/coaching/own-targets";
 import { checkInRecordDates, checkInRecordKey } from "@/lib/coaching/schedule";
 import { setMacroTargets } from "@/lib/coach-actions/macro-targets";
 import type { CoachProposal } from "@/lib/coach-actions/types";
@@ -59,6 +60,12 @@ export function buildCoachDataContext(
     `Profile: age ${profile.age}; height ${profile.height}; biological sex ${profile.biologicalSex}; activity level ${profile.activityLevel}; goal weight ${profile.goalWeight}.`,
     `Goal pace: ${pace}.`,
     `Current targets: ${data.targets.length ? data.targets.map((t) => `${t.key} = ${t.displayValue}`).join("; ") : "none"}.`,
+    (() => {
+      const own = readOwnTargets(data.prefs);
+      return own
+        ? `Targets are the user's own numbers since ${own.setAt.slice(0, 10)} (reason: ${own.reason}).`
+        : "Targets come from onboarding or the calculation.";
+    })(),
     `Trend weight: ${calc.trendWeight !== null ? `${calc.trendWeight.toFixed(1)} ${u}` : "not enough weigh-ins"}.`,
     `Estimated calorie burn: ${calc.estimatedBurn !== null ? `${Math.round(calc.estimatedBurn)} kcal/day` : "not enough data"}.`,
     `Check-in status: ${status}.`,
@@ -145,6 +152,14 @@ export const CALCULATED_TARGETS_TOOL = {
   input_schema: { type: "object" as const, properties: {} },
 };
 
+/** Read-only: lets the Coach compare the user's own numbers with the calculation. */
+export const GET_CALCULATED_TARGETS_TOOL = {
+  name: "get_calculated_targets",
+  description:
+    "Look up what the app's calculation gives for the user's targets right now (or why it would hold steady), without proposing anything. Use it before discussing numbers the user wants to set themselves, so you can compare them honestly.",
+  input_schema: { type: "object" as const, properties: {} },
+};
+
 /**
  * The server-side calculation for "adjust my macros". Outside a check-in there
  * is no logging answer, so that rule is skipped.
@@ -159,6 +174,7 @@ export function calculatedTargetsProposal(
   }
   const parsed = setMacroTargets.schema.safeParse({
     targets: result.changes.map((c) => ({ key: c.key, value: c.to, ...(c.unit ? { unit: c.unit } : {}) })),
+    source: "calculated",
   });
   if (!parsed.success) {
     return { proposal: null, resultText: "Holding targets steady: the calculated targets could not be used.", result };
@@ -184,6 +200,10 @@ export const COACH_TARGET_RULES = [
   "Target rules:",
   "- Only use calculated numbers for macro or calorie targets. To change targets, call propose_calculated_targets; never work out new targets yourself and never invent numbers.",
   "- Use set_macro_targets only for exact values the user states themselves, never for numbers you chose.",
+  "- When the user wants to change their targets: first check their goal is still right (goal weight, goal pace, activity level; if any changed, propose update_profile and then recalculate). Then ask whether they want the calculated targets or their own numbers.",
+  "- If they want their own numbers: call get_calculated_targets, tell them plainly what their numbers mean compared with the calculation (for example that a higher calorie target will slow or stop progress), and ask what changed. Only after they answer, propose set_macro_targets with their reason. It is their choice; be honest, not pushy.",
+  "- Targets should be realistic for the goal. Do not encourage making targets easier without a real change in goal or lifestyle.",
+  "- If the user has no targets yet, the calculation can't run (it starts from a calorie target). Ask for their starting numbers and propose those with set_macro_targets and their reason; later check-ins adjust them.",
   "- Propose changes only when the user asks or clearly agrees, or in a check-in review.",
   "- Nothing changes until the user taps Apply. Never say a change was made before it is applied.",
   "- If profile information is missing (for example date of birth or goal pace), you may ask for it once. If the user declines, accept that and do not ask again.",

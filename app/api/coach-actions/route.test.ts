@@ -10,7 +10,7 @@ import { POST } from "@/app/api/coach-actions/route";
 const PROTEIN_180 = {
   id: "prop-1",
   action: "set_macro_targets",
-  input: { targets: [{ key: "protein", value: 180, unit: "g" }] },
+  input: { targets: [{ key: "protein", value: 180, unit: "g" }], reason: "Training harder" },
   summary: "Set Protein 180 g",
   status: "pending",
 };
@@ -68,6 +68,8 @@ describe("POST /api/coach-actions", () => {
     expect(json.proposal).toMatchObject({ status: "applied", result: "Updated 1 target." });
     expect(fake.tables.user_preferences).toEqual([
       expect.objectContaining({ user_id: "user-1", key: "protein", value: "180 g", updated_by: "coach" }),
+      // The user's own numbers are marked, with their reason.
+      expect.objectContaining({ key: "check_in_own_targets", value: expect.stringContaining("Training harder") }),
     ]);
     expect(storedProposal()).toMatchObject({ status: "applied", result: "Updated 1 target." });
   });
@@ -94,7 +96,7 @@ describe("POST /api/coach-actions", () => {
     expect(((await again.json()) as { alreadyDecided: boolean }).alreadyDecided).toBe(true);
     const cancelAfter = await post({ conversationId: "conv-1", proposalId: "prop-1", decision: "cancel" });
     expect(((await cancelAfter.json()) as { proposal: { status: string } }).proposal.status).toBe("applied");
-    expect(prefWrites()).toHaveLength(1);
+    expect(prefWrites()).toHaveLength(2); // one apply: the target and the own-numbers marker
   });
 
   it("lets only one of two simultaneous taps run the change", async () => {
@@ -105,7 +107,7 @@ describe("POST /api/coach-actions", () => {
     const bodies = (await Promise.all([a.json(), b.json()])) as { alreadyDecided?: boolean }[];
     expect([a.status, b.status]).toEqual([200, 200]);
     expect(bodies.filter((x) => x.alreadyDecided)).toHaveLength(1);
-    expect(prefWrites()).toHaveLength(1);
+    expect(prefWrites()).toHaveLength(2); // one apply: the target and the own-numbers marker
   });
 
   it("keeps a chat message saved while the change was being applied", async () => {

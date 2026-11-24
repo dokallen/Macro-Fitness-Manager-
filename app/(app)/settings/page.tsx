@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SubpageHeader } from "@/components/layout/SubpageHeader";
 import { CheckInSection } from "@/components/settings/CheckInSection";
+import { MacroTargetsSection } from "@/components/settings/MacroTargetsSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { SettingsClient } from "@/components/settings/SettingsClient";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -44,17 +45,7 @@ export default async function SettingsPage() {
     <div className="min-h-0 flex-1 overflow-y-auto pb-24">
       <SubpageHeader title="SETTINGS" subtitle="Targets & preferences" />
       <div className="px-4">
-        <p style={{ fontSize: 14, color: "var(--text2)", fontFamily: "var(--fb)" }}>
-          Macro targets are managed in onboarding. Use the menu to open onboarding
-          anytime. Edit your profile below.
-        </p>
-        <Link
-          href="/onboarding"
-          className="back-btn"
-          style={{ display: "inline-flex", marginTop: 16 }}
-        >
-          Open onboarding →
-        </Link>
+        <MacroTargetsSection />
         <ProfileSection userId={user.id} />
         <CheckInSection userId={user.id} />
         <SettingsClient userId={user.id} />

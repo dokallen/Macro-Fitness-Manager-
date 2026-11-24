@@ -12,6 +12,8 @@ import {
 } from "@/lib/coaching/check-in";
 import { describeResult } from "@/lib/coaching/calc";
 import { buildCheckInReviewRequest } from "@/lib/coaching/coach-context";
+import { readGoalPace } from "@/lib/coaching/goal-pace";
+import { ownTargetsProgress, readOwnTargets } from "@/lib/coaching/own-targets";
 import { callCoachClaudeChat } from "@/lib/coach-chat";
 import { SCHEDULE_KEYS, checkInRecordKey, isWeighInDue, readSchedule } from "@/lib/coaching/schedule";
 import { updateConversationMessages } from "@/lib/coach-actions/conversation-store";
@@ -113,6 +115,17 @@ export async function POST(req: Request) {
     }
 
     let result = runCalculation(data, loggingAnswer);
+    // Own numbers: kept while they work; the calculated targets come back when they don't.
+    const own = readOwnTargets(data.prefs);
+    let ownNote = "";
+    if (own && result.decision === "change") {
+      const progress = ownTargetsProgress(result, readGoalPace(data.prefs));
+      if (progress === "on_track") {
+        result = { ...result, decision: "hold", changes: [], holdReasons: ["own_targets_on_track"] };
+      } else if (progress === "off_track") {
+        ownNote = ` You're on your own targets (${own.reason}), but your trend isn't moving toward your goal, so here are the calculated targets again.`;
+      }
+    }
     if (result.holdReasons.includes("calories_unknown")) {
       // Ask, then run again; nothing is saved yet.
       return json({ needsCaloriesKey: true, targetKeys: data.targets.map((t) => t.key) });
@@ -122,6 +135,7 @@ export async function POST(req: Request) {
     if (result.decision === "change") {
       const parsedInput = setMacroTargets.schema.safeParse({
         targets: result.changes.map((c) => ({ key: c.key, value: c.to, ...(c.unit ? { unit: c.unit } : {}) })),
+        source: "calculated",
       });
       if (parsedInput.success) {
         proposal = {
@@ -140,15 +154,16 @@ export async function POST(req: Request) {
     const record = buildCheckInRecord(data, result, loggingAnswer, now, proposalId);
     const resultText = describeResult(result);
     // The Coach's short review, written from the calculated numbers only.
-    let text = `Weekly check-in. ${resultText}`;
+    let text = `Weekly check-in.${ownNote} ${resultText}`;
     try {
-      const req = buildCheckInReviewRequest(record, resultText);
+      // The review is told about the user's own numbers too.
+      const req = buildCheckInReviewRequest(record, `${ownNote.trim()} ${resultText}`.trim());
       const review = await callCoachClaudeChat({
         system: req.system,
         messages: [{ role: "user", content: req.user }],
         timeoutMs: 20_000,
       });
-      text = `Weekly check-in. ${review}`;
+      text = `Weekly check-in.${ownNote} ${review}`;
     } catch (e) {
       console.error("[check-in] review", e);
     }

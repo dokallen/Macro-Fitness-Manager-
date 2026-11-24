@@ -33,6 +33,7 @@ describe("Coach data context", () => {
     expect(text).toContain("Profile: age 36;");
     expect(text).toContain("Goal pace: lose 1% of body weight per week.");
     expect(text).toContain("Current targets: calories = 2200 kcal; protein = 180 g; carbs = 200 g; fat = 60 g.");
+    expect(text).toContain("Targets come from onboarding or the calculation.");
     expect(text).toMatch(/Trend weight: \d+\.\d lbs\./);
     expect(text).toMatch(/Estimated calorie burn: \d+ kcal\/day\./);
     expect(text).toContain("Check-in status: due (next check-in 2026-11-23).");
