@@ -11,6 +11,7 @@ Branch `v3`. Every step: lint, typecheck, tests, build all passed; an independen
 | 2.5 Saved profile | c361ab9 | 171 total |
 | 2.6 Weekly check-in | bfb1c8c | 240 total |
 | 2.7 Coach role | b073c6e | 249 total |
+| 2.8 Cleanup (audit fixes) | e24a6fe | 259 total |
 
 ## Order change (needs no action)
 The target calculation (spec Step 2.7, items 1–7) was built in Step 2.6, because the check-in's decision step uses it. Building it later would have meant check-ins recording a placeholder decision. Step 2.7 then added only the Coach's side.
@@ -45,8 +46,12 @@ Reviewer fixes (4 must-fix): macro roles misread for keys like `fat_g`/`saturate
 Files: `lib/coaching/coach-context.ts`, chat and check-in routes.
 Coach sees profile, pace, last 8 entries per metric, trend, burn, check-in status, last 4 check-ins, targets. "Adjust my macros" runs the server calculation (`propose_calculated_targets`) and Claude explains it. Check-in review written from calculated numbers only. Reviewer must-fix: the explanation call would have been rejected by the real API (no tools defined while history had tool blocks) → now sends tools with `tool_choice: none` (confirmed as a documented option). Other fixes: no paid call possible in tests; per-metric history queries; invented `set_macro_targets` numbers dropped when the calculation runs; Coach told not to propose targets if data fails to load.
 
-## Decision needed from Derak
-1. **Minimum calorie floor.** The spec sets none. Today the calculation never proposes zero or below (it holds steady), but a very low positive target (e.g. 600 kcal at a 1.5%/week loss pace) can be proposed. You still must tap Apply. Options: a fixed floor, a floor based on sex/weight, or a cap on how far one check-in can move calories. I did not pick a number.
+### 2.8 Cleanup (cross-cutting audit of Phases 1–2)
+Home weight stats from weigh-ins and the profile goal weight, in the user's unit; Coach prompt no longer carries the push token, bookkeeping or raw records; refresh after Apply; check-in message kept if posted during a chat reply; Coach keeps its own review; optional goal pace in onboarding; calorie floor; changed-only settings writes; 60 s route limit; push settings read paged; device time zone for the Coach. Reviewer must-fix: a timing gap could still overwrite a check-in posted mid-reply → now keyed on what the request read, not on time; the Coach must still see settings it can change.
+
+## Decisions
+1. **Calorie floor (decided by Derak: "based on the target").** One check-in may lower calories by at most 10% of the current calorie target. If the calculation is lower, the floor is proposed and explained, and the record notes it. The 10% is for Derak to confirm.
+2. **Macro target editing (pending Derak's approval of the design).** Proposed: targets come from the calculation; goal, pace or activity changes recalculate; own numbers go through the Coach, which explains the trade-off, asks the reason, and marks them as the user's own; check-ins offer the calculated targets again if progress stalls. Not built yet.
 
 ## Constants for Derak to confirm (`lib/coaching/constants.ts`)
 | Constant | Value |
@@ -63,6 +68,7 @@ Coach sees profile, pace, last 8 entries per metric, trend, burn, check-in statu
 | Loss pace guide (%/week) | Gentle 0.25–0.5, Moderate 0.5–0.75, Aggressive 0.75–1.0; max 1.5 |
 | Gain pace guide (%/week) | Gentle 0.1–0.25, Moderate 0.25–0.5; max 1.0 |
 | Coach context | 8 entries per metric, 4 check-ins |
+| Calorie floor | at most a 10% cut of the current target per check-in |
 
 ## Not testable without a paid API call
 How well the real model chooses tools, explains a calculation, writes the check-in review, and respects "ask once". Tests mock Claude. Try these on the `v3` preview.
@@ -74,7 +80,9 @@ How well the real model chooses tools, explains a calculation, writes the check-
 - The check-in review uses a generic coach voice, not the chosen Coach persona.
 - Morning push runs at 11:00 UTC; users at UTC+12–14 get the check-in reminder near local midnight.
 - Pre-existing bug, not fixed (cleanup phase): reminder pushes run once a day and need an exact minute match, so custom reminder times rarely fire.
-- The fake Supabase client used in tests is not a full database emulator.
+- The fake Supabase client used in tests is not a full database emulator. The live v3 schema was checked separately: columns, own-row security, UNIQUE(user_id, key), the updated_by check and cascades all match.
+- Not yet: the push-subscription read isn't paged (matters only with many users); onboarding checks goal pace only at the final step.
+- Settings the user can change but the Coach can't yet: tracked-metric lists, favourite/disliked foods, chosen coach, display name, editing or deleting past logs.
 
 ## How the two metric systems relate (not merged, per spec)
 - `body_metric_keys` `[{name, unit, better}]` feeds Body composition, Metric setup and the trend chart.
